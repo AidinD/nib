@@ -1,155 +1,163 @@
 # Nib design spec
 
-Distilled from an interactive Claude Design mock of the app.
+Distilled from the interactive Claude Design mock of the app (artboard `Nib`).
 
-The mock is a working prototype: it has real React logic behind it, not just a static layout.
+The mock is a working prototype with real React logic behind it, not a static layout.
 This file captures what that prototype specifies so the implementation does not have to
 re-derive it from the prototype's own runtime.
 
-The mock is not checked in.
-It depends on Claude Design's own runtime (`support.js`, the `x-dc` element, the `DCLogic`
-base class), so a copy of the file would not run here anyway.
+The mock itself is not checked in.
+It depends on Claude Design's runtime to render, so a copy would not open here.
 This spec is the durable artifact; the mock is the source it was read from.
 
-## Window shell
+The mock is one canvas holding three artboards: the main window, the sticky windows, and
+the canvas block open for drawing.
 
-Frameless window with a custom 34px title bar.
+## Design system
 
-- Title bar background `#101014`, bottom border `#22222b`, draggable region.
-- Left: a 13px rounded square with a `#6d78ff → #4f5bd5` gradient as the app mark, then the app name in `#9a9aac` at 12px.
-- Right: minimise / maximise / close, each 46x34px. Close hovers to `#e04b4b` with white glyph; the others hover to `#22222b`.
-
-## Layout
-
-Three columns filling the remaining height.
-
-| Pane | Width | Background |
-| --- | --- | --- |
-| Lists sidebar | 212px fixed | `#1a1a20` |
-| Note list | 268px fixed | `#1d1d24` |
-| Editor | fills | `#212128` |
-
-Column separators are 1px `#24242d`.
-
-## Palette
+Nib uses Jot's tokens verbatim, so the two apps read as one family.
 
 | Token | Value | Used for |
 | --- | --- | --- |
-| Base background | `#16161b` | App body, input fields |
-| Title bar | `#101014` | Title bar, page backdrop |
-| Accent | `#4f5bd5` | Selection borders, focus, drop indicators, active format buttons |
-| Text primary | `#e6e6ee` | Body text |
-| Text strong | `#f2f2f8` | Titles, selected items |
-| Text muted | `#6e6e80` | Counts, metadata |
-| Text dim | `#5c5c6c` | Placeholders |
-| Border | `#2a2a34` / `#2e2e3a` | Cards, dividers |
-| Danger | `#e07070` / `#3a2427` | Delete hover |
+| `--bg` | `#1b1c1f` | Window background, inset fields, the drawing surface |
+| `--surface` | `#26282c` | Note cards, the editor panel, sticky windows |
+| `--surface-hover` | `#2f3237` | Card hover, selected card |
+| `--surface-alt` | `#2a2c31` | Inline code chips, the pressure readout |
+| `--border` | `#36393f` | Panel and card borders, dividers, sub-category row hover |
+| `--text` | `#e8e9ec` | Body text |
+| `--text-dim` | `#9a9da3` | Counts, metadata, inactive toolbar buttons |
+| `--accent` | `#6f9cff` | Selection, focus, drop markers, the pressure meter |
+| `--danger` | `#ff6b6b` | Delete affordances |
+| `--amber` | `#ffb054` | Sticky notes |
+| `--green` | `#5fd0a0` | A category colour, an ink colour |
+| `--violet` | `#b98cff` | Drawing blocks, a category colour |
 
-List colours cycle through `#5b8def`, `#4ec9a4`, `#e0b341`, `#8b7bf0`, `#ef6ba4`.
+Typeface is `'Segoe UI', system-ui, -apple-system, sans-serif`; base size 13px.
 
-Base font size is 13px, system UI stack.
-Editor body is 14.5px at line-height 1.72.
+Layout rules carried over from Jot:
 
-## Lists sidebar
+- The window is frameless with **no title bar and no window buttons**. A header row does that job.
+- Panes sit on one `--bg` surface with 16px padding and a 14px gap between them. No column backgrounds, no dividers.
+- Rows are 8px 10px padding at 8px radius; hover fills `--surface`, selected adds a `--border` border.
+- Row actions (rename, delete, the scope chip) stay hidden until the row is hovered. A category that already carries a W or P scope keeps its chip at partial opacity so the classification stays readable.
+- Colour marks active state only. An active toolbar button gets a grey wash (`rgba(127,127,127,0.18)`) and full-strength text, never a coloured fill.
+- The drag insertion marker is a 3px `--accent` bar, inset from both edges, fully rounded, with a soft glow. Jot learned this the hard way: a thin full-width line read as a section divider and went unnoticed.
 
-Top to bottom:
+## Data model
 
-1. **Wordmark** - app name at 17px/660 weight, with a small `notes v0.1` label beside it.
-2. **All notes** and **Recent** rows, each with a right-aligned count (`Recent` shows `7d`).
-3. **Lists** section header with a count.
-4. **Scope filter** - a three-way segmented control: All / Work / Private. Selected segment gets `#2e2e3a` background.
-5. **List rows**, scrollable.
-6. **New list** input, dashed border, commits on Enter.
+Three levels: **category → sub-category → note**, nesting one level only.
 
-Each list row carries: a 7px colour dot, the name, a note count, a scope badge, an `edit` affordance, and a delete `✕`.
-The `edit` and `✕` affordances sit at 0.3 opacity until the row is hovered.
+```
+topic  { id, name, color, scope: '' | 'W' | 'P', open, subs[], notes[] }
+sub    { id, name }
+note   { id, title, html, edited, subId: string | null, pinned }
+```
 
-Row interactions:
+Notes are a **flat list on the category** carrying a `subId`, not a list nested inside
+each sub-category. A note with `subId: null` sits directly in the category.
+This mirrors how Jot models subtasks (a `parentId` on a flat todo list) and keeps moving
+a note between sub-categories a single field write rather than a splice across two arrays.
 
-- Click selects the list and its first note.
-- Double-click (or `edit`) starts an inline rename; Enter commits, Escape cancels, blur commits.
-- Clicking the scope badge cycles it through none → Work → Private. Work renders `#5b8def`, Private `#ef6ba4`, none a dim `–`.
-- Deleting a non-empty list asks for confirmation naming the list and its note count.
-- Rows are draggable to reorder. Dropping a **note** onto a list moves the note into that list instead.
+A category's count means everything under it, its loose notes and its sub-categories' both.
 
-Drop feedback: a reorder target gets a 2px accent line on its top edge; a list receiving a note gets a full 2px accent outline.
-The dragged item drops to 0.4 opacity.
+## Artboard 1: main window
 
-## Note list
+1240 x 780, frameless.
 
-Header: the active list's colour dot, its name, and an `N notes` count on the right.
-Below it a search field filtering the current list by title **and** body text.
+### Header
 
-Each note card shows:
+Wordmark "Nib" at 20px with 0.5px letter-spacing in a fixed 210px slot, a dim version
+number beside it, and a 180px search field on the right (transparent, 1px `--border`,
+8px radius, 12px text).
 
-- Title (falls back to `Untitled note`), truncated to one line, with a `✕` delete on the right.
-- A two-line preview built from the note's block elements joined with `·`; empty notes read `Empty note`.
-- A metadata row: relative edit time (`today`, `yesterday`, `3 days ago`, `2w ago`) and a `has image` marker in accent colour when the note contains an image.
+### Sidebar, 210px
 
-The selected card gets background `#282833` and an accent border.
-Cards are draggable to reorder within the list, or onto another list to move.
+- **Smart rows** at the top: All notes, Recent, and Sticky notes. Each carries a marker and a count; the sticky row's marker is an `--amber` rounded square rather than a circle.
+- **Scope filter**: All / Work / Private as a segmented control in a `--surface` well with a `--border` outline.
+- **Category rows**: a disclosure caret that rotates 90 degrees when open, a 10px colour dot, the name, a W/P scope chip that cycles on click, rename and delete affordances, and the count.
+- **Sub-category rows**, indented 30px under their category: 12px text, 4px 6px padding, 6px radius, `--text-dim` until selected, hovering to `--border` because `--surface-hover` is too subtle at that size. Each shows a delete affordance and a count.
+- A dashed **"+ Sub-category…"** input under the last sub-category, and a dashed **"+ Category…"** input at the bottom of the list. Both commit on Enter.
+- Double-clicking a category or sub-category renames it inline; Enter commits, Escape cancels.
 
-A dashed **New note** input sits below the cards and commits on Enter, inserting at the top.
+Selecting a **category** lists every note under it. Selecting a **sub-category** lists only that sub-category's.
 
-## Editor
+### Note list, 280px
 
-### Toolbar
+A header line with the active list's dot, name and count, an "Add a note…" field, then the cards.
 
-One row, wrapping, on `#1e1e25`:
+Each card carries: the title, a pin marker (dim when unpinned, `--amber` when pinned, toggling on click), a delete affordance, a two-line preview built from the note's block elements joined with `·`, and a metadata row with the sub-category crumb, the relative edit time (`today`, `yesterday`, `3 days ago`, `2w ago`), an `image` tag in `--accent` when the note holds an image, and a `drawing` tag in `--violet` when it holds a canvas.
 
-`H1` `H2` `H3` `Body` | `B` `I` `U` `S` `code` | `Bullets` `1. List` `Quote` `Divider` | `Insert image`
+The crumb only appears when the list spans more than one place: listing a whole category, or listing sticky notes, where the crumb is the full `Category › Sub-category` trail.
 
-`B`/`I`/`U`/`S` light up in the accent colour while the caret sits in text with that formatting.
-`Insert image` is styled as the one filled action: `#2b2d52` background, `#3d4189` border, `#cdd0ff` text.
-Right-aligned at the end of the toolbar: the save state, reading `Saved` or `Saving…`.
+### Editor panel
 
-### Document
+A `--surface` panel with a 1px `--border`, 12px radius and 18px padding, matching Jot's detail panel.
 
-Centred column with a configurable measure (default 760px, adjustable 600-1100px), 34px top padding and 120px bottom padding.
+Toolbar: `H1` `H2` `H3` `Body` | `B` `I` `U` `S` `code` | `Bullets` `1. List` `Quote` `Divider` | `Image` `Canvas`, with a "Pin as sticky" / "Sticky" toggle on the right end.
 
-- Title: a borderless 29px/660 input, placeholder `Untitled note`.
-- Metadata row: list colour dot and name, word count, `edited <relative time>`, and a `· private` tag in pink when the list is scoped Private.
-- Body: the editable document itself, minimum height 420px.
+Document: a borderless 26px title input, a metadata row (category trail, word count, `edited …`, a private tag when the category is scoped Private), then the editable body at 14px / 1.7 line-height in a centred column whose width is adjustable.
 
-Body typography inside the document: `h1` 26px, `h2` 20px `#dcdcea`, `h3` 16px `#c3c3d4`, paragraphs with a 10px bottom margin.
-Blockquotes get a 2px accent left border and italic `#a9a9bd` text.
-Inline code gets a `#26262f` chip with a `#32323e` border.
-Images get an 8px radius and a `#2e2e3a` border, capped at the column width.
+### Drag and drop
+
+- Categories reorder against each other.
+- Notes reorder within a list.
+- Dropping a note on a **sub-category row** moves it there; dropping it on a **category row** moves it to that category's loose notes.
 
 ### Images
 
-Images arrive by paste, by drag-and-drop onto the document, or via `Insert image`.
-Clicking an image selects it - accent outline, 2px offset - and a floating toolbar appears just above it with **Remove image**, **Smaller** (x0.8) and **Larger** (x1.25).
-Escape or clicking elsewhere deselects.
-Backspace or Delete while an image is selected removes it.
-Scaling clamps to a minimum width of 80px and keeps `max-width: 100%`.
+Paste, drop, or the `Image` button. Clicking an image selects it and raises a floating
+toolbar with **Smaller**, **Larger** and **Remove**. Escape or clicking away deselects;
+Backspace or Delete while selected removes it.
 
-### Saving and shortcuts
+### Saving
 
-Typing marks the note unsaved and schedules a save 600ms later; the state label reflects this.
-`Cmd/Ctrl+Enter` saves immediately.
-`Cmd/Ctrl+Shift+8` inserts a bullet list.
-`Cmd/Ctrl+B` and `Cmd/Ctrl+I` are the platform defaults, surfaced in the status bar hint.
+Typing marks the note unsaved and schedules a save 600ms later; the header shows `Saved` or `Saving…`. `Ctrl+Enter` saves immediately. `Ctrl+Shift+8` inserts a bullet list.
 
-## Status bar
+## Artboard 2: sticky windows
 
-A 28px bar at the bottom of the editor pane on `#1a1a20`.
-Left: the shortcut hint.
-Right: where the notes live, shown in the mock as `Local vault · ~/Jot/notes`.
+280 x 320 each, always on top, shown three abreast so the tint palette is visible.
+
+A `--surface` panel, 12px radius, 1px `--border`, with a heavy drop shadow.
+
+- A drag strip across the top, tinted with the note's colour, holding a row of tint swatches (the selected one ringed), an "always on top" toggle, and a close ×.
+- The note title at 14px semibold.
+- The note body, editable in place, at 12.5px / 1.6 line-height. No toolbar - the formatting rules are the same, the chrome is not.
+- A footer line at 10px `--text-dim` showing the note's category trail, so you can tell where a floating note came from.
+
+Sticky windows are bound to the pinned notes themselves: pinning a note in the main window is what produces one.
+
+## Artboard 3: canvas block, open for drawing
+
+A canvas is a **block inside a note**, the same way a pasted image is - not a separate kind of note.
+
+Inserted from the `Canvas` toolbar button, it renders in the document as a 170px bordered
+box with a faint ruled-paper background and a header reading "Drawing · click to open"
+with a `--violet` marker. It is marked `contenteditable="false"` and carries a
+`data-canvas` attribute, which is also what the note card's `drawing` tag keys off.
+
+Opened, it fills the editor pane:
+
+- **Tool strip**: Pen, Highlighter, Eraser, Select; a stroke-width slider (1-18) with its value; a row of ink swatches (`--text`, `--accent`, `--amber`, `--green`, `--violet`, `--danger`); the current pointer type; a live `pressure 0.00` readout in a monospace chip; and a small vertical meter that fills with pressure. Undo, Redo and Done sit on the right.
+- **Surface**: `--bg` with a faint ruled background and a 1px `--border`, backed by a canvas at 2x device pixels.
+
+Drawing behaviour, all of it exercised in the mock rather than described:
+
+- Pointer events throughout, with `touch-action: none` and pointer capture.
+- Stroke width is driven by `event.pressure`: `width * multiplier * (0.35 + 1.3 * pressure)`, so a pressure-sensitive stylus tapers and a mouse (which reports a constant 0.5) draws evenly. Minimum 0.6px.
+- Per-tool multipliers: highlighter 3x at 0.28 alpha, eraser 2.2x drawn as `destination-out`, pen 1x.
+- **Palm rejection**: once a pen has been seen, touch input is ignored until 400ms after the pen lifts.
+- Undo and redo work on whole strokes, and redo is cleared when a new stroke starts.
 
 ## Adjustable in the mock
 
-The mock exposes three properties, which are worth keeping as real settings:
+Worth keeping as real settings:
 
-- **Accent colour** - `#4f5bd5` (default), `#4ec9a4`, `#e0b341`, `#ef6ba4`.
-- **Measure** - the editor column width, 600-1100px in 20px steps, default 760.
+- **Accent colour** - `--accent` (default), `--green`, `--amber`, `--violet`.
+- **Measure** - the editor column width, 600-1000px in 20px steps, default 720.
 - **Serif body** - switches the document font to `Iowan Old Style, Georgia, serif`.
 
-## What the mock does not cover
+## What the mock still does not cover
 
-Tracked in PLAN.md, listed here so the gap against the mock is explicit:
-
-- **Sub-categories.** The mock has two levels (list → note). The requirement is three (`Manager meeting > February > note`).
-- **Sticky notes.**
-- **Canvas drawing with a pressure-sensitive stylus** (a stretch goal, not part of the first version).
-- **Persistence.** The mock keeps everything in memory; nothing is written to disk.
+- **Persistence.** The mock keeps everything in memory; nothing is written to disk. This is the first thing the implementation has to add, and it decides the shape of everything above it.
+- **Multiple windows.** The sticky artboard draws the windows; it does not model creating, positioning or restoring real always-on-top windows.
+- **Canvas storage.** The drawing exists as a stroke list in memory. How a drawing is stored inside a note - stroke data, a rendered image, or both - is undecided.

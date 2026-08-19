@@ -3,6 +3,37 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-19 - Notes are a flat list carrying a sub-category id
+
+A category holds `subs` (id and name only) and a **flat** `notes` array, where each note
+carries `subId`, which is null when the note sits directly in the category.
+Notes are not nested inside the sub-category they belong to.
+
+This is how Jot already models subtasks: a flat todo list where a `parentId` does the
+nesting. Following it keeps the two apps' storage legible in the same way, and it makes
+moving a note between sub-categories one field write instead of a splice across two
+arrays. Counting everything under a category is one filter rather than a walk.
+
+Considered and rejected: nesting `notes` inside each sub-category. It reads more
+naturally on paper, but every operation that spans a category - counting, searching,
+listing all notes, moving between levels - has to walk two shapes instead of one.
+
+## 2026-08-19 - Nib uses Jot's design tokens verbatim
+
+The first mock had its own dark palette and an indigo accent. It was replaced with the
+exact tokens from Jot's `styles.css`, along with Jot's layout language: no window chrome,
+no column backgrounds or dividers, row actions hidden until hover, and colour reserved
+for active state.
+
+The two apps sit side by side on the same desktop and are meant to be recognisably one
+family. A second, similar-but-different dark theme would read as a near-miss rather than
+a sibling. The cost is that a change to Jot's palette now has two places to land, which
+is accepted: the tokens have been stable for the life of Jot.
+
+One detail worth keeping when implementing: Jot's drag insertion marker is a glowing,
+inset, rounded 3px bar rather than a hairline. Its CSS records why - a thin full-width
+line read as a section divider and nobody noticed it.
+
 ## 2026-08-19 - The name is Nib
 
 A nib is the tip of a pen.
