@@ -3,6 +3,26 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-19 - The data directory follows Jot's pattern
+
+Nib stores its notes in Electron's `userData` folder by default (`%APPDATA%/nib` on
+Windows), and honours a `NIB_DATA_DIR` environment variable that relocates them.
+On the author's machines that variable points at a Dropbox folder, the same way
+`JOT_DATA_DIR` does for Jot.
+
+The reasons are Jot's, and they still hold:
+
+- A fresh install works with no setup, so a distributed copy stays portable. The synced location is per-machine configuration, never baked into the app.
+- It puts the data somewhere an external tool can reach without Windows' filesystem virtualisation getting in the way. Writes to `%APPDATA%` from a sandboxed process can land in a private overlay the app never sees; a path on a real drive does not have that problem.
+- Sync comes free from the folder itself, with no sync layer to build or run.
+
+Copy Jot's one-time migration too: when `NIB_DATA_DIR` points somewhere that has no data
+yet, move the existing `userData` contents across once. It runs on every start and is a
+no-op afterwards, so it can never clobber newer data.
+
+The file-per-note decision below is what makes the synced folder work well: editing one
+note touches one file, so two machines editing different notes do not collide.
+
 ## 2026-08-19 - Notes are a flat list carrying a sub-category id
 
 A category holds `subs` (id and name only) and a **flat** `notes` array, where each note

@@ -58,6 +58,9 @@ Out, for now:
 
 ## Open questions
 
-- **Where does the data live?** The storage format is decided (see DECISIONS.md), the location is not. Jot uses an environment variable pointing into Dropbox; Nib can do the same, but the default for a public repo should be sensible for someone who is not the author.
-- **Sub-category depth.** One level below a category covers the stated example. Arbitrary nesting is more general and more work, and nothing has asked for it yet.
+- **How is a drawing stored inside a note?** Stroke data keeps it editable and small; a rendered image makes it portable and lets a note render anywhere without a canvas. Probably both, but that is a decision for when the canvas is built, not before.
 - **Does anything move between Jot and Nib?** Turning a note into a todo, or attaching a note to a todo, is an obvious pull once both exist. Not planned yet.
+
+Settled since the first draft: the name, the separate-app question, the storage format
+and location, the sub-category depth (one level), and the whole visual design.
+See [DECISIONS.md](DECISIONS.md).
