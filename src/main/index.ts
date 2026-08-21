@@ -4,7 +4,7 @@ import { join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import type { NibIndex, NoteDoc } from '@shared/types'
+import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import { NoteStorage } from './storage'
 import { allWindows, closeStickyWindow, createMainWindow, openStickyWindow } from './windows'
@@ -136,6 +136,10 @@ function registerIpc(): void {
     return edited
   })
   ipcMain.handle('note:delete', (_event, id: string) => store().deleteNote(id))
+
+  ipcMain.handle('drawing:read', (_event, id: string) => store().readDrawing(id))
+  ipcMain.handle('drawing:write', (_event, doc: DrawingDoc) => store().writeDrawing(doc))
+  ipcMain.handle('drawing:delete', (_event, id: string) => store().deleteDrawing(id))
 
   ipcMain.handle('asset:write', (_event, dataUrl: string) => writeAsset(dataUrl))
 

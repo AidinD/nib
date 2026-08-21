@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
+import { CanvasEditor } from './CanvasEditor'
 import {
+  applyCanvasBlocks,
   applyImageWidths,
   blockAtSelection,
   bodyHasDrawing,
@@ -47,6 +49,8 @@ export function Editor({
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [words, setWords] = useState(0)
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null)
+  // The drawing currently open over the document, if any.
+  const [openDrawingId, setOpenDrawingId] = useState<string | null>(null)
   const saveTimer = useRef<number | null>(null)
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
@@ -111,6 +115,7 @@ export function Editor({
       const html = sanitizeHtml(doc?.html ?? '')
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
+      applyCanvasBlocks(bodyRef.current)
       setTitle(doc?.title ?? note.title)
       setWords(wordCount(html))
       setSaveState('saved')
@@ -150,6 +155,7 @@ export function Editor({
       const html = sanitizeHtml(doc.html)
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
+      applyCanvasBlocks(bodyRef.current)
       setTitle(doc.title)
       setWords(wordCount(html))
       loadedEdited.current = doc.edited
@@ -283,6 +289,81 @@ export function Editor({
       exec('insertHTML', `<img src="${url}" alt="" />`)
     },
     [exec]
+  )
+
+  /**
+   * Insert a drawing block and open it.
+   *
+   * A canvas is a block inside a note, the same way a pasted image is - not a
+   * kind of note. The id in `data-canvas` is what ties the block to its stroke
+   * file, and it is minted here so the block and the file agree from the start.
+   */
+  const insertCanvas = useCallback(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const id = newId('drw')
+
+    // Built with DOM calls rather than execCommand('insertHTML'). A canvas block
+    // is a block element, and insertHTML dropped it when the caret sat inside a
+    // paragraph - a div is not valid there, so the browser unwrapped it and left
+    // the contents behind. Placing it as a sibling of that paragraph is both
+    // valid and predictable.
+    const block = document.createElement('div')
+    block.className = 'canvas-block'
+    block.dataset.canvas = id
+    block.contentEditable = 'false'
+
+    // A paragraph after it, so there is somewhere to keep typing.
+    const after = document.createElement('p')
+    after.appendChild(document.createElement('br'))
+
+    const current = blockAtSelection(root)
+    const anchor = current !== null && current.parentElement === root ? current : root.lastElementChild
+    if (anchor === null) {
+      root.appendChild(block)
+    } else {
+      anchor.after(block)
+    }
+    block.after(after)
+
+    // Caret into the new paragraph, so the note is ready to keep writing in.
+    const range = document.createRange()
+    range.setStart(after, 0)
+    range.collapse(true)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    onBodyInput()
+    setOpenDrawingId(id)
+  }, [onBodyInput])
+
+  /**
+   * Put the rendered drawing into its block once the canvas is closed.
+   *
+   * An empty drawing takes its block with it: opening a canvas, drawing nothing
+   * and closing it should leave the note as it was, not leave a 170px hole in it.
+   */
+  const onDrawingDone = useCallback(
+    ({ drawingId, imageUrl }: { drawingId: string; imageUrl: string }) => {
+      setOpenDrawingId(null)
+      const root = bodyRef.current
+      const block = root?.querySelector(`[data-canvas="${drawingId}"]`)
+      if (root === null || block === null || block === undefined) {
+        return
+      }
+      if (imageUrl.length === 0) {
+        block.remove()
+        void window.nib.deleteDrawing(drawingId)
+      } else {
+        block.innerHTML = `<img src="${imageUrl}" alt="" />`
+      }
+      applyCanvasBlocks(root)
+      onBodyInput()
+    },
+    [onBodyInput]
   )
 
   const onPaste = useCallback(
@@ -436,6 +517,7 @@ export function Editor({
         </div>
         <div className="toolbar-group">
           <button type="button" onClick={pickImage}>Image</button>
+          <button type="button" onClick={insertCanvas}>Canvas</button>
         </div>
         </div>
 
@@ -463,7 +545,21 @@ export function Editor({
         </div>
       </div>
 
-      <div className="document" style={{ maxWidth: measure }}>
+      {openDrawingId !== null && (
+        <CanvasEditor
+          drawingId={openDrawingId}
+          onDone={onDrawingDone}
+          onCancel={() => setOpenDrawingId(null)}
+        />
+      )}
+
+      {/* Hidden rather than unmounted while the canvas is open: the body element
+          is where the note lives, and a save that lands meanwhile must still find
+          it. */}
+      <div
+        className={`document${openDrawingId !== null ? ' is-hidden' : ''}`}
+        style={{ maxWidth: measure }}
+      >
         <input
           className="doc-title"
           placeholder="Untitled"
@@ -507,6 +603,17 @@ export function Editor({
           }}
           onClick={(event) => {
             const target = event.target as HTMLElement
+            // A click anywhere in a drawing block opens the drawing, image and
+            // label alike, which is what "click to open" promises.
+            const canvas = target.closest('[data-canvas]')
+            if (canvas !== null) {
+              const id = (canvas as HTMLElement).dataset.canvas
+              if (id !== undefined && id.length > 0) {
+                setSelectedImage(null)
+                setOpenDrawingId(id)
+                return
+              }
+            }
             setSelectedImage(target.tagName === 'IMG' ? (target as HTMLImageElement) : null)
           }}
         />

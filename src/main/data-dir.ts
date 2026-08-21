@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 
-import { ASSETS_DIR, INDEX_FILE, NOTES_DIR } from '@shared/paths'
+import { ASSETS_DIR, DRAWINGS_DIR, INDEX_FILE, NOTES_DIR } from '@shared/paths'
 
-export { ASSETS_DIR, INDEX_FILE, NOTES_DIR }
+export { ASSETS_DIR, DRAWINGS_DIR, INDEX_FILE, NOTES_DIR }
 
 /**
  * Where Nib keeps user-facing data (the index, the note files, image assets).
@@ -49,6 +49,7 @@ export function migrateLegacyData(): void {
     copyFileSync(join(legacyDir, INDEX_FILE), join(dataDir, INDEX_FILE))
     copyDirIfPresent(join(legacyDir, NOTES_DIR), join(dataDir, NOTES_DIR))
     copyDirIfPresent(join(legacyDir, ASSETS_DIR), join(dataDir, ASSETS_DIR))
+    copyDirIfPresent(join(legacyDir, DRAWINGS_DIR), join(dataDir, DRAWINGS_DIR))
   } catch (error) {
     console.error('Failed to migrate Nib data to NIB_DATA_DIR', error)
   }

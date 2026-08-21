@@ -74,6 +74,42 @@ export interface NibIndex {
   categories: Category[]
 }
 
+/** The tools a stroke can be drawn with. */
+export type StrokeTool = 'pen' | 'highlighter' | 'eraser'
+
+/** One sampled point: position plus the stylus pressure that produced it. */
+export interface StrokePoint {
+  x: number
+  y: number
+  /** 0..1. A mouse reports a constant 0.5, which is what makes it draw evenly. */
+  p: number
+}
+
+export interface Stroke {
+  tool: StrokeTool
+  color: string
+  /** The nib width before pressure is applied. */
+  width: number
+  points: StrokePoint[]
+}
+
+/**
+ * One drawing, stored as its own file.
+ *
+ * A drawing is kept twice over: the strokes, so it stays editable, and a
+ * rendered PNG in the assets folder, so a note can show it without a canvas.
+ * See DECISIONS 2026-08-21.
+ */
+export interface DrawingDoc {
+  id: string
+  /** The surface size the strokes were drawn against, in CSS pixels. */
+  width: number
+  height: number
+  strokes: Stroke[]
+  /** The `nib-asset://` URL of the rendered PNG, or empty before the first render. */
+  image: string
+}
+
 /** One note file. Self-describing, so a lost index can be rebuilt from these. */
 export interface NoteDoc {
   id: string
