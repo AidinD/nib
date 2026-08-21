@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { STICKY_TINTS } from '@shared/types'
 import { useNib } from '../lib/useNib'
+import { applyPrefs, readPrefs } from '../lib/prefs'
 import {
   applyImageWidths,
   bodyHasDrawing,
@@ -30,6 +31,12 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
   // The `edited` stamp of what the body holds, so an edit made in the main
   // window can be picked up instead of being overwritten by this one.
   const loadedEdited = useRef(0)
+
+  // The accent and the serif choice are shared with the main window; a sticky
+  // reads them once on open rather than watching for changes.
+  useEffect(() => {
+    applyPrefs(readPrefs())
+  }, [])
 
   const note =
     index.categories.flatMap((category) => category.notes).find((n) => n.id === noteId) ?? null

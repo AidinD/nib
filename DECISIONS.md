@@ -3,6 +3,24 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-21 - View preferences are per machine, not part of the notes
+
+The accent colour, the serif body switch and the measure live in the renderer's
+localStorage, not in the data directory beside the notes.
+
+They are display choices, not note data: how wide a column should be on this
+screen, which accent this monitor suits. Putting them in the synced folder would
+mean the laptop's window width fighting the desktop's on every start, for no gain.
+
+Every window of the app shares one origin, so a sticky window reads the values the
+main window wrote - which is how a sticky picks up the accent without any wiring
+between the two.
+
+The accent is applied by overwriting the `--accent` token on the root element.
+Everything already built against that token - focus rings, the drop marker, the
+image tag, the pressure meter to come - follows without knowing a setting exists.
+
+
 ## 2026-08-21 - An image's size is stored in a data attribute, not a style or a width
 
 The width of an image in a note is stored as `data-w` and applied as an inline
