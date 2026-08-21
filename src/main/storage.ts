@@ -6,7 +6,15 @@ import {
   unwatchFile as unwatchFileFs
 } from 'fs'
 import { basename, dirname, join } from 'path'
-import type { Category, NibIndex, NoteDoc, NoteMeta, Scope, SubCategory } from '@shared/types'
+import type {
+  AlertMeta,
+  Category,
+  NibIndex,
+  NoteDoc,
+  NoteMeta,
+  Scope,
+  SubCategory
+} from '@shared/types'
 import { INDEX_FILE, NOTES_DIR } from '@shared/paths'
 
 const MAX_WRITE_ATTEMPTS = 4
@@ -89,6 +97,25 @@ function normalizeScope(value: unknown): Scope {
   return value === 'W' || value === 'P' ? value : ''
 }
 
+// Capped on both axes: the index is read on every start and rendered into a
+// strip, so one pathological note must not be able to bloat it.
+const MAX_ALERTS_PER_NOTE = 24
+const MAX_ALERT_TEXT = 160
+
+function normalizeAlerts(raw: unknown): AlertMeta[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw
+    .filter((entry) => entry !== null && typeof entry === 'object')
+    .map((entry) => ({
+      id: str((entry as { id?: unknown }).id),
+      text: str((entry as { text?: unknown }).text).slice(0, MAX_ALERT_TEXT)
+    }))
+    .filter((alert) => alert.id.length > 0)
+    .slice(0, MAX_ALERTS_PER_NOTE)
+}
+
 function normalizeSub(raw: any): SubCategory {
   return { id: String(raw?.id ?? ''), name: str(raw?.name) }
 }
@@ -111,6 +138,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     edited: num(raw?.edited, created),
     pinned: raw?.pinned === true,
     tint: str(raw?.tint),
+    alerts: normalizeAlerts(raw?.alerts),
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }

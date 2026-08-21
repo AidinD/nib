@@ -11,6 +11,19 @@ export interface SubCategory {
 }
 
 /**
+ * One flagged block inside a note - an action point.
+ *
+ * The flag lives on the block in the note body; this is its shadow in the index,
+ * so the alert strip and the "Needs you" list can be built without opening a
+ * single note file. `text` is the block's own text, trimmed to a chip's worth.
+ */
+export interface AlertMeta {
+  /** Matches `data-alert-id` on the block, which is how a click jumps to it. */
+  id: string
+  text: string
+}
+
+/**
  * Everything about a note except its body.
  *
  * This is what the index file carries and what the note list renders from, so
@@ -31,6 +44,8 @@ export interface NoteMeta {
   pinned: boolean
   /** The sticky window's tint. Empty means the default amber. */
   tint: string
+  /** The action points flagged inside this note, in document order. */
+  alerts: AlertMeta[]
   hasImage: boolean
   hasDrawing: boolean
 }

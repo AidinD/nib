@@ -937,3 +937,140 @@ body.is-sticky-window {
 .is-serif .sticky-title {
   font-family: 'Iowan Old Style', Georgia, serif;
 }
+
+/* ---------- alerts ---------- */
+
+:root {
+  /* Action points get their own colour rather than borrowing one: amber already
+     means sticky, and --danger means delete. This is Jot's own Urgent orange, so
+     the two apps still agree on what "attention" looks like. */
+  --alert: #ff8c42;
+}
+
+.marker-alert {
+  background: transparent;
+  border: 2px solid var(--alert);
+}
+
+/* The strip sits between the header and the panes, and only exists when there
+   is something in it. */
+.alert-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 10px;
+  min-width: 0;
+}
+
+.alert-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--alert);
+}
+
+.alert-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.alert-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.alert-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 0 auto;
+  max-width: 260px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.alert-chip:hover {
+  background: var(--surface-hover);
+  border-color: var(--alert);
+}
+
+.alert-chip-note {
+  flex: 0 0 auto;
+  color: var(--alert);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.alert-more {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  border: 1px dashed var(--border);
+}
+
+/* A flagged block in the document, and the same flag in a sticky. The bar is on
+   the left because that is where a reader's eye starts a line. */
+.doc-body [data-alert='1'],
+.sticky-body [data-alert='1'] {
+  position: relative;
+  padding-left: 10px;
+  border-left: 2px solid var(--alert);
+}
+
+/* Arriving from the strip: flash once, so the eye lands on the right line. */
+.doc-body .is-flashing {
+  animation: alert-flash 1.4s ease-out;
+}
+
+@keyframes alert-flash {
+  0%,
+  40% {
+    background: rgba(255, 140, 66, 0.22);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.alert-button:hover {
+  color: var(--alert);
+}
+
+/* The review list shows a note's action points instead of its opening lines. */
+.card-alerts {
+  margin: 5px 0 0;
+  padding-left: 14px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.card-alerts li::marker {
+  color: var(--alert);
+}
+
+/* The chip reads as "note · what needs doing", so the two halves get a
+   separator rather than only a gap. */
+.alert-chip-note::after {
+  content: '·';
+  margin-left: 6px;
+  opacity: 0.5;
+}

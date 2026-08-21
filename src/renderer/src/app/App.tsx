@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
+import { AlertStrip } from './AlertStrip'
 import { Editor } from './Editor'
 import { NoteList } from './NoteList'
 import { Settings } from './Settings'
@@ -16,6 +17,9 @@ export function App(): React.JSX.Element {
   const [search, setSearch] = useState('')
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [prefs, setPrefs] = useState(readPrefs)
+  // Set when arriving from the alert strip: the editor scrolls to this block and
+  // flashes it once, then clears the request.
+  const [focusAlertId, setFocusAlertId] = useState<string | null>(null)
 
   const notes = useMemo(
     () => selectedNotes(index, selection, scope, search),
@@ -110,6 +114,16 @@ export function App(): React.JSX.Element {
         </div>
       </header>
 
+      <AlertStrip
+        index={index}
+        scope={scope}
+        onOpen={(note, alertId) => {
+          setActiveNoteId(note.id)
+          setFocusAlertId(alertId)
+        }}
+        onShowAll={() => setSelection({ kind: 'alerts' })}
+      />
+
       <main className="panes">
         <Sidebar
           index={index}
@@ -148,6 +162,8 @@ export function App(): React.JSX.Element {
           index={index}
           note={activeNote}
           measure={prefs.measure}
+          focusAlertId={focusAlertId}
+          onAlertFocused={() => setFocusAlertId(null)}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
           onTogglePin={(note) => void togglePin(note)}
         />

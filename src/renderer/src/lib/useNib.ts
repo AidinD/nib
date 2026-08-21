@@ -223,6 +223,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               edited: now,
               pinned: false,
               tint: '',
+              alerts: [],
               hasImage: false,
               hasDrawing: false
             },

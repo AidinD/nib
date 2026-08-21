@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import {
   applyImageWidths,
+  blockAtSelection,
   bodyHasDrawing,
   bodyHasImage,
   buildPreview,
   deriveTitle,
+  extractAlerts,
   imageWidth,
+  newId,
   noteTrail,
   relativeTime,
   sanitizeHtml,
@@ -21,13 +24,24 @@ interface EditorProps {
   note: NoteMeta | null
   /** Measure - the editor column width, adjustable per the design spec. */
   measure: number
+  /** An alert to scroll to and flash once the note is loaded. */
+  focusAlertId: string | null
+  onAlertFocused: () => void
   onSaved: (noteId: string, patch: Partial<NoteMeta>) => void
   onTogglePin: (note: NoteMeta) => void
 }
 
 type SaveState = 'saved' | 'dirty' | 'saving'
 
-export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorProps): React.JSX.Element {
+export function Editor({
+  index,
+  note,
+  measure,
+  focusAlertId,
+  onAlertFocused,
+  onSaved,
+  onTogglePin
+}: EditorProps): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [title, setTitle] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('saved')
@@ -73,7 +87,8 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
       preview: buildPreview(html),
       edited,
       hasImage: bodyHasImage(html),
-      hasDrawing: bodyHasDrawing(html)
+      hasDrawing: bodyHasDrawing(html),
+      alerts: extractAlerts(html)
     })
     setSaveState('saved')
   }, [note, onSaved, title])
@@ -189,6 +204,65 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
     },
     [onBodyInput]
   )
+
+  /**
+   * Flag the block the caret is in as an action point, or clear the flag.
+   *
+   * The flag is a data attribute on the block itself rather than a separate list
+   * of positions: text moves as a note is edited, and a position would be stale
+   * the moment a paragraph was inserted above it. The id is minted here, once,
+   * so the alert strip can jump back to this exact block later.
+   */
+  const toggleAlert = useCallback(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const block = blockAtSelection(root)
+    if (block === null) {
+      return
+    }
+    if (block.dataset.alert === '1') {
+      delete block.dataset.alert
+    } else {
+      block.dataset.alert = '1'
+      if (block.dataset.alertId === undefined || block.dataset.alertId.length === 0) {
+        block.dataset.alertId = newId('alert')
+      }
+    }
+    onBodyInput()
+  }, [onBodyInput])
+
+  /** Scroll to a flagged block and flash it, when arriving from the alert strip. */
+  useEffect(() => {
+    const root = bodyRef.current
+    if (focusAlertId === null || root === null || note === null) {
+      return
+    }
+    // The body may still be loading; retry on the next frame until it is there.
+    let frames = 0
+    let cancelled = false
+    const look = (): void => {
+      if (cancelled || bodyRef.current === null) {
+        return
+      }
+      const target = bodyRef.current.querySelector(`[data-alert-id="${focusAlertId}"]`)
+      if (target !== null) {
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        target.classList.add('is-flashing')
+        window.setTimeout(() => target.classList.remove('is-flashing'), 1400)
+        onAlertFocused()
+        return
+      }
+      if (frames++ < 60) {
+        window.requestAnimationFrame(look)
+      }
+    }
+    window.requestAnimationFrame(look)
+    return () => {
+      cancelled = true
+    }
+  }, [focusAlertId, note?.id, onAlertFocused])
 
   const wrapInCode = useCallback(() => {
     const selection = window.getSelection()
@@ -366,6 +440,16 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
         </div>
 
         <div className="toolbar-right">
+          {/* Outside the scrolling half on purpose: the formatting buttons can
+              scroll out of reach on a narrow panel, this must not. */}
+          <button
+            type="button"
+            className="alert-button"
+            title="Flag the block the caret is in as an action point"
+            onClick={toggleAlert}
+          >
+            Alert
+          </button>
           <span className={`save-state${saveState === 'saved' ? '' : ' is-pending'}`}>
             {saveState === 'saved' ? 'Saved' : 'Saving…'}
           </span>
