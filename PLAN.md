@@ -1,17 +1,16 @@
 # Nib - plan
 
-Last reconciled: 2026-08-19.
+Last reconciled: 2026-08-21.
 
 ## Status
 
-**Design settled, implementation starts the week of 2026-08-24.**
-The repository holds the design spec and the reasoning; there is no application code yet.
+**The app runs.** The scaffold, the storage layer and the three-pane main window
+are in place, notes survive a restart, and pinning a note opens a real sticky
+window bound to the same note file.
 
-What exists:
-
-- The design spec in [docs/design-spec.md](docs/design-spec.md), distilled from the Claude Design mock. It now covers all three surfaces: the main window, the sticky windows, and the drawing canvas.
-- The decisions taken so far in [DECISIONS.md](DECISIONS.md).
-- No `package.json`, no source tree, no build. That is the next step.
+Verified by running the built app against a seeded data directory: the sidebar,
+the note list, the editor and a sticky window were all exercised on screen. What
+has *not* been exercised end to end yet is listed under "Not verified" below.
 
 ## What Nib is
 
@@ -21,46 +20,56 @@ Same feel, same local-first approach, separate app and separate data.
 
 ## Requirements
 
-These come from the author's own list, captured before any design work.
-All six are now covered by the mock.
+From the author's own list, with where each one stands.
 
-| Requirement | Covered by the mock |
+| Requirement | State |
 | --- | --- |
-| Same shape as Jot, with the list on the left | Yes, and restyled to Jot's own tokens |
-| Real formatting (headings, emphasis, lists, quotes, code) | Yes |
-| Paste images directly into the document, not as attachments | Yes |
-| Sub-categories, e.g. `Manager meeting > February > note` | Yes |
-| Sticky notes | Yes, as their own artboard |
-| Canvas drawing with a pressure-sensitive stylus (stretch goal) | Yes, drawing for real off `event.pressure` |
+| Same shape as Jot, with the list on the left | Done - three panes, Jot's tokens |
+| Real formatting (headings, emphasis, lists, quotes, code) | Done |
+| Paste images directly into the document, not as attachments | Built, not yet exercised on a real paste |
+| Sub-categories, e.g. `Manager meeting > February > note` | Done |
+| Sticky notes | Done - a window per pinned note |
+| Canvas drawing with a pressure-sensitive stylus (stretch goal) | Not started |
+| **Alerts** - mark a note as an action point and see them in one "needs you" view | Not started; new since the design spec |
 
-## Scope for the first version
+The Alerts requirement arrived in the Jot task list after the design spec was
+written, so the spec does not cover it. It needs a design decision before it is
+built: what carries the flag (a note, or a block inside a note), and whether the
+view is a fourth smart row or something else.
 
-In:
+## Built so far
 
-- The main window exactly as specified in the design spec: three panes, three-level sidebar, editor.
-- Persistence to disk, with notes surviving restarts.
-- Inline images.
-- Sticky windows.
+- **Scaffold** mirroring Jot: Electron + electron-vite + React + TypeScript, `src/main`, `src/preload`, `src/renderer`, `src/shared`, electron-builder for a Windows NSIS build.
+- **Storage** in [src/main/storage.ts](src/main/storage.ts): `index.json` for ordering and metadata, `notes/<id>.json` per note body, atomic writes with the Dropbox/antivirus retry Jot needed, index writes serialised, and an external-change watch (event-driven plus a poll, because `fs.watch` drops the atomic renames).
+- **Data directory** in [src/main/data-dir.ts](src/main/data-dir.ts): `userData` by default, `NIB_DATA_DIR` to relocate, one-time migration across.
+- **Main window**: header with wordmark, version, search and a measure slider; 210px sidebar with smart rows, the scope filter, categories, sub-categories, inline rename and the dashed add fields; 280px note list with previews, crumbs, relative times, pin and delete; the editor panel with the toolbar, title, metadata row and the document body.
+- **Editor**: headings, body, bold/italic/underline/strike, inline code, bullet and numbered lists, quote, divider, image insert, 600ms debounced autosave with a Saved/Saving indicator, `Ctrl+Enter` to save now, `Ctrl+Shift+8` for a bullet list, paste and drop of images, and the floating Smaller/Larger/Remove toolbar on a selected image.
+- **Sticky windows**: 280x320, frameless, always on top, tint swatches, editable in place, footer trail. Bound to the pinned note, editing the same file the main window edits.
 
-Out, for now:
+## Not verified
 
-- The stylus canvas. The mock proves the interaction works, which was the open question; wiring it to real storage is a second decision (stroke data, a rendered image, or both) and it should not hold up the rest.
-- Sync beyond whatever the storage folder itself syncs.
+Worth a pass before this is called finished:
+
+- Pasting a real image, and what a stored asset looks like on disk afterwards.
+- Two windows editing the same note at once (main window and its sticky).
+- The `NIB_DATA_DIR` migration path, which has only been read, not run.
 
 ## Next steps
 
-1. Scaffold the app: Electron + electron-vite + React + TypeScript, mirroring Jot's project layout.
-2. Build the storage layer first, since it decides the shape of everything above it.
-3. Build the three-pane shell against the design spec, sidebar included.
-4. Build the editor, then inline images.
-5. Add sticky windows, which need a second window type in the main process.
-6. Then the canvas, once there is somewhere to put a drawing.
+1. Drag and drop: reorder categories and notes, and move a note by dropping it on a category or sub-category row. The spec's insertion marker (3px accent bar, inset, rounded, glowing) is not built yet.
+2. Exercise the image path for real, then decide whether the asset folder needs a garbage collection pass when notes are deleted.
+3. Decide and build **Alerts**, since it is the one requirement with no design behind it.
+4. The canvas block, plus the storage decision it depends on.
+5. The remaining spec settings: accent colour and the serif body switch. The measure slider is built.
 
 ## Open questions
 
-- **How is a drawing stored inside a note?** Stroke data keeps it editable and small; a rendered image makes it portable and lets a note render anywhere without a canvas. Probably both, but that is a decision for when the canvas is built, not before.
-- **Does anything move between Jot and Nib?** Turning a note into a todo, or attaching a note to a todo, is an obvious pull once both exist. Not planned yet.
+- **How is a drawing stored inside a note?** Stroke data keeps it editable and small; a rendered image makes it portable. Probably both, but it is a decision for when the canvas is built.
+- **What does an Alert attach to?** A whole note is the simple answer and matches the note list; a block inside a note matches how the requirement was written ("mark a subtitle as an alert").
+- **Do deleted notes leave their images behind?** Assets are content-addressed and shared between notes, so deleting a note cannot simply delete its images. A sweep that drops unreferenced assets is the obvious answer and is not built.
+- **Does anything move between Jot and Nib?** Turning a note into a todo, or attaching a note to a todo. Not planned yet.
 
-Settled since the first draft: the name, the separate-app question, the storage format
-and location, the sub-category depth (one level), and the whole visual design.
+Settled: the name, the separate-app question, the storage format and location, the
+sub-category depth, the whole visual design, and - as of this session - where
+images live and how the two window types share one renderer bundle.
 See [DECISIONS.md](DECISIONS.md).
