@@ -65,10 +65,21 @@ export function Sidebar({
         <SmartRow
           label="Sticky notes"
           count={counts.sticky}
-          sticky
+          marker="sticky"
           active={selection.kind === 'sticky'}
           onClick={() => onSelect({ kind: 'sticky' })}
         />
+        {/* Only when there is something to need you. An always-present row
+            reading 0 is furniture; this one appears when it means something. */}
+        {counts.alerts > 0 && (
+          <SmartRow
+            label="Needs you"
+            count={counts.alerts}
+            marker="alert"
+            active={selection.kind === 'alerts'}
+            onClick={() => onSelect({ kind: 'alerts' })}
+          />
+        )}
       </div>
 
       <div className="scope-filter" role="group" aria-label="Scope">
@@ -131,20 +142,21 @@ function SmartRow({
   label,
   count,
   active,
-  sticky = false,
+  marker = 'plain',
   onClick
 }: {
   label: string
   count: number
   active: boolean
-  sticky?: boolean
+  marker?: 'plain' | 'sticky' | 'alert'
   onClick: () => void
 }): React.JSX.Element {
   return (
     <button type="button" className={`row smart-row${active ? ' is-active' : ''}`} onClick={onClick}>
-      {/* The sticky row's marker is a rounded square rather than a dot, which is
-          what tells the three smart rows apart at a glance. */}
-      <span className={sticky ? 'marker marker-sticky' : 'marker'} />
+      {/* The markers are what tell the smart rows apart at a glance: a dot for
+          the plain ones, a rounded amber square for sticky, an orange ring for
+          the action points. */}
+      <span className={marker === 'plain' ? 'marker' : `marker marker-${marker}`} />
       <span className="row-label">{label}</span>
       <span className="row-count">{count}</span>
     </button>

@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import type { Category, NoteMeta } from '@shared/types'
+import type { AlertMeta, Category, NoteMeta } from '@shared/types'
 
 /**
  * Ids are used as filenames, so they stay inside the character class the storage
@@ -29,7 +29,7 @@ const PURIFY_CONFIG = {
     'a', 'img',
     'table', 'thead', 'tbody', 'tr', 'th', 'td'
   ],
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class', 'data-canvas', 'data-w'],
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class'],
   // The custom scheme is how a stored image is referenced; data: is what a paste
   // arrives as before it has been written to the assets folder.
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/|nib-asset:)/i
@@ -38,6 +38,9 @@ const PURIFY_CONFIG = {
 export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, PURIFY_CONFIG)
 }
+
+// Data attributes are allowed through by DOMPurify's own default, which is what
+// `data-w`, `data-canvas`, `data-alert` and `data-alert-id` all rely on.
 
 /**
  * An image's size lives in `data-w` and is applied as an inline style when the
@@ -93,6 +96,51 @@ export function buildPreview(html: string): string {
   }
   const joined = parts.length > 0 ? parts.join(' · ') : htmlToText(html)
   return joined.slice(0, 200)
+}
+
+/** Blocks that can carry an alert flag - the ones a thought fits in. */
+const ALERT_BLOCKS = 'p, h1, h2, h3, h4, li, blockquote'
+
+/**
+ * The action points flagged inside a note body.
+ *
+ * The flag is `data-alert` on a block, with `data-alert-id` identifying it so a
+ * click in the alert strip can jump back to the exact block. Both are data
+ * attributes because those are what survive the sanitiser - see
+ * `applyImageWidths` for the same lesson learned the hard way.
+ */
+export function extractAlerts(html: string): AlertMeta[] {
+  const holder = document.createElement('div')
+  holder.innerHTML = sanitizeHtml(html)
+  const alerts: AlertMeta[] = []
+  for (const block of holder.querySelectorAll(`${ALERT_BLOCKS}`)) {
+    const element = block as HTMLElement
+    if (element.dataset.alert !== '1') {
+      continue
+    }
+    const id = element.dataset.alertId
+    if (id === undefined || id.length === 0) {
+      continue
+    }
+    alerts.push({
+      id,
+      text: (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160)
+    })
+  }
+  return alerts
+}
+
+/** The block a selection sits in, or null when the selection is outside `root`. */
+export function blockAtSelection(root: HTMLElement): HTMLElement | null {
+  const selection = window.getSelection()
+  const anchor = selection?.anchorNode ?? null
+  if (anchor === null || !root.contains(anchor)) {
+    return null
+  }
+  const start = anchor instanceof HTMLElement ? anchor : anchor.parentElement
+  const block = start?.closest(ALERT_BLOCKS) ?? null
+  // `closest` can walk out of the editor entirely; only a block inside it counts.
+  return block !== null && root.contains(block) ? (block as HTMLElement) : null
 }
 
 export function wordCount(html: string): number {

@@ -154,7 +154,17 @@ export function NoteList({
                 </button>
               </div>
 
-              {note.preview.length > 0 && <p className="card-preview">{note.preview}</p>}
+              {/* In the review view a card shows its action points rather than
+                its opening lines: that is what you came to the list for. */}
+              {selection.kind === 'alerts' && note.alerts.length > 0 ? (
+                <ul className="card-alerts">
+                  {note.alerts.map((alert) => (
+                    <li key={alert.id}>{alert.text}</li>
+                  ))}
+                </ul>
+              ) : (
+                note.preview.length > 0 && <p className="card-preview">{note.preview}</p>
+              )}
 
               <div className="card-meta">
                 {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}

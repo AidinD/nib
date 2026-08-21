@@ -3,6 +3,38 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-21 - Alerts are block-level flags, shown in a strip and a review row
+
+An action point is a flag on a **block** inside a note - `data-alert="1"` plus a
+`data-alert-id` on the paragraph, heading, bullet or quote itself. A note counts as
+needing you when it holds at least one. Both levels exist, and the block is the
+truth.
+
+The flag lives on the block rather than in a list of positions because text moves:
+a stored offset would be stale the moment a paragraph was inserted above it. The
+id is minted when the flag is set, which is what lets a click jump back to that
+exact line.
+
+The index carries a shadow of each note's alerts (id plus the block's text, capped
+at 24 per note and 160 characters each), so both views can be built without
+opening a single note file - the same reason the index carries a preview.
+
+Two surfaces, doing different jobs:
+
+- **A horizontal strip under the header**, holding up to six chips. Action points cut across categories, so they belong to no single list, and a row that is simply *there* nags in a way a list you have to open cannot. It renders nothing when there is nothing to show, so it costs no space until it means something.
+- **A "Needs you" row in the sidebar**, appearing only when the count is above zero, whose list shows each note's flagged lines instead of its opening lines. This is the review view; the strip's "+N more" chip hands over to it.
+
+Considered and rejected: **a separate always-on-top window** for the action points,
+like the sticky windows. Stickies already do the floating-list job, and two
+competing floating lists on one desktop is one too many - the pinned note you
+chose to float would end up next to a window listing things you did not choose.
+
+Also considered: flagging **only whole notes**, which is simpler and reuses the
+note list as it stands. Rejected because a long meeting note with one action point
+in it is a coarse hit - the requirement was written as marking a line, not a
+document.
+
+
 ## 2026-08-21 - View preferences are per machine, not part of the notes
 
 The accent colour, the serif body switch and the measure live in the renderer's

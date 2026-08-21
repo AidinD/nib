@@ -1,10 +1,11 @@
-import type { Category, NibIndex, NoteMeta } from '@shared/types'
+import type { AlertMeta, Category, NibIndex, NoteMeta } from '@shared/types'
 
 /** What the note list is currently showing. */
 export type Selection =
   | { kind: 'all' }
   | { kind: 'recent' }
   | { kind: 'sticky' }
+  | { kind: 'alerts' }
   | { kind: 'category'; categoryId: string }
   | { kind: 'sub'; categoryId: string; subId: string }
 
@@ -54,6 +55,13 @@ export function selectedNotes(
     case 'sticky':
       notes = allNotes(index, filter).filter((note) => note.pinned)
       break
+    // The review view for action points: the notes that hold one, newest first,
+    // because an action point you wrote today is the one still on your mind.
+    case 'alerts':
+      notes = allNotes(index, filter)
+        .filter((note) => note.alerts.length > 0)
+        .sort((a, b) => b.edited - a.edited)
+      break
     case 'category': {
       const category = index.categories.find((c) => c.id === selection.categoryId)
       notes = category === undefined ? [] : pinnedFirst(category.notes)
@@ -101,6 +109,8 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
       return 'Recent'
     case 'sticky':
       return 'Sticky notes'
+    case 'alerts':
+      return 'Needs you'
     case 'category':
       return index.categories.find((c) => c.id === selection.categoryId)?.name ?? ''
     case 'sub': {
@@ -114,7 +124,10 @@ export function selectionColor(index: NibIndex, selection: Selection): string {
   if (selection.kind === 'category' || selection.kind === 'sub') {
     return index.categories.find((c) => c.id === selection.categoryId)?.color ?? '#9a9da3'
   }
-  return selection.kind === 'sticky' ? '#ffb054' : '#9a9da3'
+  if (selection.kind === 'sticky') {
+    return '#ffb054'
+  }
+  return selection.kind === 'alerts' ? '#ff8c42' : '#9a9da3'
 }
 
 /** Where a new note goes for the current selection, or null when it has no home. */
@@ -133,11 +146,25 @@ export function selectionTarget(
 export function smartCounts(
   index: NibIndex,
   filter: ScopeFilter
-): { all: number; recent: number; sticky: number } {
+): { all: number; recent: number; sticky: number; alerts: number } {
   const notes = allNotes(index, filter)
   return {
     all: notes.length,
     recent: Math.min(notes.length, RECENT_LIMIT),
-    sticky: notes.filter((note) => note.pinned).length
+    sticky: notes.filter((note) => note.pinned).length,
+    // Counted in action points, not in notes: the row answers "how many things
+    // need me", and one note can hold several.
+    alerts: notes.reduce((total, note) => total + note.alerts.length, 0)
   }
+}
+
+/** Every flagged block in the app, with the note it lives in - what the strip shows. */
+export function allAlerts(
+  index: NibIndex,
+  filter: ScopeFilter
+): Array<{ note: NoteMeta; alert: AlertMeta }> {
+  return allNotes(index, filter)
+    .slice()
+    .sort((a, b) => b.edited - a.edited)
+    .flatMap((note) => note.alerts.map((alert) => ({ note, alert })))
 }
