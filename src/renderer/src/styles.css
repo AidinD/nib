@@ -509,33 +509,27 @@ input {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* One row, always. Wrapping put the save state and the sticky toggle on a
-     second line, which read as a second toolbar rather than as its right end. */
+  /* The right end stays on the first line - it read as a second toolbar when it
+     wrapped - while the formatting groups are free to wrap under themselves. */
   flex-wrap: nowrap;
+  align-items: flex-start;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
-.toolbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* The scrolling half of the toolbar. Its own overflow, so a narrow panel eats
-   into the formatting buttons and never into the save state. */
+/*
+ * The formatting groups. They wrap rather than scroll: a scrolling toolbar hid
+ * the Image and Canvas buttons off its right edge, and a button you cannot see
+ * is a feature you do not have. Wrapping costs a row of height on a narrow
+ * panel and shows everything.
+ */
 .toolbar-scroll {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.toolbar-scroll::-webkit-scrollbar {
-  display: none;
 }
 
 .toolbar-group {
@@ -570,6 +564,9 @@ input {
   margin-left: auto;
   padding-left: 8px;
   flex: 0 0 auto;
+  /* Aligned with the first row of formatting buttons, not with the middle of a
+     wrapped block. */
+  min-height: 24px;
 }
 
 .save-state {
@@ -1073,4 +1070,186 @@ body.is-sticky-window {
   content: '·';
   margin-left: 6px;
   opacity: 0.5;
+}
+
+/* ---------- canvas ---------- */
+
+.document.is-hidden {
+  display: none;
+}
+
+/* The block as it sits in the document: a bordered box on faint ruled paper,
+   with a violet marker, per the design spec. */
+.canvas-block {
+  position: relative;
+  /* The spec's 170px box. The drawing inside is a thumbnail: a note is a
+     document, not a gallery, and the full-size render is one click away. */
+  height: 170px;
+  margin: 14px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 25px,
+    rgba(255, 255, 255, 0.045) 25px,
+    rgba(255, 255, 255, 0.045) 26px
+  );
+  padding-top: 30px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.canvas-block:hover {
+  border-color: var(--violet);
+}
+
+/* The header is two pseudo-elements rather than markup: a violet marker and the
+   text. Keeping it out of the DOM is what stops it appearing in the note's
+   preview, word count and search. */
+.canvas-block::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--violet);
+}
+
+.canvas-block::after {
+  content: 'Drawing · click to open';
+  position: absolute;
+  top: 8px;
+  left: 26px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.canvas-block img {
+  display: block;
+  /* Fitted to the box rather than shown at its own size: the box is a fixed
+     170px and the drawing should use the width it has. */
+  width: 100%;
+  height: 128px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* The canvas open for drawing, filling the editor pane. */
+.canvas-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  padding-top: 12px;
+}
+
+.canvas-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.canvas-tools button {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.canvas-tools button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.canvas-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.canvas-width {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-width input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.ink-swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.ink {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.ink.is-selected {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.pointer-type {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Monospace on purpose: the number changes every event, and a proportional font
+   makes it jitter sideways while you draw. */
+.pressure-readout {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--surface-alt);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.pressure-meter {
+  position: relative;
+  width: 6px;
+  height: 22px;
+  border-radius: 3px;
+  background: var(--surface-alt);
+  overflow: hidden;
+}
+
+.pressure-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--accent);
+}
+
+.canvas-surface {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(255, 255, 255, 0.04) 27px,
+    rgba(255, 255, 255, 0.04) 28px
+  );
+  overflow: hidden;
+}
+
+.canvas-surface canvas {
+  display: block;
+  /* Without this the browser claims the gesture and scrolls instead of drawing. */
+  touch-action: none;
 }

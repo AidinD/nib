@@ -8,5 +8,7 @@
 export const INDEX_FILE = 'index.json'
 /** One file per note, named `<noteId>.json`. */
 export const NOTES_DIR = 'notes'
-/** Content-addressed images pasted into notes. */
+/** Content-addressed images pasted into notes, and rendered drawings. */
 export const ASSETS_DIR = 'assets'
+/** One file per drawing, named `<drawingId>.json`, holding its strokes. */
+export const DRAWINGS_DIR = 'drawings'

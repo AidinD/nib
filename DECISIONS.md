@@ -3,6 +3,40 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-21 - A drawing is stored twice: its strokes and a cropped PNG
+
+This closes the question the canvas was waiting on. A drawing is kept as **both**:
+
+- `drawings/<drawingId>.json` - the strokes, so the drawing stays editable and reopens exactly as it was left. Not pretty-printed: it is thousands of coordinates, and indenting them triples the file for nobody's benefit.
+- a PNG in the assets folder - so a note can show the drawing without a canvas, and so the note renders anywhere the images do.
+
+The note body holds neither. It holds a block - `<div class="canvas-block"
+data-canvas="<drawingId>">` - with the rendered image inside it. The id ties the
+block to its stroke file; the image is what makes the block worth looking at.
+
+Three things came out of building it:
+
+- **The PNG is cropped to the ink**, not to the surface. Exporting the whole canvas gave a mostly empty image, which then had to be scaled down into a 170px block - so the drawing itself came out tiny. Cropping to the ink's bounding box, padded by the widest nib, means the thumbnail shows the drawing and the asset is smaller.
+- **The block is inserted with DOM calls, not `execCommand('insertHTML')`.** A div is not valid inside a paragraph, so when the caret sat in one the browser unwrapped the block and left its contents behind as text - which then turned up in the note's preview. It is placed as a sibling of that paragraph instead.
+- **The block's header is drawn in CSS**, not markup, for the same reason: "Drawing · click to open" is chrome, and chrome in the DOM leaks into previews, word counts and search.
+
+Closing a canvas with nothing drawn removes the block and its file. Opening a
+canvas, changing your mind and closing it should leave the note as it was, not
+leave a 170px hole in it.
+
+## 2026-08-21 - A translucent stroke is one path, not a run of segments
+
+The pen paints each segment separately, because each segment's width comes from
+the pressure at that point - which is the whole reason a stylus stroke tapers.
+The highlighter cannot: overlapping round caps compound their alpha, and a sweep
+came out as a string of beads rather than a band.
+
+So any tool with alpha below 1 is painted as a single path at the stroke's mean
+pressure, and a live translucent stroke repaints whole on each move rather than
+appending a segment. The cost is that a highlighter does not taper with pressure,
+which is fair - a real one does not either.
+
+
 ## 2026-08-21 - Alerts are block-level flags, shown in a strip and a review row
 
 An action point is a flag on a **block** inside a note - `data-alert="1"` plus a

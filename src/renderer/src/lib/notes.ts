@@ -62,17 +62,45 @@ export function applyImageWidths(root: HTMLElement): void {
   }
 }
 
+/**
+ * Make the canvas blocks in a note body uneditable.
+ *
+ * `contenteditable` is not an allowed attribute - it is exactly the kind of thing
+ * a paste should not be able to smuggle in - so, like an image's width, it is
+ * re-applied after every load instead of being stored.
+ */
+export function applyCanvasBlocks(root: HTMLElement): void {
+  for (const block of root.querySelectorAll('[data-canvas]')) {
+    ;(block as HTMLElement).contentEditable = 'false'
+  }
+}
+
 /** The stored width of an image, or its natural width when it has none yet. */
 export function imageWidth(image: HTMLImageElement): number {
   const stored = Number(image.dataset.w)
   return Number.isFinite(stored) && stored > 0 ? stored : image.naturalWidth
 }
 
-/** A note's plain text, used for previews, word counts and search. */
-export function htmlToText(html: string): string {
+/**
+ * The note body as a detached element, with the drawing blocks taken out.
+ *
+ * A canvas block carries no text of the author's - its label is drawn by CSS
+ * precisely so it cannot leak into a preview, a word count or a search - but an
+ * image's alt text inside one would, so the blocks are removed here rather than
+ * trusted to be empty.
+ */
+function bodyElement(html: string): HTMLElement {
   const holder = document.createElement('div')
   holder.innerHTML = sanitizeHtml(html)
-  return (holder.textContent ?? '').replace(/\s+/g, ' ').trim()
+  for (const block of holder.querySelectorAll('[data-canvas]')) {
+    block.remove()
+  }
+  return holder
+}
+
+/** A note's plain text, used for previews, word counts and search. */
+export function htmlToText(html: string): string {
+  return (bodyElement(html).textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
 /**
@@ -81,8 +109,7 @@ export function htmlToText(html: string): string {
  * Blocks read as separate thoughts that way even at two lines.
  */
 export function buildPreview(html: string): string {
-  const holder = document.createElement('div')
-  holder.innerHTML = sanitizeHtml(html)
+  const holder = bodyElement(html)
   const blocks = holder.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, pre')
   const parts: string[] = []
   for (const block of blocks) {
@@ -110,8 +137,7 @@ const ALERT_BLOCKS = 'p, h1, h2, h3, h4, li, blockquote'
  * `applyImageWidths` for the same lesson learned the hard way.
  */
 export function extractAlerts(html: string): AlertMeta[] {
-  const holder = document.createElement('div')
-  holder.innerHTML = sanitizeHtml(html)
+  const holder = bodyElement(html)
   const alerts: AlertMeta[] = []
   for (const block of holder.querySelectorAll(`${ALERT_BLOCKS}`)) {
     const element = block as HTMLElement

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { NibIndex, NoteDoc } from '../shared/types'
+import type { DrawingDoc, NibIndex, NoteDoc } from '../shared/types'
 
 /**
  * The whole surface the renderer gets. Everything that touches disk happens in
@@ -16,6 +16,10 @@ const api = {
   /** Returns the `edited` timestamp the main process stamped on the file. */
   writeNote: (doc: NoteDoc): Promise<number> => ipcRenderer.invoke('note:write', doc),
   deleteNote: (id: string): Promise<void> => ipcRenderer.invoke('note:delete', id),
+
+  readDrawing: (id: string): Promise<DrawingDoc | null> => ipcRenderer.invoke('drawing:read', id),
+  writeDrawing: (doc: DrawingDoc): Promise<void> => ipcRenderer.invoke('drawing:write', doc),
+  deleteDrawing: (id: string): Promise<void> => ipcRenderer.invoke('drawing:delete', id),
 
   /** Store a pasted image and get back the URL to reference it by. */
   writeAsset: (dataUrl: string): Promise<string> => ipcRenderer.invoke('asset:write', dataUrl),
