@@ -3,6 +3,57 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-21 - An image's size is stored in a data attribute, not a style or a width
+
+The width of an image in a note is stored as `data-w` and applied as an inline
+style every time a note is loaded.
+
+Two more obvious approaches were tried and both lost the size silently:
+
+- **An inline `style`.** `style` is not on the sanitiser's allowed-attribute list, on purpose - letting arbitrary CSS in from a paste is exactly what a sanitiser is for. The resize looked right and was gone after a reload.
+- **A plain `width` attribute.** Allowed on paper, and still not present in the saved HTML. Data attributes, on the other hand, survive this configuration.
+
+So the size is kept as data and turned back into a width in one place,
+`applyImageWidths`, which every load path calls. Found by resizing a real pasted
+image, saving, and reading the note file back: the DOM said 375px and the file
+said nothing.
+
+## 2026-08-21 - Drag and drop is the native API, not Jot's @dnd-kit
+
+Jot reorders its lists with @dnd-kit. Nib uses the browser's own HTML5 drag and
+drop instead.
+
+What Nib has to drag decides it: a note card is dropped on three different kinds
+of target across two panes - between cards, on a category row, on a sub-category
+row - and the editor already handles native file drops for pasted images. One API
+for all of it beats a sortable-list library plus the native path side by side.
+
+Two things the native API forces and are worth knowing:
+
+- `dataTransfer` cannot be read during `dragover` (the spec calls it protected mode), so the dragged item is also kept in a module-level variable. A target has only `types` to go on otherwise.
+- Reordering is expressed as "place this before that", not "move to index N". The index form has to be corrected for the fact that pulling the item out shifts everything after it, and that correction is exactly the off-by-one everyone writes twice.
+
+Reordering is offered only inside a category, where the order is actually stored.
+The smart lists have their own sorts - Recent by edit time, Sticky by pin - so a
+card dropped there would snap straight back, and no marker is shown.
+
+## 2026-08-21 - A window picks up edits made to the same note elsewhere
+
+A note open in both the main window and its sticky window is one file, and either
+window reloads its body when the other one saves - but only while it is clean and
+unfocused.
+
+Both halves of that condition matter. Replacing the text under a caret that is
+mid-sentence is worse than showing the change a moment late, and a body with
+unsaved edits must never lose them to a reload. The result is that the two views
+converge as soon as you look away from one of them, instead of drifting apart and
+then overwriting each other.
+
+This is also what makes another machine's sync visible without a restart: the
+index watch fires, the note's `edited` stamp moves, and any window showing it that
+is not being typed into reloads.
+
+
 ## 2026-08-21 - Pasted images live in a content-addressed assets folder
 
 Images pasted into a note are written to `assets/<sha256>.<ext>` in the data

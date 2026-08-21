@@ -814,3 +814,42 @@ body.is-sticky-window {
   max-width: 100%;
   border-radius: 5px;
 }
+
+/* ---------- drag and drop ---------- */
+
+/* Jot learned this the hard way and its CSS records why: a thin full-width line
+   read as a section divider and nobody noticed it. So the insertion marker is a
+   3px bar, inset from both edges, fully rounded, with a soft glow. */
+.drop-marker {
+  height: 3px;
+  margin: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(111, 156, 255, 0.7);
+}
+
+/* A row that would receive the note being dragged. Not a coloured fill: an
+   accent outline over the hover wash, so it reads as a target rather than as a
+   selection. */
+.row.is-drop-target {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.card-slot {
+  display: flex;
+  flex-direction: column;
+}
+
+.card[draggable='true'] {
+  /* Text selection inside a card would otherwise start a text drag instead of a
+     card drag. */
+  user-select: none;
+}
+
+/* An image's width comes from its width attribute; height follows, so a resize
+   keeps the aspect ratio and never exceeds the column. */
+.doc-body img,
+.sticky-body img {
+  height: auto;
+}
