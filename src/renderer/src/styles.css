@@ -853,3 +853,87 @@ body.is-sticky-window {
 .sticky-body img {
   height: auto;
 }
+
+/* ---------- settings ---------- */
+
+.settings {
+  position: relative;
+}
+
+.settings-toggle {
+  width: 26px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.settings-toggle:hover {
+  background: var(--surface);
+}
+
+.settings-panel {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 10;
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.settings-row > span:first-child {
+  flex: 1;
+}
+
+.settings-row input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.settings-row input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+.settings-value {
+  width: 26px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.accent-swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.accent-swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.accent-swatch.is-selected {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+/* The serif setting changes the document body only. The chrome stays in the
+   interface font, so the app does not turn into a word processor. */
+.is-serif .doc-body,
+.is-serif .doc-title,
+.is-serif .sticky-body,
+.is-serif .sticky-title {
+  font-family: 'Iowan Old Style', Georgia, serif;
+}

@@ -46,6 +46,7 @@ view is a fourth smart row or something else.
 - **Main window**: header with wordmark, version, search and a measure slider; 210px sidebar with smart rows, the scope filter, categories, sub-categories, inline rename and the dashed add fields; 280px note list with previews, crumbs, relative times, pin and delete; the editor panel with the toolbar, title, metadata row and the document body.
 - **Editor**: headings, body, bold/italic/underline/strike, inline code, bullet and numbered lists, quote, divider, image insert, 600ms debounced autosave with a Saved/Saving indicator, `Ctrl+Enter` to save now, `Ctrl+Shift+8` for a bullet list, paste and drop of images, and the floating Smaller/Larger/Remove toolbar on a selected image.
 - **Sticky windows**: 280x320, frameless, always on top, tint swatches, editable in place, footer trail. Bound to the pinned note, editing the same file the main window edits.
+- **Settings**: a popover in the header for the accent colour, the serif body and the measure - the three things the mock left adjustable. Per machine, not synced.
 - **Drag and drop** on the native API: notes reorder within a category, categories reorder against each other, and a note dropped on a sub-category or category row moves there. The insertion marker is the spec's 3px inset accent bar with its glow, not a hairline - Jot's own CSS records why.
 
 ## Verified against the running app
@@ -57,11 +58,14 @@ view is a fourth smart row or something else.
 
 ## Next steps
 
-1. Decide and build **Alerts** - the one requirement with no design behind it. See the open question below.
+1. **Alerts.** Blocked on a design decision, not on work - see the open question below.
 2. The canvas block, plus the storage decision it depends on.
-3. The remaining spec settings: accent colour and the serif body switch. The measure slider is built.
-4. A sweep for unreferenced assets, once there is a reason to care - see the open question.
-5. Reopen sticky windows for pinned notes on start. Today a pinned note keeps its pin across restarts but its window has to be reopened by hand.
+3. A sweep for unreferenced assets, once there is a reason to care - see the open question.
+
+Everything else in the first version's scope is done: the three panes, the
+sidebar, the editor, persistence, inline images, sticky windows, drag and drop,
+and the mock's three adjustable settings. Sticky windows now also come back on
+start for notes that are still pinned.
 
 ## Open questions
 

@@ -2,15 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
 import { Editor } from './Editor'
 import { NoteList } from './NoteList'
+import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
 import { selectedNotes } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
-
-/** The editor column width, in the design spec's own range and step. */
-const MEASURE_MIN = 600
-const MEASURE_MAX = 1000
-const MEASURE_STEP = 20
+import { applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 
 export function App(): React.JSX.Element {
   const { index, loaded, ops } = useNib()
@@ -18,7 +15,7 @@ export function App(): React.JSX.Element {
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [search, setSearch] = useState('')
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  const [measure, setMeasure] = useState(() => readMeasure())
+  const [prefs, setPrefs] = useState(readPrefs)
 
   const notes = useMemo(
     () => selectedNotes(index, selection, scope, search),
@@ -41,8 +38,9 @@ export function App(): React.JSX.Element {
   }, [activeNote, activeNoteId])
 
   useEffect(() => {
-    window.localStorage.setItem('nib.measure', String(measure))
-  }, [measure])
+    applyPrefs(prefs)
+    writePrefs(prefs)
+  }, [prefs])
 
   const deleteNote = async (note: NoteMeta): Promise<void> => {
     ops.deleteNote(note.id)
@@ -88,16 +86,7 @@ export function App(): React.JSX.Element {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <label className="measure" title="Editor column width">
-            <input
-              type="range"
-              min={MEASURE_MIN}
-              max={MEASURE_MAX}
-              step={MEASURE_STEP}
-              value={measure}
-              onChange={(event) => setMeasure(Number(event.target.value))}
-            />
-          </label>
+          <Settings prefs={prefs} onChange={setPrefs} />
           <div className="window-controls">
             <button type="button" onClick={() => void window.nib.minimizeWindow()} title="Minimise">
               –
@@ -158,7 +147,7 @@ export function App(): React.JSX.Element {
         <Editor
           index={index}
           note={activeNote}
-          measure={measure}
+          measure={prefs.measure}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
           onTogglePin={(note) => void togglePin(note)}
         />
@@ -169,9 +158,4 @@ export function App(): React.JSX.Element {
       )}
     </div>
   )
-}
-
-function readMeasure(): number {
-  const stored = Number(window.localStorage.getItem('nib.measure'))
-  return Number.isFinite(stored) && stored >= MEASURE_MIN && stored <= MEASURE_MAX ? stored : 720
 }

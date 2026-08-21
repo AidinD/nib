@@ -202,6 +202,24 @@ void app.whenReady().then(() => {
 
   createMainWindow()
 
+  // Pinning a note is what produces its sticky window, and a pin outlives a
+  // restart - so the windows have to come back with it, or a pinned note would
+  // quietly stop being sticky until it was toggled again.
+  void store()
+    .loadIndex()
+    .then((index) => {
+      for (const category of index.categories) {
+        for (const note of category.notes) {
+          if (note.pinned) {
+            openStickyWindow(note.id)
+          }
+        }
+      }
+    })
+    .catch((error) => {
+      console.error('Failed to reopen sticky windows', error)
+    })
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow()
