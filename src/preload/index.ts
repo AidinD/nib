@@ -1,0 +1,47 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import type { NibIndex, NoteDoc } from '../shared/types'
+
+/**
+ * The whole surface the renderer gets. Everything that touches disk happens in
+ * the main process; this is the only way across, and it is a fixed list of
+ * calls rather than a general "invoke anything" hole.
+ */
+const api = {
+  info: (): Promise<{ version: string; dataDir: string }> => ipcRenderer.invoke('app:info'),
+
+  loadIndex: (): Promise<NibIndex> => ipcRenderer.invoke('index:load'),
+  saveIndex: (index: NibIndex): Promise<void> => ipcRenderer.invoke('index:save', index),
+
+  readNote: (id: string): Promise<NoteDoc | null> => ipcRenderer.invoke('note:read', id),
+  /** Returns the `edited` timestamp the main process stamped on the file. */
+  writeNote: (doc: NoteDoc): Promise<number> => ipcRenderer.invoke('note:write', doc),
+  deleteNote: (id: string): Promise<void> => ipcRenderer.invoke('note:delete', id),
+
+  /** Store a pasted image and get back the URL to reference it by. */
+  writeAsset: (dataUrl: string): Promise<string> => ipcRenderer.invoke('asset:write', dataUrl),
+
+  openSticky: (noteId: string): Promise<void> => ipcRenderer.invoke('sticky:open', noteId),
+  closeSticky: (noteId: string): Promise<void> => ipcRenderer.invoke('sticky:close', noteId),
+
+  minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: (): Promise<void> => ipcRenderer.invoke('window:toggle-maximize'),
+  closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),
+  /** Returns the new always-on-top state. */
+  toggleAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-always-on-top'),
+
+  /**
+   * Fires when the data on disk changed - another window of ours, or an external
+   * writer such as Dropbox syncing the folder down. Returns its own unsubscribe.
+   */
+  onIndexChanged: (handler: () => void): (() => void) => {
+    const listener = (): void => handler()
+    ipcRenderer.on('index:changed', listener)
+    return () => {
+      ipcRenderer.removeListener('index:changed', listener)
+    }
+  }
+}
+
+export type NibApi = typeof api
+
+contextBridge.exposeInMainWorld('nib', api)

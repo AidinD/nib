@@ -3,6 +3,75 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-21 - Pasted images live in a content-addressed assets folder
+
+Images pasted into a note are written to `assets/<sha256>.<ext>` in the data
+directory and referenced from the note body through a custom `nib-asset://`
+scheme, rather than embedded in the note file as a base64 data URL.
+
+This closes the question left open by the file-per-note decision below.
+
+- A note file stays small and readable. A screenshot embedded as base64 is a megabyte of unreadable text in the middle of the document, and it is rewritten on every keystroke's save.
+- The filename is the content hash, so the same image pasted into two notes - or re-pasted after an undo - is stored once.
+- The scheme is registered as privileged and resolved in the main process, which also refuses any path that climbs out of the assets folder. The renderer never gets filesystem access to make this work.
+
+The cost is that an image is no longer *inside* the note it belongs to: deleting a
+note cannot delete its images, because another note may reference the same bytes.
+A sweep for unreferenced assets is the answer and is not built yet. That is
+recorded in PLAN.md as an open question rather than solved speculatively.
+
+Considered and rejected: base64 in the note file. It keeps a note perfectly
+self-contained and portable, which is genuinely attractive for a local-first
+tool, but it loses on every write and makes the note file unreadable by hand -
+and readability is exactly why this app is not a database.
+
+## 2026-08-21 - Rich text uses the browser's own editing commands
+
+The editor is a `contenteditable` region formatted through `document.execCommand`.
+
+`execCommand` is deprecated and its replacement is not shipping, so every
+contenteditable editor either uses it or ships a whole editing engine. For a
+local notes app run in one known Chromium version, the trade is worth it: the
+whole formatting layer is a few lines per command instead of a dependency with a
+document model of its own.
+
+The fallback, when it does break, is a real editor library - not a hand-rolled
+selection model. That is the point of writing this down.
+
+Two details that came out of building it:
+
+- Pasted HTML is sanitised on the way in **and** on the way out. A paste from a browser brings scripts, inline styles and remote images; a note file is also something an external tool or a synced folder can write, so it is never trusted just because we wrote it.
+- The bullet-list shortcut is matched on `event.code === 'Digit8'`, not on the character. On a Swedish layout Shift+8 produces `(`, not `*`, so keying off the character would have made `Ctrl+Shift+8` silently disappear on the author's own keyboard.
+
+## 2026-08-21 - One renderer bundle, two window types, routed by the hash
+
+The main window and the sticky windows are the same built renderer. Which one a
+window is comes from its hash: `#sticky/<noteId>` is a sticky, anything else is
+the main window.
+
+Jot ships a second HTML entry point for its capture window. That works, but the
+sticky window shares almost everything with the main one - the tokens, the index
+store, the sanitiser, the note read/write path - so a second entry point would
+duplicate a bundle to change two components.
+
+The sticky window edits the same note file the main window edits, rather than
+holding a copy. There is no reconciliation step because there is nothing to
+reconcile: the note is the single source of truth, and both windows reload when
+the index changes.
+
+## 2026-08-21 - The frameless window keeps three small window controls
+
+The design spec says no title bar and no window buttons, with the header row
+doing that job. The header is the drag handle as specified, but it also carries
+minimise, maximise and close at its right end.
+
+A frameless window with no close affordance has to be closed from the taskbar or
+by a keyboard shortcut, which is worse than the three 26px buttons it takes to
+avoid. This is a deliberate, documented departure from the spec, not a detail
+that slipped through: if it turns out to be wrong, the fix is to delete the
+controls and restore the frame decision, not to re-derive why they are there.
+
+
 ## 2026-08-19 - The data directory follows Jot's pattern
 
 Nib stores its notes in Electron's `userData` folder by default (`%APPDATA%/nib` on
