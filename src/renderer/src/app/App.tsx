@@ -152,6 +152,7 @@ export function App(): React.JSX.Element {
           }}
           onDelete={(note) => void deleteNote(note)}
           onTogglePin={(note) => void togglePin(note)}
+          onReorder={ops.moveNoteBefore}
         />
 
         <Editor

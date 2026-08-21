@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import {
+  applyImageWidths,
   bodyHasDrawing,
   bodyHasImage,
   buildPreview,
   deriveTitle,
+  imageWidth,
   noteTrail,
   relativeTime,
   sanitizeHtml,
@@ -35,6 +37,9 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
   const loadedId = useRef<string | null>(null)
+  // The `edited` stamp of what is currently in the body. Anything newer on disk
+  // came from somewhere else - this note's sticky window, or another machine.
+  const loadedEdited = useRef(0)
 
   const category = index.categories.find((c) => c.id === note?.categoryId)
 
@@ -62,6 +67,7 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
       edited: Date.now()
     })
 
+    loadedEdited.current = edited
     onSaved(note.id, {
       title: resolvedTitle,
       preview: buildPreview(html),
@@ -89,15 +95,54 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
       }
       const html = sanitizeHtml(doc?.html ?? '')
       bodyRef.current.innerHTML = html
+      applyImageWidths(bodyRef.current)
       setTitle(doc?.title ?? note.title)
       setWords(wordCount(html))
       setSaveState('saved')
+      loadedEdited.current = doc?.edited ?? note.edited
     })
 
     return () => {
       cancelled = true
     }
   }, [note?.id])
+
+  /**
+   * Pick up an edit made to this same note somewhere else - its sticky window,
+   * or another machine's sync - so the two views do not drift and then overwrite
+   * each other.
+   *
+   * Only while this body is clean and unfocused. Replacing the text under a
+   * caret that is mid-sentence would be worse than showing it a moment late, and
+   * a body with unsaved changes must not lose them to a reload.
+   */
+  useEffect(() => {
+    const element = bodyRef.current
+    if (
+      note === null ||
+      element === null ||
+      saveState !== 'saved' ||
+      note.edited <= loadedEdited.current ||
+      document.activeElement === element
+    ) {
+      return
+    }
+    let cancelled = false
+    void window.nib.readNote(note.id).then((doc) => {
+      if (cancelled || bodyRef.current === null || doc === null) {
+        return
+      }
+      const html = sanitizeHtml(doc.html)
+      bodyRef.current.innerHTML = html
+      applyImageWidths(bodyRef.current)
+      setTitle(doc.title)
+      setWords(wordCount(html))
+      loadedEdited.current = doc.edited
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [note?.id, note?.edited, saveState])
 
   /** Flush a pending save when the note changes or the window goes away. */
   useEffect(() => {
@@ -151,11 +196,17 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
     exec('insertHTML', `<code>${text.length > 0 ? escapeHtml(text) : 'code'}</code>`)
   }, [exec])
 
-  /** Store the image in the assets folder, then reference it from the body. */
+  /**
+   * Store the image in the assets folder, then reference it from the body.
+   *
+   * No width is set on insert: the image renders at its natural size, capped by
+   * the column, so a screenshot is not upscaled into a blurry mess before anyone
+   * asks for it to be bigger.
+   */
   const insertImageFromDataUrl = useCallback(
     async (dataUrl: string) => {
       const url = await window.nib.writeAsset(dataUrl)
-      exec('insertHTML', `<img src="${url}" alt="" data-w="480" style="width:480px" />`)
+      exec('insertHTML', `<img src="${url}" alt="" />`)
     },
     [exec]
   )
@@ -223,14 +274,18 @@ export function Editor({ index, note, measure, onSaved, onTogglePin }: EditorPro
     input.click()
   }, [insertImageFromDataUrl])
 
-  /** Resize or remove the selected image. */
+  /**
+   * Resize or remove the selected image.
+   *
+   * The size goes in `data-w` and is applied as a style. See `applyImageWidths`
+   * for why it is stored that way rather than as a width attribute or a style.
+   */
   const resizeImage = useCallback(
     (factor: number) => {
       if (selectedImage === null) {
         return
       }
-      const current = Number(selectedImage.dataset.w ?? selectedImage.width ?? 480)
-      const next = Math.max(80, Math.min(1200, Math.round(current * factor)))
+      const next = Math.max(80, Math.min(1600, Math.round(imageWidth(selectedImage) * factor)))
       selectedImage.dataset.w = String(next)
       selectedImage.style.width = `${next}px`
       onBodyInput()

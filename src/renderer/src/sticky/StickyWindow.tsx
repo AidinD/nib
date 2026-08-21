@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { STICKY_TINTS } from '@shared/types'
 import { useNib } from '../lib/useNib'
-import { bodyHasDrawing, bodyHasImage, buildPreview, noteTrail, sanitizeHtml } from '../lib/notes'
+import {
+  applyImageWidths,
+  bodyHasDrawing,
+  bodyHasImage,
+  buildPreview,
+  noteTrail,
+  sanitizeHtml
+} from '../lib/notes'
 
 const SAVE_DELAY = 600
 
@@ -20,6 +27,9 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
   const [alwaysOnTop, setAlwaysOnTop] = useState(true)
   const [loadedBody, setLoadedBody] = useState(false)
   const saveTimer = useRef<number | null>(null)
+  // The `edited` stamp of what the body holds, so an edit made in the main
+  // window can be picked up instead of being overwritten by this one.
+  const loadedEdited = useRef(0)
 
   const note =
     index.categories.flatMap((category) => category.notes).find((n) => n.id === noteId) ?? null
@@ -42,13 +52,46 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
         return
       }
       bodyRef.current.innerHTML = sanitizeHtml(doc?.html ?? '')
+      applyImageWidths(bodyRef.current)
       setTitle(doc?.title ?? '')
+      loadedEdited.current = doc?.edited ?? 0
       setLoadedBody(true)
     })
     return () => {
       cancelled = true
     }
   }, [loadedBody, noteId, note?.id])
+
+  /**
+   * The main window edits the same file. Pick its changes up while this body is
+   * unfocused, so the two do not drift apart and then overwrite each other.
+   */
+  useEffect(() => {
+    const element = bodyRef.current
+    if (
+      !loadedBody ||
+      note === null ||
+      element === null ||
+      note.edited <= loadedEdited.current ||
+      document.activeElement === element ||
+      saveTimer.current !== null
+    ) {
+      return
+    }
+    let cancelled = false
+    void window.nib.readNote(note.id).then((doc) => {
+      if (cancelled || bodyRef.current === null || doc === null) {
+        return
+      }
+      bodyRef.current.innerHTML = sanitizeHtml(doc.html)
+      applyImageWidths(bodyRef.current)
+      setTitle(doc.title)
+      loadedEdited.current = doc.edited
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [loadedBody, note?.id, note?.edited])
 
   const save = useCallback(async () => {
     const element = bodyRef.current
@@ -69,6 +112,7 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       created: note.created,
       edited: Date.now()
     })
+    loadedEdited.current = edited
     ops.patchNoteMeta(note.id, {
       title,
       preview: buildPreview(html),

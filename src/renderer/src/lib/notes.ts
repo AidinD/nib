@@ -29,7 +29,7 @@ const PURIFY_CONFIG = {
     'a', 'img',
     'table', 'thead', 'tbody', 'tr', 'th', 'td'
   ],
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'width', 'height', 'class', 'data-canvas', 'data-w'],
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class', 'data-canvas', 'data-w'],
   // The custom scheme is how a stored image is referenced; data: is what a paste
   // arrives as before it has been written to the assets folder.
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/|nib-asset:)/i
@@ -37,6 +37,32 @@ const PURIFY_CONFIG = {
 
 export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, PURIFY_CONFIG)
+}
+
+/**
+ * An image's size lives in `data-w` and is applied as an inline style when the
+ * note is loaded.
+ *
+ * The obvious ways to store it both fail. `style` is not on the allowed list, on
+ * purpose - allowing arbitrary CSS in from a paste is exactly what a sanitiser is
+ * for. And a plain `width` attribute was tried and does not survive this config
+ * either: the size was set, looked right, and was gone after a reload. Data
+ * attributes do survive, so the size is stored as one and turned back into a
+ * width here, in the one place that runs after every load.
+ */
+export function applyImageWidths(root: HTMLElement): void {
+  for (const image of root.querySelectorAll('img')) {
+    const stored = Number(image.dataset.w)
+    if (Number.isFinite(stored) && stored > 0) {
+      image.style.width = `${stored}px`
+    }
+  }
+}
+
+/** The stored width of an image, or its natural width when it has none yet. */
+export function imageWidth(image: HTMLImageElement): number {
+  const stored = Number(image.dataset.w)
+  return Number.isFinite(stored) && stored > 0 ? stored : image.naturalWidth
 }
 
 /** A note's plain text, used for previews, word counts and search. */

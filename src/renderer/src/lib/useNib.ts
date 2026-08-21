@@ -62,7 +62,8 @@ export interface NibOps {
   deleteCategory: (categoryId: string) => void
   setCategoryOpen: (categoryId: string, open: boolean) => void
   cycleCategoryScope: (categoryId: string) => void
-  moveCategory: (categoryId: string, toIndex: number) => void
+  /** Reorder: place the category just before `beforeCategoryId`, or last when null. */
+  moveCategoryBefore: (categoryId: string, beforeCategoryId: string | null) => void
   addSub: (categoryId: string, name: string) => void
   renameSub: (categoryId: string, subId: string, name: string) => void
   deleteSub: (categoryId: string, subId: string) => void
@@ -70,7 +71,8 @@ export interface NibOps {
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
   moveNote: (noteId: string, categoryId: string, subId: string | null) => void
-  reorderNote: (categoryId: string, noteId: string, toIndex: number) => void
+  /** Reorder within a category: place the note just before `beforeNoteId`, or last when null. */
+  moveNoteBefore: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
   patchNoteMeta: (noteId: string, patch: Partial<NoteMeta>) => void
 }
 
@@ -110,14 +112,24 @@ function mapNote(
   }
 }
 
-function move<T>(items: T[], from: number, to: number): T[] {
-  if (from < 0 || from >= items.length) {
+/**
+ * Move the item with `id` so it sits immediately before `beforeId`, or last when
+ * `beforeId` is null.
+ *
+ * Expressed as "before this one" rather than "at index N" on purpose: the drop
+ * target knows which row the pointer is over, and an index would have to be
+ * corrected for the fact that pulling the item out shifts everything after it.
+ * Doing that arithmetic here, once, is how the off-by-one stays fixed.
+ */
+function moveBefore<T extends { id: string }>(items: T[], id: string, beforeId: string | null): T[] {
+  const item = items.find((candidate) => candidate.id === id)
+  if (item === undefined || id === beforeId) {
     return items
   }
-  const next = items.slice()
-  const [item] = next.splice(from, 1)
-  next.splice(Math.max(0, Math.min(next.length, to)), 0, item)
-  return next
+  const without = items.filter((candidate) => candidate.id !== id)
+  const at = beforeId === null ? -1 : without.findIndex((candidate) => candidate.id === beforeId)
+  const target = at === -1 ? without.length : at
+  return [...without.slice(0, target), item, ...without.slice(target)]
 }
 
 function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): NibOps {
@@ -161,14 +173,10 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
         }))
       ),
 
-    moveCategory: (categoryId, toIndex) =>
+    moveCategoryBefore: (categoryId, beforeCategoryId) =>
       mutate((index) => ({
         ...index,
-        categories: move(
-          index.categories,
-          index.categories.findIndex((c) => c.id === categoryId),
-          toIndex
-        )
+        categories: moveBefore(index.categories, categoryId, beforeCategoryId)
       })),
 
     addSub: (categoryId, name) =>
@@ -264,15 +272,11 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
         }
       }),
 
-    reorderNote: (categoryId, noteId, toIndex) =>
+    moveNoteBefore: (categoryId, noteId, beforeNoteId) =>
       mutate((index) =>
         mapCategory(index, categoryId, (c) => ({
           ...c,
-          notes: move(
-            c.notes,
-            c.notes.findIndex((note) => note.id === noteId),
-            toIndex
-          )
+          notes: moveBefore(c.notes, noteId, beforeNoteId)
         }))
       ),
 

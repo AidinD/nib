@@ -1,16 +1,17 @@
 # Nib - plan
 
-Last reconciled: 2026-08-21.
+Last reconciled: 2026-08-21 (second pass).
 
 ## Status
 
-**The app runs.** The scaffold, the storage layer and the three-pane main window
-are in place, notes survive a restart, and pinning a note opens a real sticky
-window bound to the same note file.
+**The app runs, and everything in the first version's scope is built and
+exercised.** Notes survive restarts, images are pasted into the document and keep
+their size, drag and drop moves and reorders, and pinning a note opens a sticky
+window bound to the same file.
 
-Verified by running the built app against a seeded data directory: the sidebar,
-the note list, the editor and a sticky window were all exercised on screen. What
-has *not* been exercised end to end yet is listed under "Not verified" below.
+Everything below was verified by driving the built app against a seeded data
+directory - clicking, dragging, pasting a real image from the clipboard, and
+reading the files back off disk afterwards.
 
 ## What Nib is
 
@@ -26,7 +27,7 @@ From the author's own list, with where each one stands.
 | --- | --- |
 | Same shape as Jot, with the list on the left | Done - three panes, Jot's tokens |
 | Real formatting (headings, emphasis, lists, quotes, code) | Done |
-| Paste images directly into the document, not as attachments | Built, not yet exercised on a real paste |
+| Paste images directly into the document, not as attachments | Done - verified with a real clipboard paste |
 | Sub-categories, e.g. `Manager meeting > February > note` | Done |
 | Sticky notes | Done - a window per pinned note |
 | Canvas drawing with a pressure-sensitive stylus (stretch goal) | Not started |
@@ -45,22 +46,22 @@ view is a fourth smart row or something else.
 - **Main window**: header with wordmark, version, search and a measure slider; 210px sidebar with smart rows, the scope filter, categories, sub-categories, inline rename and the dashed add fields; 280px note list with previews, crumbs, relative times, pin and delete; the editor panel with the toolbar, title, metadata row and the document body.
 - **Editor**: headings, body, bold/italic/underline/strike, inline code, bullet and numbered lists, quote, divider, image insert, 600ms debounced autosave with a Saved/Saving indicator, `Ctrl+Enter` to save now, `Ctrl+Shift+8` for a bullet list, paste and drop of images, and the floating Smaller/Larger/Remove toolbar on a selected image.
 - **Sticky windows**: 280x320, frameless, always on top, tint swatches, editable in place, footer trail. Bound to the pinned note, editing the same file the main window edits.
+- **Drag and drop** on the native API: notes reorder within a category, categories reorder against each other, and a note dropped on a sub-category or category row moves there. The insertion marker is the spec's 3px inset accent bar with its glow, not a hairline - Jot's own CSS records why.
 
-## Not verified
+## Verified against the running app
 
-Worth a pass before this is called finished:
-
-- Pasting a real image, and what a stored asset looks like on disk afterwards.
-- Two windows editing the same note at once (main window and its sticky).
-- The `NIB_DATA_DIR` migration path, which has only been read, not run.
+- **Images.** A real clipboard paste is written to `assets/<sha256>.png`, referenced through `nib-asset://`, and rendered. Resizing it persists and survives a restart - which is where a real bug was found: the size was being sanitised away on save. See DECISIONS.
+- **Drag and drop.** A note dropped on a sub-category row moves into it, a note dropped on a category row leaves its sub-category, cards reorder within a category, and categories reorder against each other. Each one checked in `index.json` afterwards, not just on screen.
+- **Two windows on one note.** Typing in a sticky window shows up in the main window's editor, and vice versa, as soon as the window being typed into is not the one you are looking at.
+- **The `NIB_DATA_DIR` migration.** Pointed at an empty folder with data in `userData`, the index, the note files and the assets all moved across on first start.
 
 ## Next steps
 
-1. Drag and drop: reorder categories and notes, and move a note by dropping it on a category or sub-category row. The spec's insertion marker (3px accent bar, inset, rounded, glowing) is not built yet.
-2. Exercise the image path for real, then decide whether the asset folder needs a garbage collection pass when notes are deleted.
-3. Decide and build **Alerts**, since it is the one requirement with no design behind it.
-4. The canvas block, plus the storage decision it depends on.
-5. The remaining spec settings: accent colour and the serif body switch. The measure slider is built.
+1. Decide and build **Alerts** - the one requirement with no design behind it. See the open question below.
+2. The canvas block, plus the storage decision it depends on.
+3. The remaining spec settings: accent colour and the serif body switch. The measure slider is built.
+4. A sweep for unreferenced assets, once there is a reason to care - see the open question.
+5. Reopen sticky windows for pinned notes on start. Today a pinned note keeps its pin across restarts but its window has to be reopened by hand.
 
 ## Open questions
 
