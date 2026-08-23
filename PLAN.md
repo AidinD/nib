@@ -88,7 +88,7 @@ start for notes that are still pinned.
 
 ## Open questions
 
-- **Does anything move between Jot and Nib?** Turning a note into a todo, or attaching a note to a todo. Not planned yet.
+- **Does anything move between Jot and Nib?** Settled for now: nothing automatic. A manual `Add to Jot` button on a flagged line is the shape it would take, and it is not scheduled - see DECISIONS 2026-08-23. Alerts stay in Nib meanwhile, overlap and all.
 
 Settled: the name, the separate-app question, the storage format and location, the
 sub-category depth, the whole visual design, and - as of this session - where

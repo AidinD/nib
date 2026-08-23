@@ -3,6 +3,32 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - Alerts stay in Nib, and any bridge to Jot is a manual button, later
+
+Nib keeps its own action points. The overlap with Jot's todos is real and known -
+a flagged line collected in a "Needs you" strip is a to-do list living inside a
+notes app - and it is accepted rather than resolved.
+
+The reason to keep it: an action point comes out of the note it was written in, and
+it is useful where it was written. Reading back a meeting note and flagging the
+line you need to act on is one gesture in one place; the same thing routed to
+another app is two apps and a context switch, for a note you may deal with in the
+next five minutes anyway.
+
+Considered and rejected for now:
+
+- **An automatic bridge**, where flagging a line creates a Jot todo. Rejected today on two counts: it would have Nib writing into another application's store as a side effect of typing, and it would promote every flag to a tracked commitment whether it deserved one or not. Most flags are read-and-clear within the hour.
+- **Dropping alerts and letting Jot own everything that needs doing.** Cleaner on paper, and it is the answer if the overlap ever becomes annoying in practice. It is not what the author wants while using the two side by side.
+
+What is left open, deliberately: a **manual** `Add to Jot` on a flagged line, for
+the ones that turn out to be real commitments. A button, pressed on purpose, for
+the few - not a rule that fires for all of them. Not built, and not scheduled.
+
+The thing that would change this decision is usage, not argument: if the flags in
+Nib start being things that live for days, they belong in Jot and the strip is in
+the way.
+
+
 ## 2026-08-23 - The alert mark is a flag, and a card carries the same three states
 
 The mark beside a line is a flag, not a checkbox, and a note's own flag has the
