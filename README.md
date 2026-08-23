@@ -13,7 +13,6 @@ things are the way they are.
 
 ## What it does
 
-- **Nothing deletes without asking**: notes, categories and sub-categories all confirm first.
 - **Three panes**: a three-level sidebar on the left (smart lists, categories, sub-categories), the note list in the middle, the editor on the right.
 - **Real formatting**: headings, bold, italic, underline, strikethrough, inline code, bullet and numbered lists, quotes, dividers.
 - **Images inline**: paste, drop or insert. They are stored beside the notes and referenced, not embedded, and a selected image can be resized or removed.
@@ -22,6 +21,7 @@ things are the way they are.
 - **Alerts**: every line has a marker in the document's margin - click it to flag the line as an action point, again to tick it off, again to clear it. Cards carry the same flag for notes that are themselves the action. Everything outstanding shows in a strip under the header and in a "Needs you" list.
 - **A canvas** in a note: pen, highlighter and eraser, with stroke width driven by stylus pressure. Stored as strokes plus a rendered image.
 - **Local-first**: one folder of plain JSON files, no server, and it syncs by living in a synced folder.
+- **Nothing deletes without asking**: notes, categories and sub-categories all confirm first, in the app's own dialog.
 
 ## Running it
 
