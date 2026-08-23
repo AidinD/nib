@@ -3,6 +3,27 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - Releases publish themselves, with a token nobody stores
+
+Nib now ships the way Jot does: `npm run release` cleans, builds, packages and
+uploads to GitHub Releases, and the installed app updates itself from there.
+
+Three choices inside that:
+
+- **The token comes from `gh auth token` at release time.** The gh CLI is already logged in with `repo` scope, so nothing new had to be created and no long-lived `GH_TOKEN` sits in a shell profile or a file. electron-builder does not read gh's keyring itself, which is why a script feeds it.
+- **The upload is electron-builder's publisher, not `gh release create`.** `latest.yml` names the installer in a dashed form; a local package produces spaces and a hand-made upload produces dots, and electron-updater then 404s on the asset in a release that looks published. Jot's DECISIONS entry of 2026-07-04 is the record of finding that out.
+- **The release script cleans `out/` and `dist/` first**, because electron-builder packages whatever is already there. Jot shipped a release from the previous day's build that way.
+
+The check runs once at startup and installs on quit, and it is skipped in
+development, where there is no packaged app to replace. Until the first release
+exists the check fails with `ERR_XML_MISSED_ELEMENT` - GitHub's feed has no
+entries to read - which is logged and otherwise ignored.
+
+What this changes about the version number: it stops being a label and becomes
+the delivery mechanism. An unbumped version reaches nobody, and a bad release is
+corrected by bumping to the next one, never by republishing the same.
+
+
 ## 2026-08-23 - A toolbar button must not take the focus
 
 Every button in the editor's toolbar swallows its own `mousedown`, so pressing

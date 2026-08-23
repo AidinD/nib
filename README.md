@@ -42,6 +42,17 @@ Produces `dist/Nib Setup <version>.exe`, a Windows NSIS installer that can be
 installed per-user without administrator rights. It is not code-signed, so
 Windows will warn on first run.
 
+## Releasing
+
+```
+npm run release
+```
+
+Bump the version in `package.json` first, commit and push, then run this: it
+cleans, builds, packages and publishes a GitHub release, and the installed app
+picks the new version up on its next launch. The upload uses a token from the
+`gh` CLI, so there is nothing to configure and nothing stored.
+
 The icon is committed under `resources/`; regenerate it with
 `node scripts/generate-icon.mjs` if it ever changes.
 

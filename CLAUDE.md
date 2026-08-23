@@ -12,12 +12,26 @@ Keep both PLAN.md and DECISIONS.md current as work happens, not in a batch at th
 
 ## Releases
 
-Nib follows Jot's rule: **a release is bump the version, commit, push, then build
-the installer** - in that order.
+A release is: **bump the version, commit, push, then publish** - in that order.
 
-- The version lives in `package.json` and is shown in the app header, so it is how you tell which build you are running. A build handed over under a version that has already been handed over is a build nobody can identify.
-- Bump the patch digit for fixes, the minor for a batch of new behaviour. Commit it as `Release X.Y.Z: <what changed>`, which is also how Jot's history reads.
-- Nib does **not** auto-update yet: there is no `electron-updater` and no publish target in `electron-builder.yml`, so an installer is something you build and run by hand. If that changes, the version increase becomes the delivery mechanism and skipping a bump means the fix never reaches the installed app - which is the mistake Jot's DECISIONS entry of 2026-08-04 records.
+```
+npm run release
+```
+
+That script cleans, builds, packages and uploads. Do not assemble it by hand; each
+step is there because skipping it has broken a release in Jot, which shares this
+setup:
+
+- **The clean is not optional.** electron-builder packages whatever is already in `out/`, so building without clearing it ships the previous build's code under a new version number, silently. Jot published 1.5.30 that way on 2026-08-04.
+- **The upload must be electron-builder's own publisher**, never `npm run package` (local installer only) and never a manual `gh release create`. `latest.yml` references the installer under a dashed name (`Nib-Setup-0.2.0.exe`); packaging locally produces spaces and a hand-made upload produces dots, and electron-updater then 404s on the asset in a release that looks fine. See Jot's DECISIONS, 2026-07-04.
+- **A bad release is fixed by bumping, not by republishing.** electron-updater only offers an update when the version increases, so anyone who already took the bad X stays on it until X+1 exists.
+
+The token comes from `gh auth token` at release time, so there is no long-lived
+`GH_TOKEN` anywhere. The app itself needs no token to check for updates: the repo
+is public.
+
+Nib is unsigned. The first manual install trips SmartScreen; auto-updates after
+that are silent, since electron-updater does not require signing for NSIS.
 
 ## Conventions
 

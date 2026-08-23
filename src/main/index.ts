@@ -3,7 +3,12 @@ import { promises as fs } from 'fs'
 import { join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
+// electron-updater is CommonJS, so a named ESM import does not work here - the
+// same shape Jot ended up with.
+import electronUpdater from 'electron-updater'
+
+const { autoUpdater } = electronUpdater
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import { NoteStorage } from './storage'
@@ -160,6 +165,36 @@ function scheduleSweep(): void {
   }, 5000)
 }
 
+/**
+ * Check GitHub for a newer release, once, at startup.
+ *
+ * Nib is unsigned, which does not stop electron-updater on Windows: the first
+ * install triggers SmartScreen, updates after that are silent. The download is
+ * installed on quit rather than mid-session, which is the library's default and
+ * the right one for an app you leave open all day.
+ *
+ * Never in development: there is no packaged app to replace, and the check only
+ * produces a confusing error in the log.
+ */
+function checkForUpdates(): void {
+  if (is.dev) {
+    return
+  }
+  autoUpdater.on('update-available', (info) => {
+    console.log(`Nib update available: ${info.version}`)
+  })
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`Nib update ${info.version} downloaded; it installs on quit`)
+  })
+  autoUpdater.on('error', (error) => {
+    // Being offline is the common case here, and it is not worth a dialog.
+    console.error('Nib update check failed', error)
+  })
+  void autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+    console.error('Nib update check could not start', error)
+  })
+}
+
 function registerIpc(): void {
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
@@ -271,6 +306,7 @@ void app.whenReady().then(() => {
   })
 
   createMainWindow()
+  checkForUpdates()
 
   // Pinning a note is what produces its sticky window, and a pin outlives a
   // restart - so the windows have to come back with it, or a pinned note would
