@@ -127,16 +127,41 @@ input {
   margin-left: auto;
 }
 
-.search {
+/* The field is a box around the input, so the clear button can sit inside its
+   border rather than beside it. */
+.search-field {
+  display: flex;
+  align-items: center;
   width: 180px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding-right: 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.search:focus {
+.search-field:focus-within {
   border-color: var(--accent);
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* Only there when there is something to clear. */
+.search-clear {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.search-clear:hover {
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .measure input[type='range'] {

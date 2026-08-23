@@ -142,11 +142,19 @@ function makePage(send) {
     }
   }
 
-  const key = async (windowsVirtualKeyCode, code, keyName) => {
-    for (const type of ['keyDown', 'keyUp']) {
-      await send('Input.dispatchKeyEvent', { type, windowsVirtualKeyCode, code, key: keyName })
-      await sleep(20)
+  /** Press a key, optionally with modifiers (1 alt, 2 ctrl, 4 meta, 8 shift). */
+  const key = async (windowsVirtualKeyCode, code, keyName, modifiers = 0) => {
+    for (const type of ['rawKeyDown', 'keyUp']) {
+      await send('Input.dispatchKeyEvent', {
+        type,
+        windowsVirtualKeyCode,
+        code,
+        key: keyName,
+        modifiers
+      })
+      await sleep(30)
     }
+    await sleep(120)
   }
 
   /** Wait until an expression returns something truthy. */

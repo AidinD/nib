@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
@@ -56,6 +56,7 @@ export function App(): React.JSX.Element {
   // The deletion waiting to be confirmed. Deleting a category or a note cannot
   // be undone, and all three used to happen on one stray click.
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
+  const searchRef = useRef<HTMLInputElement | null>(null)
 
   const notes = useMemo(
     () => selectedNotes(index, selection, scope, search),
@@ -81,6 +82,28 @@ export function App(): React.JSX.Element {
     applyPrefs(prefs)
     writePrefs(prefs)
   }, [prefs])
+
+  /**
+   * Ctrl+Shift+F puts the caret in the search field, wherever it was.
+   *
+   * On the window rather than on the field, because the point is to reach the
+   * field from the note you are typing in - which is also why it has to
+   * preventDefault before the editor sees the keystroke. Existing text is
+   * selected, so the shortcut starts a new search as readily as it revisits one.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.ctrlKey && event.shiftKey && event.code === 'KeyF') {
+        event.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
 
   const deleteNote = async (note: NoteMeta): Promise<void> => {
     ops.deleteNote(note.id)
@@ -161,12 +184,35 @@ export function App(): React.JSX.Element {
           <span className="version">v{__APP_VERSION__}</span>
         </div>
         <div className="header-right">
-          <input
-            className="search"
-            placeholder="Search notes"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <div className="search-field">
+            <input
+              ref={searchRef}
+              className="search"
+              placeholder="Search notes  (Ctrl+Shift+F)"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                // Escape clears rather than merely blurring: a stale filter you
+                // cannot see the end of is worse than no filter.
+                if (event.key === 'Escape') {
+                  setSearch('')
+                }
+              }}
+            />
+            {search.length > 0 && (
+              <button
+                type="button"
+                className="search-clear"
+                title="Clear the search"
+                onClick={() => {
+                  setSearch('')
+                  searchRef.current?.focus()
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
           <Settings prefs={prefs} onChange={setPrefs} />
           <div className="window-controls">
             <button type="button" onClick={() => void window.nib.minimizeWindow()} title="Minimise">
