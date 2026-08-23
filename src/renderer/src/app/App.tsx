@@ -109,7 +109,9 @@ export function App(): React.JSX.Element {
    */
   const tickAlert = async (note: NoteMeta, alertId: string | null, done = true): Promise<void> => {
     if (alertId === null) {
-      ops.toggleFlag(note.id)
+      // The note itself: dealt with, and still marked as having been an action
+      // point. Clearing it altogether is the card's flag, one more click on.
+      ops.setFlag(note.id, done ? 'done' : 'open')
       return
     }
     const result = await setAlertDone(note, alertId, done)
@@ -234,8 +236,21 @@ export function App(): React.JSX.Element {
           }}
           onDelete={(note) => setPendingDelete({ kind: 'note', note })}
           onTogglePin={(note) => void togglePin(note)}
-          onReorder={ops.moveNoteBefore}
-          onToggleFlag={(note) => ops.toggleFlag(note.id)}
+          onReorder={(noteId, landing) => {
+            // A drop can be a move and a reorder at once: in the flat lists the
+            // card you drop on decides which category the note joins.
+            const note = index.categories
+              .flatMap((category) => category.notes)
+              .find((candidate) => candidate.id === noteId)
+            if (note === undefined) {
+              return
+            }
+            if (note.categoryId !== landing.categoryId || note.subId !== landing.subId) {
+              ops.moveNote(noteId, landing.categoryId, landing.subId)
+            }
+            ops.moveNoteBefore(landing.categoryId, noteId, landing.beforeNoteId)
+          }}
+          onCycleFlag={(note) => ops.cycleFlag(note.id)}
           onTickAlert={(note, alertId, done) => void tickAlert(note, alertId, done)}
         />
 
@@ -247,7 +262,7 @@ export function App(): React.JSX.Element {
           onAlertFocused={() => setFocusAlertId(null)}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
           onTogglePin={(note) => void togglePin(note)}
-          onToggleFlag={(note) => ops.toggleFlag(note.id)}
+          onCycleFlag={(note) => ops.cycleFlag(note.id)}
         />
       </main>
 

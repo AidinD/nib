@@ -12,6 +12,7 @@ import type {
   DrawingDoc,
   NibIndex,
   NoteDoc,
+  NoteFlag,
   NoteMeta,
   Scope,
   Stroke,
@@ -131,6 +132,19 @@ function normalizeAlerts(raw: unknown): AlertMeta[] {
     .slice(0, MAX_ALERTS_PER_NOTE)
 }
 
+/**
+ * A note's flag, accepting the boolean this field used to be.
+ *
+ * Notes written before the flag had three states carry `flagged: true`, and there
+ * is no migration step anywhere in Nib - the normalisers are the migration.
+ */
+function normalizeFlag(raw: any): NoteFlag {
+  if (raw?.flag === 'open' || raw?.flag === 'done') {
+    return raw.flag
+  }
+  return raw?.flagged === true ? 'open' : ''
+}
+
 function normalizeSub(raw: any): SubCategory {
   return { id: String(raw?.id ?? ''), name: str(raw?.name) }
 }
@@ -154,7 +168,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     pinned: raw?.pinned === true,
     tint: str(raw?.tint),
     alerts: normalizeAlerts(raw?.alerts),
-    flagged: raw?.flagged === true,
+    flag: normalizeFlag(raw),
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }

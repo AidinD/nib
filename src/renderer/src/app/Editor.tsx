@@ -41,7 +41,7 @@ interface EditorProps {
   onAlertFocused: () => void
   onSaved: (noteId: string, patch: Partial<NoteMeta>) => void
   onTogglePin: (note: NoteMeta) => void
-  onToggleFlag: (note: NoteMeta) => void
+  onCycleFlag: (note: NoteMeta) => void
 }
 
 type SaveState = 'saved' | 'dirty' | 'saving'
@@ -54,7 +54,7 @@ export function Editor({
   onAlertFocused,
   onSaved,
   onTogglePin,
-  onToggleFlag
+  onCycleFlag
 }: EditorProps): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [title, setTitle] = useState('')
@@ -295,7 +295,7 @@ export function Editor({
       if (block === null) {
         // No line to flag, so the note itself is the action point. A card that
         // says "call the contractor" has no line worth singling out.
-        onToggleFlag(note)
+        onCycleFlag(note)
         return
       }
       if (block.dataset.alert === undefined) {
@@ -311,7 +311,7 @@ export function Editor({
       }
       onBodyInput()
     })
-  }, [note, onBodyInput, onToggleFlag, withSelection])
+  }, [note, onBodyInput, onCycleFlag, withSelection])
 
   /**
    * The marker in a line's margin, clicked.
@@ -688,7 +688,10 @@ export function Editor({
             {words} {words === 1 ? 'word' : 'words'}
           </span>
           <span>edited {relativeTime(note.edited)}</span>
-          {category?.scope === 'P' && <span className="tag">private</span>}
+          {/* Both scopes, not just Private. A note in a Work category was
+              unmarked, which read as "no scope" rather than "work". */}
+          {category?.scope === 'P' && <span className="tag tag-private">private</span>}
+          {category?.scope === 'W' && <span className="tag tag-work">work</span>}
         </div>
 
         {selectedImage !== null && (

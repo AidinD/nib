@@ -55,13 +55,21 @@ export function selectedNotes(
     case 'sticky':
       notes = allNotes(index, filter).filter((note) => note.pinned)
       break
-    // The review view for action points: the notes that hold one, newest first,
-    // because an action point you wrote today is the one still on your mind.
-    // Ticked-off ones do not bring a note in here; they stay visible in it.
+    /*
+     * The review view: every note carrying a flag at all, outstanding ones
+     * first.
+     *
+     * Notes whose flags are all dealt with stay in the list rather than
+     * vanishing from under the pointer that just ticked them - the strip and
+     * the count are what they leave.
+     */
     case 'alerts':
       notes = allNotes(index, filter)
-        .filter((note) => note.flagged || note.alerts.some((alert) => !alert.done))
-        .sort((a, b) => b.edited - a.edited)
+        .filter((note) => note.flag !== '' || note.alerts.length > 0)
+        .sort((a, b) => {
+          const open = Number(isOutstanding(b)) - Number(isOutstanding(a))
+          return open !== 0 ? open : b.edited - a.edited
+        })
       break
     case 'category': {
       const category = index.categories.find((c) => c.id === selection.categoryId)
@@ -88,6 +96,11 @@ export function selectedNotes(
     (note) =>
       note.title.toLowerCase().includes(needle) || note.preview.toLowerCase().includes(needle)
   )
+}
+
+/** Does this note still need you, as opposed to carrying only dealt-with flags? */
+export function isOutstanding(note: NoteMeta): boolean {
+  return note.flag === 'open' || note.alerts.some((alert) => !alert.done)
 }
 
 function pinnedFirst(notes: NoteMeta[]): NoteMeta[] {
@@ -158,7 +171,9 @@ export function smartCounts(
     // themselves the action point.
     alerts: notes.reduce(
       (total, note) =>
-        total + note.alerts.filter((alert) => !alert.done).length + (note.flagged ? 1 : 0),
+        total +
+        note.alerts.filter((alert) => !alert.done).length +
+        (note.flag === 'open' ? 1 : 0),
       0
     )
   }
@@ -179,7 +194,7 @@ export function allAlerts(index: NibIndex, filter: ScopeFilter): AlertEntry[] {
     .slice()
     .sort((a, b) => b.edited - a.edited)
     .flatMap((note) => [
-      ...(note.flagged ? [{ note, alert: null }] : []),
+      ...(note.flag === 'open' ? [{ note, alert: null }] : []),
       ...note.alerts.filter((alert) => !alert.done).map((alert) => ({ note, alert }))
     ])
 }

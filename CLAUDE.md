@@ -10,6 +10,27 @@ Nib is a desktop note-taking app, a sibling to Jot (`D:\Repo\Tools\jot`) rather 
 
 Keep both PLAN.md and DECISIONS.md current as work happens, not in a batch at the end.
 
+## Verifying a change in the running app
+
+```
+node scripts/e2e.mjs <steps-file.mjs>
+```
+
+The harness starts its own instance with `--remote-debugging-port`, drives the
+renderer over the Chrome DevTools Protocol and reads the DOM back. Steps files
+default-export `async (page) => {}` and get `eval`, `click`, `type`, `key`,
+`waitFor`.
+
+Do **not** verify by moving the pointer and clicking. It fights whoever is using
+the machine, steals focus into their other windows, and every coordinate is a
+guess that goes stale the moment a toolbar wraps - all three happened here on
+2026-08-23 before this existed.
+
+Two rules that come with it:
+
+- **Never kill processes by name.** The installed app's process is called `Nib`, so `Stop-Process -Name Nib` closes the app someone is working in. Kill only the PID you started; `e2e.mjs` does exactly that.
+- **Always point `NIB_DATA_DIR` at a scratch folder** for a test run, so a test never writes into real notes.
+
 ## Releases
 
 A release is: **bump the version, commit, push, then publish** - in that order.

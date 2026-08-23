@@ -3,6 +3,42 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - The alert mark is a flag, and a card carries the same three states
+
+The mark beside a line is a flag, not a checkbox, and a note's own flag has the
+same three states a line's does: unflagged, needs you, dealt with.
+
+Two things were wrong with the checkbox:
+
+- **It said the wrong thing.** A column of empty boxes down a note reads as a checklist of things not done yet. Most lines are not tasks, and the mark means "this needs attention" - so it is a flag, in the alert colour, grey once it has been dealt with.
+- **Ticking a card off made it disappear.** The review list filtered to notes that still needed you, so the card you had just ticked vanished from under the pointer, which reads as deletion rather than completion. The list now shows every note carrying a flag at all, outstanding ones first; the strip and the count are what a dealt-with note leaves.
+
+`done` is deliberately not the same as unflagged, at both levels. A note that
+needed doing and has been dealt with keeps a quiet grey edge and a grey flag - the
+history is the useful part, and clearing it altogether is one more click.
+
+## 2026-08-23 - Verify by driving the renderer, never the mouse
+
+Checks against the running app go through the Chrome DevTools Protocol -
+`scripts/e2e.mjs` starts its own instance with a debugging port, dispatches input
+into the page and reads the DOM back.
+
+The alternative was what came before it, and it was bad in three separate ways: it
+moved the pointer of whoever was using the machine, it clicked into their other
+windows whenever the app was not in front (twice into their own apps, once
+navigating a browser tab they were reading), and every coordinate was a guess
+from a screenshot that went stale as soon as a toolbar wrapped to two rows.
+
+Synthetic input into the page has none of those problems and is more precise: a
+selector cannot drift, and the DOM can be asserted on directly rather than
+inferred from pixels.
+
+The same session produced the other half of the rule: **never kill a process by
+name.** `Stop-Process -Name Nib` was closing the author's own installed copy on
+every test run, because the packaged app's process is also called `Nib`. Kill the
+PID you started, nothing else.
+
+
 ## 2026-08-23 - Releases publish themselves, with a token nobody stores
 
 Nib now ships the way Jot does: `npm run release` cleans, builds, packages and

@@ -15,8 +15,11 @@ interface NoteListProps {
   onAdd: (title: string) => void
   onDelete: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
-  onReorder: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
-  onToggleFlag: (note: NoteMeta) => void
+  onReorder: (
+    noteId: string,
+    target: { categoryId: string; subId: string | null; beforeNoteId: string | null }
+  ) => void
+  onCycleFlag: (note: NoteMeta) => void
   onTickAlert: (note: NoteMeta, alertId: string, done: boolean) => void
 }
 
@@ -31,7 +34,7 @@ export function NoteList({
   onDelete,
   onTogglePin,
   onReorder,
-  onToggleFlag,
+  onCycleFlag,
   onTickAlert
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
@@ -40,29 +43,44 @@ export function NoteList({
   const showCrumb = selectionShowsCrumb(selection)
 
   /**
-   * Reordering only means something where the order is stored: inside a
-   * category. The smart lists have their own sorts - Recent by edit time,
-   * Sticky by pin - so a dropped card there would snap straight back, and no
-   * marker is offered.
+   * Where a card dropped in this list lands.
+   *
+   * In a category or a sub-category that is simply the position: the list IS the
+   * stored order. In the flat lists - All notes, Recent, Sticky, Needs you -
+   * there is no such order, so a drop means "put it where the card you dropped
+   * it on lives, just before it". Dragging a note in All notes used to do
+   * nothing at all, which read as drag and drop being missing.
+   *
+   * Recent and Needs you have sorts of their own (edit time, outstanding first),
+   * so a card dropped there moves as asked and then sorts where that sort puts
+   * it. The move is the point; the position within those lists is not ours.
    */
-  const reorderable = target !== null
-
-  const reorderTargetId = target?.categoryId ?? null
+  const dropTarget = (
+    beforeNoteId: string | null,
+    over: NoteMeta | undefined
+  ): { categoryId: string; subId: string | null; beforeNoteId: string | null } | null => {
+    if (target !== null) {
+      return { ...target, beforeNoteId }
+    }
+    return over === undefined ? null : { categoryId: over.categoryId, subId: over.subId, beforeNoteId }
+  }
 
   const acceptsNote = (event: React.DragEvent): boolean =>
-    reorderable &&
-    event.dataTransfer.types.includes(DRAG_MIME) &&
-    draggedItem()?.kind === 'note' &&
-    draggedItem()?.categoryId === reorderTargetId
+    event.dataTransfer.types.includes(DRAG_MIME) && draggedItem()?.kind === 'note'
 
-  const drop = (event: React.DragEvent): void => {
+  const drop = (event: React.DragEvent, over?: NoteMeta): void => {
     const payload = readDrop(event)
+    const at = slot
     setSlot(null)
-    if (payload === null || payload.kind !== 'note' || reorderTargetId === null || slot === null) {
+    if (payload === null || payload.kind !== 'note' || at === null) {
+      return
+    }
+    const landing = dropTarget(at.before, over ?? notes.find((note) => note.id === at.before))
+    if (landing === null) {
       return
     }
     event.preventDefault()
-    onReorder(reorderTargetId, payload.noteId, slot.before)
+    onReorder(payload.noteId, landing)
   }
 
   return (
@@ -103,7 +121,7 @@ export function NoteList({
             {slot !== null && slot.before === note.id && <div className="drop-marker" />}
             <article
               className={`card${note.id === activeNoteId ? ' is-active' : ''}${
-                note.flagged ? ' is-flagged' : ''
+                note.flag === '' ? '' : ` is-${note.flag}`
               }`}
               draggable
               onClick={() => onOpen(note.id)}
@@ -130,21 +148,27 @@ export function NoteList({
                   setSlot(next)
                 }
               }}
-              onDrop={drop}
+              onDrop={(event) => drop(event, note)}
             >
               <div className="card-top">
                 <span className="card-title">
                   {note.title.length > 0 ? note.title : 'Untitled'}
                 </span>
                 {/* The whole note as an action point, for the cards that are
-                    themselves the thing to do. */}
+                    themselves the thing to do. Same three states as a line. */}
                 <button
                   type="button"
-                  className={`card-flag${note.flagged ? ' is-flagged' : ''}`}
-                  title={note.flagged ? 'Not an action point after all' : 'Flag this note'}
+                  className={`card-flag${note.flag === '' ? '' : ` is-${note.flag}`}`}
+                  title={
+                    note.flag === 'open'
+                      ? 'Dealt with'
+                      : note.flag === 'done'
+                        ? 'Clear the flag'
+                        : 'Flag this note'
+                  }
                   onClick={(event) => {
                     event.stopPropagation()
-                    onToggleFlag(note)
+                    onCycleFlag(note)
                   }}
                 >
                   ⚑
@@ -181,14 +205,14 @@ export function NoteList({
                     <li key={alert.id} className={alert.done ? 'is-done' : ''}>
                       <button
                         type="button"
-                        className={`alert-box${alert.done ? ' is-done' : ''}`}
-                        title={alert.done ? 'Not done after all' : 'Done with this'}
+                        className={`alert-flag${alert.done ? ' is-done' : ''}`}
+                        title={alert.done ? 'Still needs you after all' : 'Dealt with'}
                         onClick={(event) => {
                           event.stopPropagation()
                           onTickAlert(note, alert.id, !alert.done)
                         }}
                       >
-                        {alert.done ? '✓' : ''}
+                        ⚑
                       </button>
                       <span>{alert.text}</span>
                     </li>

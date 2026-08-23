@@ -54,12 +54,13 @@ export interface NoteMeta {
   /** The action points flagged inside this note, in document order. */
   alerts: AlertMeta[]
   /**
-   * The whole note flagged as an action point, rather than a line inside it.
+   * The whole note as an action point, rather than a line inside it.
    *
    * Some notes are the action - a card that says "call the contractor" has no
-   * line worth singling out - so the flag exists at both levels.
+   * line worth singling out - so the flag exists at both levels, and with the
+   * same three states: unflagged, flagged, and dealt with but still marked.
    */
-  flagged: boolean
+  flag: NoteFlag
   hasImage: boolean
   hasDrawing: boolean
 }
@@ -87,6 +88,15 @@ export interface NibIndex {
   version: 1
   categories: Category[]
 }
+
+/**
+ * A note-level flag: none, needs you, or dealt with.
+ *
+ * `done` is not the same as none. A note that needed doing and has been dealt
+ * with should still say so on its card - it leaves the strip and the count, not
+ * the list.
+ */
+export type NoteFlag = '' | 'open' | 'done'
 
 /** The tools a stroke can be drawn with. */
 export type StrokeTool = 'pen' | 'highlighter' | 'eraser'

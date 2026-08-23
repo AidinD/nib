@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Category, NibIndex, NoteMeta, Scope, SubCategory } from '@shared/types'
+import type { Category, NibIndex, NoteFlag, NoteMeta, Scope, SubCategory } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { newId } from './notes'
 
@@ -70,8 +70,9 @@ export interface NibOps {
   addNote: (categoryId: string, subId: string | null, title: string) => string
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
-  /** Flag or unflag the whole note as an action point. */
-  toggleFlag: (noteId: string) => void
+  /** Cycle the whole note's flag: none, needs you, dealt with. */
+  cycleFlag: (noteId: string) => void
+  setFlag: (noteId: string, flag: NoteFlag) => void
   setPinned: (noteId: string, pinned: boolean) => void
   moveNote: (noteId: string, categoryId: string, subId: string | null) => void
   /** Reorder within a category: place the note just before `beforeNoteId`, or last when null. */
@@ -227,7 +228,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               pinned: false,
               tint: '',
               alerts: [],
-              flagged: false,
+              flag: '',
               hasImage: false,
               hasDrawing: false
             },
@@ -249,8 +250,17 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
 
     togglePin: (noteId) => mutate((index) => mapNote(index, noteId, (n) => ({ ...n, pinned: !n.pinned }))),
 
-    toggleFlag: (noteId) =>
-      mutate((index) => mapNote(index, noteId, (n) => ({ ...n, flagged: !n.flagged }))),
+    // The same three states a flagged line has, in the same order, so the two
+    // levels behave alike.
+    cycleFlag: (noteId) =>
+      mutate((index) =>
+        mapNote(index, noteId, (n) => ({
+          ...n,
+          flag: n.flag === '' ? 'open' : n.flag === 'open' ? 'done' : ''
+        }))
+      ),
+
+    setFlag: (noteId, flag) => mutate((index) => mapNote(index, noteId, (n) => ({ ...n, flag }))),
 
     /** Used when a sticky window is closed: the card must not stay marked sticky. */
     setPinned: (noteId, pinned) =>

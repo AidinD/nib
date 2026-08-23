@@ -215,7 +215,11 @@ input {
 }
 
 .row:hover .row-action,
-.row:hover .scope-chip {
+.row:hover .scope-chip,
+/* A card is not a row, and inherited none of this - so its delete cross was
+   there, hit-testable, and invisible. That is why deleting a note looked
+   impossible. */
+.card:hover .row-action {
   opacity: 1;
 }
 
@@ -1374,12 +1378,15 @@ body.is-sticky-window {
 /* ---------- action points, marked and ticked off ---------- */
 
 /*
- * Every line in the document has a marker in its left margin: faint on hover,
- * an orange box once the line is flagged, ticked once it is done.
+ * Every line in the document has a flag in its left margin: faint on hover,
+ * orange once the line is flagged, grey once it has been dealt with.
  *
- * In the MARGIN, not in the line: showing it on hover has to not move the text,
- * and a marker that nudged every paragraph sideways as the pointer crossed it
- * would be unusable. Clicking it cycles the three states - see cycleAlert.
+ * A FLAG, not a checkbox. A row of empty checkboxes down a note reads as a
+ * checklist of things not done yet, which is not what this is: the mark says
+ * "this needs attention", and most lines are not tasks at all.
+ *
+ * In the MARGIN, not in the line: showing it on hover has to not move the text.
+ * Clicking it cycles the three states - see cycleAlert.
  */
 .doc-body > p,
 .doc-body > h1,
@@ -1398,26 +1405,33 @@ body.is-sticky-window {
 .doc-body > h4::before,
 .doc-body > blockquote::before,
 .doc-body li::before {
-  content: '';
+  content: '⚑';
   position: absolute;
   left: -24px;
-  top: 0.35em;
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  border: 1.5px solid var(--text-dim);
+  top: 0;
+  width: 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: inherit;
+  text-align: center;
   opacity: 0;
   cursor: pointer;
   transition: opacity 100ms ease;
 }
 
+/* An empty line has nothing to flag, and a marker beside it is just clutter. */
+.doc-body > p:empty::before,
+.doc-body > p:has(br:only-child)::before {
+  display: none;
+}
+
 /*
- * The markers appear while the pointer is anywhere in the document, and the
- * hovered line's own marker is stronger.
+ * The flags appear while the pointer is anywhere in the document, and the
+ * hovered line's own flag is stronger.
  *
- * Hover on the line alone will not do: the marker sits in the column beside it,
- * so reaching for it leaves the line and the marker you were reaching for fades
- * out from under the pointer.
+ * Hover on the line alone will not do: the flag sits in the column beside it,
+ * so reaching for it leaves the line and the flag fades out from under the
+ * pointer.
  */
 .doc-body:hover > p::before,
 .doc-body:hover > h1::before,
@@ -1426,7 +1440,7 @@ body.is-sticky-window {
 .doc-body:hover > h4::before,
 .doc-body:hover > blockquote::before,
 .doc-body:hover li::before {
-  opacity: 0.22;
+  opacity: 0.25;
 }
 
 .doc-body > p:hover::before,
@@ -1436,17 +1450,17 @@ body.is-sticky-window {
 .doc-body > h4:hover::before,
 .doc-body > blockquote:hover::before,
 .doc-body li:hover::before {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
-/* Flagged: the box is the alert colour and stays put. */
+/* Flagged: the flag is the alert colour and stays put. */
 .doc-body [data-alert]::before {
   opacity: 1;
-  border-color: var(--alert);
+  color: var(--alert);
 }
 
 /* And a bar in the margin beside it, so a flagged line reads as flagged from
-   across the page, not just at the marker. */
+   across the page, not only at the flag. */
 .doc-body [data-alert]::after {
   content: '';
   position: absolute;
@@ -1458,20 +1472,15 @@ body.is-sticky-window {
   background: var(--alert);
 }
 
-/* Done: still marked, ticked, and dimmed - the line needed doing and has been
-   dealt with, which is worth seeing. */
+/* Dealt with: still marked, still a flag, but grey and out of the way - the line
+   needed attention and got it, which is worth being able to see. */
 .doc-body [data-alert='done'] {
   color: var(--text-dim);
 }
 
 .doc-body [data-alert='done']::before {
-  content: '✓';
-  border-color: var(--text-dim);
   color: var(--text-dim);
-  font-size: 10px;
-  line-height: 11px;
-  text-align: center;
-  opacity: 1;
+  opacity: 0.75;
 }
 
 .doc-body [data-alert='done']::after {
@@ -1500,40 +1509,55 @@ body.is-sticky-window {
   opacity: 1;
 }
 
-.card-flag.is-flagged {
+.card-flag.is-open {
   color: var(--alert);
   opacity: 1;
 }
 
-.card.is-flagged {
-  /* Marked on the edge rather than by a fill: colour means active state, and a
-     flagged card is not selected. */
+.card-flag.is-done {
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+/* Marked on the edge rather than by a fill: colour means active state, and a
+   flagged card is not selected. A dealt-with one keeps a quieter edge, so the
+   card does not simply drop out of the list when it is ticked. */
+.card.is-open {
   box-shadow: inset 2px 0 0 var(--alert);
 }
 
-/* The checkbox in the review list, which mirrors the one in the document. */
-.alert-box {
+.card.is-done {
+  box-shadow: inset 2px 0 0 var(--border);
+}
+
+/* The flag in the review list, mirroring the one in the document. */
+.alert-flag {
   flex: 0 0 auto;
-  width: 12px;
-  height: 12px;
-  margin-top: 2px;
-  border-radius: 3px;
-  border: 1.5px solid var(--alert);
-  font-size: 9px;
-  line-height: 10px;
+  width: 14px;
+  font-size: 10px;
+  line-height: 1.4;
   text-align: center;
-  color: transparent;
+  color: var(--alert);
 }
 
-.alert-box:hover {
-  background: rgba(255, 140, 66, 0.15);
+.alert-flag:hover {
+  color: var(--text);
 }
 
-.alert-box.is-done {
-  border-color: var(--text-dim);
+.alert-flag.is-done {
   color: var(--text-dim);
+  opacity: 0.7;
 }
 
 .card-alerts li.is-done span {
   color: var(--text-dim);
+}
+
+/* The two scopes read as a pair: neither is the default, so neither is silent. */
+.tag-private {
+  color: var(--violet);
+}
+
+.tag-work {
+  color: var(--accent);
 }

@@ -194,6 +194,10 @@ function CategoryRow({
   clearTargets: () => void
 }): React.JSX.Element {
   const [renaming, setRenaming] = useState(false)
+  // The sub-category field is opened by the row's +, not left standing under
+  // every category: a field per category, always visible, was most of the
+  // sidebar's height and none of its content.
+  const [addingSub, setAddingSub] = useState(false)
   const active = selection.kind === 'category' && selection.categoryId === category.id
   const isNoteTarget = noteTarget?.categoryId === category.id && noteTarget.subId === null
 
@@ -304,6 +308,19 @@ function CategoryRow({
         >
           {category.scope === '' ? '–' : category.scope}
         </button>
+        <button
+          type="button"
+          className="row-action"
+          title="Add a sub-category"
+          onClick={() => {
+            // Opening the field on a collapsed category would type into
+            // something nobody can see.
+            ops.setCategoryOpen(category.id, true)
+            setAddingSub(true)
+          }}
+        >
+          +
+        </button>
         <button type="button" className="row-action danger" title="Delete category" onClick={onDelete}>
           ×
         </button>
@@ -332,11 +349,20 @@ function CategoryRow({
               clearTargets={clearTargets}
             />
           ))}
-          <InlineInput
-            placeholder="+ Sub-category…"
-            className="add-row add-sub"
-            onCommit={(name) => ops.addSub(category.id, name)}
-          />
+          {addingSub && (
+            <InlineInput
+              placeholder="Sub-category name"
+              className="add-row add-sub"
+              keepOpen={false}
+              onCommit={(name) => {
+                if (name.length > 0) {
+                  ops.addSub(category.id, name)
+                }
+                setAddingSub(false)
+              }}
+              onCancel={() => setAddingSub(false)}
+            />
+          )}
         </div>
       )}
     </div>
