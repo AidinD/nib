@@ -18,7 +18,7 @@ import type {
   StrokeTool,
   SubCategory
 } from '@shared/types'
-import { DRAWINGS_DIR, INDEX_FILE, NOTES_DIR } from '@shared/paths'
+import { ASSETS_DIR, DRAWINGS_DIR, INDEX_FILE, NOTES_DIR } from '@shared/paths'
 
 const MAX_WRITE_ATTEMPTS = 4
 
@@ -360,6 +360,87 @@ export class NoteStorage {
         throw error
       }
     })
+  }
+
+  /**
+   * Delete the images and drawings nothing refers to any more.
+   *
+   * Assets are content-addressed and shared: the same image pasted into two
+   * notes is one file, so deleting a note - or a section of one - cannot simply
+   * delete "its" images. What can be said is which files no note refers to at
+   * all, and that is what this removes.
+   *
+   * The grace period is the safety catch. An image is written to disk the moment
+   * it is pasted, and the note that refers to it is saved 600ms later; a sweep in
+   * between would see an unreferenced file and delete the paste. Nothing younger
+   * than the grace period is touched, so that window is never a race.
+   *
+   * Returns what it deleted, for the log.
+   */
+  async sweepOrphans(graceMs = 10 * 60 * 1000): Promise<{ assets: number; drawings: number }> {
+    const noteFiles = await fs.readdir(this.notesDir).catch(() => [] as string[])
+    const referencedAssets = new Set<string>()
+    const referencedDrawings = new Set<string>()
+
+    for (const file of noteFiles) {
+      if (!file.endsWith('.json')) {
+        continue
+      }
+      const raw = await fs.readFile(join(this.notesDir, file), 'utf-8').catch(() => '')
+      for (const match of raw.matchAll(/nib-asset:\/\/asset\/([A-Za-z0-9_.-]+)/g)) {
+        referencedAssets.add(match[1])
+      }
+      for (const match of raw.matchAll(/data-canvas=\?["']([A-Za-z0-9_-]+)/g)) {
+        referencedDrawings.add(match[1])
+      }
+    }
+
+    // A drawing that is still in a note keeps its rendered PNG alive even if the
+    // block's img tag has been replaced since.
+    for (const id of referencedDrawings) {
+      const doc = await this.readDrawing(id).catch(() => null)
+      const name = doc?.image.split('/').pop()
+      if (name !== undefined && name.length > 0) {
+        referencedAssets.add(name)
+      }
+    }
+
+    const assets = await this.removeUnreferenced(
+      join(this.dataDir, ASSETS_DIR),
+      (file) => referencedAssets.has(file),
+      graceMs
+    )
+    const drawings = await this.removeUnreferenced(
+      this.drawingsDir,
+      (file) => referencedDrawings.has(file.replace(/\.json$/, '')),
+      graceMs
+    )
+    return { assets, drawings }
+  }
+
+  private async removeUnreferenced(
+    directory: string,
+    isReferenced: (file: string) => boolean,
+    graceMs: number
+  ): Promise<number> {
+    const files = await fs.readdir(directory).catch(() => [] as string[])
+    const cutoff = Date.now() - graceMs
+    let removed = 0
+
+    for (const file of files) {
+      // Never touch a half-written temp file from an atomic write in flight.
+      if (file.startsWith('.') || isReferenced(file)) {
+        continue
+      }
+      const path = join(directory, file)
+      const stat = await fs.stat(path).catch(() => null)
+      if (stat === null || !stat.isFile() || stat.mtimeMs > cutoff) {
+        continue
+      }
+      await fs.unlink(path).catch(() => undefined)
+      removed++
+    }
+    return removed
   }
 
   /**

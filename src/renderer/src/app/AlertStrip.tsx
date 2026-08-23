@@ -23,12 +23,14 @@ export function AlertStrip({
   index,
   scope,
   onOpen,
-  onShowAll
+  onShowAll,
+  onClear
 }: {
   index: NibIndex
   scope: ScopeFilter
   onOpen: (note: NoteMeta, alertId: string) => void
   onShowAll: () => void
+  onClear: (note: NoteMeta, alertId: string) => void
 }): React.JSX.Element | null {
   const alerts = allAlerts(index, scope)
   if (alerts.length === 0) {
@@ -43,16 +45,29 @@ export function AlertStrip({
       <span className="alert-label">Needs you</span>
       <div className="alert-chips">
         {shown.map(({ note, alert }) => (
-          <button
-            key={`${note.id}-${alert.id}`}
-            type="button"
-            className="alert-chip"
-            title={`${noteTrail(index.categories, note)} › ${note.title}\n${alert.text}`}
-            onClick={() => onOpen(note, alert.id)}
-          >
-            <span className="alert-chip-note">{note.title.length > 0 ? note.title : 'Untitled'}</span>
-            <span className="alert-chip-text">{alert.text}</span>
-          </button>
+          <span key={`${note.id}-${alert.id}`} className="alert-chip">
+            <button
+              type="button"
+              className="alert-chip-open"
+              title={`${noteTrail(index.categories, note)} › ${note.title}\n${alert.text}`}
+              onClick={() => onOpen(note, alert.id)}
+            >
+              <span className="alert-chip-note">
+                {note.title.length > 0 ? note.title : 'Untitled'}
+              </span>
+              <span className="alert-chip-text">{alert.text}</span>
+            </button>
+            {/* Ticking it off here clears the flag on the block itself, without
+                having to open the note and hunt for the line. */}
+            <button
+              type="button"
+              className="alert-tick"
+              title="Done with this"
+              onClick={() => onClear(note, alert.id)}
+            >
+              ✓
+            </button>
+          </span>
         ))}
         {hidden > 0 && (
           <button type="button" className="alert-more" onClick={onShowAll}>

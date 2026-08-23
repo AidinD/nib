@@ -16,6 +16,7 @@ interface NoteListProps {
   onDelete: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
   onReorder: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
+  onClearAlert: (note: NoteMeta, alertId: string) => void
 }
 
 /** The 280px middle pane: a header line, an add field, then the cards. */
@@ -28,7 +29,8 @@ export function NoteList({
   onAdd,
   onDelete,
   onTogglePin,
-  onReorder
+  onReorder,
+  onClearAlert
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [slot, setSlot] = useState<DropSlot>(null)
@@ -159,7 +161,20 @@ export function NoteList({
               {selection.kind === 'alerts' && note.alerts.length > 0 ? (
                 <ul className="card-alerts">
                   {note.alerts.map((alert) => (
-                    <li key={alert.id}>{alert.text}</li>
+                    <li key={alert.id}>
+                      <button
+                        type="button"
+                        className="alert-tick"
+                        title="Done with this"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onClearAlert(note, alert.id)
+                        }}
+                      >
+                        ✓
+                      </button>
+                      <span>{alert.text}</span>
+                    </li>
                   ))}
                 </ul>
               ) : (

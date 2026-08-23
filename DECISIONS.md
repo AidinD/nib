@@ -3,6 +3,45 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - Orphaned images are swept, not deleted with the note
+
+Deleting a note - or a section of one - does not delete "its" images, because
+assets are content-addressed and shared: the same image pasted into two notes is
+one file on disk. What can be said for certain is which files no note refers to
+any more, and a sweep removes those.
+
+It runs a few seconds after writing stops (a sweep per keystroke would be absurd)
+and once at startup, which catches anything orphaned by a crash or by a note
+deleted on another machine and synced down while this one was closed.
+
+The grace period is the part that matters. An image is written the moment it is
+pasted, and the note referring to it is saved 600ms later; a sweep in between
+would see an unreferenced file and delete the paste. Nothing younger than ten
+minutes is touched, so that window is never a race. Drawings are swept the same
+way, keyed by the `data-canvas` id still present in some note.
+
+Considered and rejected: reference counting, incremented on paste and decremented
+on delete. It is exact until the first crash, external edit or sync, and then it
+is silently wrong for good. Recomputing from the notes on disk cannot drift.
+
+## 2026-08-23 - An action point is ticked off, not checked off
+
+There is no checkbox in the document. The flag is an attribute on the block, and
+it is cleared in one of three places: the `Alert` button in the editor toggles the
+block the caret is in, and a tick appears on the alert strip's chip and beside
+each line in the "Needs you" list.
+
+The reason is that the flag is not part of the note's text. A checkbox in the
+document would be content - it would show up in the note's preview, be selectable,
+be deletable halfway - and would then need reconciling with the index. Clearing it
+from the strip, on the other hand, means the note you are reminded about does not
+have to be opened at all, which is the whole point of the strip.
+
+Clearing from outside the editor edits the note file directly and re-derives the
+alert list from it. The index is a shadow of the body; changing only the shadow
+would put the two out of step and the flag would come back on the note's next save.
+
+
 ## 2026-08-21 - A drawing is stored twice: its strokes and a cropped PNG
 
 This closes the question the canvas was waiting on. A drawing is kept as **both**:

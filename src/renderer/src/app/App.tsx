@@ -9,6 +9,7 @@ import { useNib } from '../lib/useNib'
 import { selectedNotes } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
+import { clearAlert } from '../lib/alerts'
 
 export function App(): React.JSX.Element {
   const { index, loaded, ops } = useNib()
@@ -62,6 +63,14 @@ export function App(): React.JSX.Element {
         await window.nib.closeSticky(note.id)
       }
       await window.nib.deleteNote(note.id)
+    }
+  }
+
+  /** Tick off an action point, from the strip or from the review list. */
+  const tickAlert = async (note: NoteMeta, alertId: string): Promise<void> => {
+    const result = await clearAlert(note, alertId)
+    if (result !== null) {
+      ops.patchNoteMeta(note.id, { alerts: result.alerts, edited: result.edited })
     }
   }
 
@@ -122,6 +131,7 @@ export function App(): React.JSX.Element {
           setFocusAlertId(alertId)
         }}
         onShowAll={() => setSelection({ kind: 'alerts' })}
+        onClear={(note, alertId) => void tickAlert(note, alertId)}
       />
 
       <main className="panes">
@@ -156,6 +166,7 @@ export function App(): React.JSX.Element {
           onDelete={(note) => void deleteNote(note)}
           onTogglePin={(note) => void togglePin(note)}
           onReorder={ops.moveNoteBefore}
+          onClearAlert={(note, alertId) => void tickAlert(note, alertId)}
         />
 
         <Editor

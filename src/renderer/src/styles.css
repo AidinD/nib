@@ -1253,3 +1253,50 @@ body.is-sticky-window {
   /* Without this the browser claims the gesture and scrolls instead of drawing. */
   touch-action: none;
 }
+
+/* A chip is two controls: the label opens the note at that line, the tick
+   clears the flag where it stands. */
+.alert-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alert-chip-open {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+}
+
+.alert-tick {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: 9px;
+  line-height: 1;
+  color: transparent;
+}
+
+.alert-chip:hover .alert-tick,
+.card:hover .alert-tick {
+  color: var(--text-dim);
+}
+
+.alert-tick:hover {
+  color: var(--alert) !important;
+  border-color: var(--alert);
+}
+
+.card-alerts li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.card-alerts li::marker {
+  content: '';
+}

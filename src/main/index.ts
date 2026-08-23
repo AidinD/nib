@@ -116,6 +116,35 @@ async function writeAsset(dataUrl: string): Promise<string> {
   return `${ASSET_SCHEME}://asset/${name}`
 }
 
+/**
+ * The orphan sweep, debounced.
+ *
+ * Every note write is a chance for an image or a drawing to have lost its last
+ * reference - deleting a section takes its images with it - but a sweep per
+ * keystroke would be absurd. One run a few seconds after the writing stops
+ * catches the same files.
+ */
+let sweepTimer: NodeJS.Timeout | null = null
+
+function scheduleSweep(): void {
+  if (sweepTimer !== null) {
+    clearTimeout(sweepTimer)
+  }
+  sweepTimer = setTimeout(() => {
+    sweepTimer = null
+    void store()
+      .sweepOrphans()
+      .then(({ assets, drawings }) => {
+        if (assets > 0 || drawings > 0) {
+          console.log(`Nib swept ${assets} orphaned asset(s) and ${drawings} drawing(s)`)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to sweep orphaned files', error)
+      })
+  }, 5000)
+}
+
 function registerIpc(): void {
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
@@ -127,15 +156,20 @@ function registerIpc(): void {
     await store().saveIndex(index)
     // The writer already has this state; every OTHER window needs telling.
     broadcastIndexChanged()
+    scheduleSweep()
   })
 
   ipcMain.handle('note:read', (_event, id: string) => store().readNote(id))
   ipcMain.handle('note:write', async (_event, doc: NoteDoc) => {
     const edited = Date.now()
     await store().writeNote({ ...doc, edited })
+    scheduleSweep()
     return edited
   })
-  ipcMain.handle('note:delete', (_event, id: string) => store().deleteNote(id))
+  ipcMain.handle('note:delete', async (_event, id: string) => {
+    await store().deleteNote(id)
+    scheduleSweep()
+  })
 
   ipcMain.handle('drawing:read', (_event, id: string) => store().readDrawing(id))
   ipcMain.handle('drawing:write', (_event, doc: DrawingDoc) => store().writeDrawing(doc))
@@ -199,6 +233,10 @@ void app.whenReady().then(() => {
   // An external write - Dropbox syncing the folder down from another machine, or
   // a tool editing the index - reaches the renderer the same way our own does.
   store().watchIndex(broadcastIndexChanged)
+
+  // A sweep at startup catches anything orphaned by a crash, or by a note
+  // deleted on another machine and synced down while this one was closed.
+  scheduleSweep()
 
   app.on('browser-window-created', (_event, window) => {
     optimizer.watchWindowShortcuts(window)
