@@ -3,6 +3,34 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - One mark, at every size and in the window too
+
+The icon is one drawing. An earlier version had two - the full nib for 48px and
+up, a simpler tip-and-drop for 16 and 32 - on the reasoning that detail turns to
+mud at small sizes. It does, but the cure was worse: Windows showed one logo in
+the taskbar and a different one in search, and the honest reaction to that is
+"which one did we pick?".
+
+So the silhouette, the slit and the colour are the same at every size, and what
+changes is weight and detail: below 32px the stroke thickens and the vent hole
+goes, because a one-pixel ring is a smudge. Recognisably the same mark, drawn for
+the space it has.
+
+The mark is also in the window now, beside the wordmark - drawn as inline SVG
+rather than the packaged PNG, because it sits at 20px next to 20px text and a
+downscaled 512px bitmap is soft exactly where the eye is most critical. The same
+mark went into Jot's header in the same change, so the two apps introduce
+themselves the same way.
+
+A note on how the marks were checked, since one of them could not be: Jot takes a
+single-instance lock, so a second copy exits rather than opening a window, and
+driving the author's own running copy is not on. Its mark was rendered in a
+header that *can* be driven - Nib's - purely to be looked at. The test harness
+gained a screenshot helper for it, which is the missing half of not using the
+pointer: a check about how something looks still needs an image, and one taken
+from inside the renderer cannot catch another window by accident.
+
+
 ## 2026-08-23 - Alerts stay in Nib, and any bridge to Jot is a manual button, later
 
 Nib keeps its own action points. The overlap with Jot's todos is real and known -

@@ -11,15 +11,16 @@ import { fileURLToPath } from 'url'
  * transparent background, built from thick strokes with round caps, in a warm
  * colour - no container, no square. So this is a pen nib, in brass, the same way.
  *
- * Two drawings, not one:
+ * ONE mark at every size. An earlier version drew a second, simpler mark for 16
+ * and 32 - and Windows duly showed one logo in the taskbar and a different one
+ * in search, which reads as two logos and is worse than the blur it avoided.
  *
- *  - The full nib - shoulders, slit, vent hole - for 48px and up, where that
- *    detail is what makes it read as a nib rather than an arrowhead.
- *  - Just the tip and a drop of ink for 16 and 32, where the detail turns to
- *    mud. Jot does the same thing with its tray icon.
+ * What changes with size instead is detail and weight: below 32px the vent hole
+ * is dropped and the stroke thickens, because a 1px ring is a smudge. Same
+ * silhouette, same slit, same colour - recognisably the same mark.
  *
- * Both go into a multi-size icon.ico, so Windows picks the drawing meant for the
- * size it is asking for instead of downscaling the detailed one.
+ * They go into a multi-size icon.ico so each size is drawn rather than
+ * downscaled from the 256.
  *
  * Run with `node scripts/generate-icon.mjs`. The output is committed, because
  * packaging must not depend on having run a script first.
@@ -172,24 +173,33 @@ function brass(x, y, size) {
   ]
 }
 
-const FLAT_BRASS = [223, 163, 74]
-
 // ---------- the two drawings ----------
 
-/** The full nib, for the sizes that can carry its detail. */
+/**
+ * The nib. The only mark there is.
+ *
+ * Small sizes get a heavier stroke and no vent hole - at 16px a ring of one
+ * pixel is a smudge, and the slit alone still says "nib". Everything else is
+ * identical, so the taskbar and the Start menu show the same logo.
+ */
 function shadeNib(x, y, size) {
-  const weight = size * 0.055
+  const small = size < 32
+  const weight = size * (small ? 0.1 : size < 64 ? 0.075 : 0.055)
   const cx = size / 2
   const outline = nibOutline(cx, size * 0.13, size * 0.9, size * 0.245)
   const holeR = size * 0.075
   const holeY = size * 0.44
 
-  const d = Math.min(
-    distPath(x, y, outline, true),
-    distSegment(x, y, cx, holeY + holeR, cx, size * 0.855),
-    distRing(x, y, cx, holeY, holeR)
-  )
-  const alpha = coverage(d, weight / 2)
+  const parts = [distPath(x, y, outline, true)]
+  if (small) {
+    // Just the slit, running most of the body.
+    parts.push(distSegment(x, y, cx, size * 0.38, cx, size * 0.8))
+  } else {
+    parts.push(distSegment(x, y, cx, holeY + holeR, cx, size * 0.855))
+    parts.push(distRing(x, y, cx, holeY, holeR))
+  }
+
+  const alpha = coverage(Math.min(...parts), weight / 2)
   if (alpha === 0) {
     return [0, 0, 0, 0]
   }
@@ -197,37 +207,10 @@ function shadeNib(x, y, size) {
   return [r, g, b, Math.round(255 * alpha)]
 }
 
-/** The tip and a drop of ink, for 16 and 32 where detail turns to mud. */
-function shadeTip(x, y, size) {
-  const weight = size * 0.075
-  const cx = size / 2
-  const shoulders = [
-    [size * 0.18, size * 0.2],
-    [size * 0.5, size * 0.62],
-    [size * 0.82, size * 0.2]
-  ]
-  const dropR = size * 0.1
-  const dropY = size * 0.84
-
-  const line = Math.min(
-    distPath(x, y, shoulders),
-    distSegment(x, y, cx, size * 0.3, cx, size * 0.56)
-  )
-  const drop = Math.hypot(x - cx, y - dropY)
-  const alpha = Math.max(coverage(line, weight / 2), coverage(drop, dropR))
-  if (alpha === 0) {
-    return [0, 0, 0, 0]
-  }
-  return [...FLAT_BRASS, Math.round(255 * alpha)]
-}
-
 // ---------- output ----------
 
 // The PNG electron-builder falls back to, and the source of truth for the mark.
 writeFileSync(join(outDir, 'icon.png'), renderPng(512, shadeNib))
-
-// The small drawing on its own, for anywhere a 32px mark is wanted directly.
-writeFileSync(join(outDir, 'icon-small.png'), renderPng(64, shadeTip))
 
 writeFileSync(
   join(outDir, 'icon.ico'),
@@ -236,9 +219,9 @@ writeFileSync(
     { size: 128, png: renderPng(128, shadeNib) },
     { size: 64, png: renderPng(64, shadeNib) },
     { size: 48, png: renderPng(48, shadeNib) },
-    { size: 32, png: renderPng(32, shadeTip) },
-    { size: 16, png: renderPng(16, shadeTip) }
+    { size: 32, png: renderPng(32, shadeNib) },
+    { size: 16, png: renderPng(16, shadeNib) }
   ])
 )
 
-console.log('Wrote resources/icon.png, resources/icon-small.png and resources/icon.ico')
+console.log('Wrote resources/icon.png and resources/icon.ico')

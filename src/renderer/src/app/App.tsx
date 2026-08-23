@@ -3,6 +3,7 @@ import type { Category, NoteMeta } from '@shared/types'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
+import { NibMark } from './NibMark'
 import { NoteList } from './NoteList'
 import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
@@ -180,6 +181,7 @@ export function App(): React.JSX.Element {
       <header className="app-header">
         {/* Frameless window: this row is the drag handle. */}
         <div className="brand">
+          <NibMark />
           <span className="wordmark">Nib</span>
           <span className="version">v{__APP_VERSION__}</span>
         </div>

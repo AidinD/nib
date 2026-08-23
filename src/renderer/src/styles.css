@@ -115,6 +115,13 @@ input {
   letter-spacing: 0.5px;
 }
 
+/* The brand row aligns on the baseline, which a square mark has none of - so it
+   centres itself instead. */
+.brand-mark {
+  align-self: center;
+  flex: 0 0 auto;
+}
+
 .version {
   color: var(--text-dim);
   font-size: 11px;

@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { writeFileSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -168,7 +169,24 @@ function makePage(send) {
     throw new Error(`Timed out waiting for: ${label}`)
   }
 
-  return { eval: evaluate, click, type, key, waitFor, log: console.log, sleep }
+  /**
+   * Screenshot the page, or a region of it, to a file.
+   *
+   * The other half of not using the pointer: a check that is about how something
+   * looks still needs an image, and this is one taken from inside the renderer
+   * rather than off the desktop - so it cannot catch another window by accident.
+   */
+  const shot = async (path, clip = null, scale = 2) => {
+    const params = { format: 'png' }
+    if (clip !== null) {
+      params.clip = { ...clip, scale }
+    }
+    const result = await send('Page.captureScreenshot', params)
+    writeFileSync(path, Buffer.from(result.data, 'base64'))
+    console.log(`wrote ${path}`)
+  }
+
+  return { eval: evaluate, click, type, key, waitFor, shot, log: console.log, sleep }
 }
 
 const stepsPath = process.argv[2]
