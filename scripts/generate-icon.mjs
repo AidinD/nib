@@ -214,14 +214,12 @@ writeFileSync(join(outDir, 'icon.png'), renderPng(512, shadeNib))
 
 writeFileSync(
   join(outDir, 'icon.ico'),
-  buildIco([
-    { size: 256, png: renderPng(256, shadeNib) },
-    { size: 128, png: renderPng(128, shadeNib) },
-    { size: 64, png: renderPng(64, shadeNib) },
-    { size: 48, png: renderPng(48, shadeNib) },
-    { size: 32, png: renderPng(32, shadeNib) },
-    { size: 16, png: renderPng(16, shadeNib) }
-  ])
+  // 20 and 24 are in here as well as the usual ladder because Windows asks for
+  // them at 125% and 150% display scaling - the two scales where a missing frame
+  // means it resamples a neighbour and the mark goes soft again.
+  buildIco(
+    [256, 128, 64, 48, 32, 24, 20, 16].map((size) => ({ size, png: renderPng(size, shadeNib) }))
+  )
 )
 
 console.log('Wrote resources/icon.png and resources/icon.ico')

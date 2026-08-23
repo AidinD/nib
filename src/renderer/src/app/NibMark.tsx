@@ -22,7 +22,20 @@ export function NibMark({ size = 20 }: { size?: number }): React.JSX.Element {
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id="nib-brass" x1="0" y1="0" x2="1" y2="1">
+        {/* userSpaceOnUse, not the objectBoundingBox default. The slit below is a
+            vertical line, so its bounding box has zero width - and a
+            bounding-box gradient on a zero-width shape renders nothing at all,
+            which meant the slit silently did not draw. It also makes one ramp
+            span the whole mark instead of restarting inside every path, which is
+            what the icon script does. */}
+        <linearGradient
+          id="nib-brass"
+          gradientUnits="userSpaceOnUse"
+          x1="13"
+          y1="13"
+          x2="90"
+          y2="90"
+        >
           <stop offset="0" stopColor="#e8b55c" />
           <stop offset="1" stopColor="#c97e3e" />
         </linearGradient>

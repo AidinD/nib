@@ -3,6 +3,28 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - The header mark was missing its slit, and the ladder was missing two rungs
+
+Two defects in the mark, both found while giving Loom the same treatment.
+
+**The slit did not render.** `NibMark`'s slit is `M50 52 V86`, a vertical line,
+so its bounding box has zero width - and an `objectBoundingBox` gradient (the
+SVG default) on a shape with a zero-width or zero-height box renders *nothing at
+all*. So the window showed a nib with a vent hole and no slit, while the taskbar
+icon showed both, because the icon script paints with distance fields rather than
+an SVG gradient. Two drawings where the whole point of the previous entry was
+one. Fixed with `gradientUnits="userSpaceOnUse"`, which also makes a single ramp
+span the mark instead of restarting inside every path.
+
+It is worth naming why this survived review: the mark still looked like a nib.
+Nothing was obviously broken, and the only way to catch it was to render the
+component and compare against the icon, which is now the habit.
+
+**20 and 24 were missing from the .ico.** Windows asks for those at 125% and
+150% display scaling; without them it resamples a neighbouring frame and the
+mark goes soft at exactly the scales most displays actually run at. The ladder is
+now 16/20/24/32/48/64/128/256. Jot and Loom carry the same set.
+
 ## 2026-08-23 - One mark, at every size and in the window too
 
 The icon is one drawing. An earlier version had two - the full nib for 48px and
