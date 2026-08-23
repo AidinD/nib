@@ -124,7 +124,8 @@ function normalizeAlerts(raw: unknown): AlertMeta[] {
     .filter((entry) => entry !== null && typeof entry === 'object')
     .map((entry) => ({
       id: str((entry as { id?: unknown }).id),
-      text: str((entry as { text?: unknown }).text).slice(0, MAX_ALERT_TEXT)
+      text: str((entry as { text?: unknown }).text).slice(0, MAX_ALERT_TEXT),
+      done: (entry as { done?: unknown }).done === true
     }))
     .filter((alert) => alert.id.length > 0)
     .slice(0, MAX_ALERTS_PER_NOTE)
@@ -153,6 +154,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     pinned: raw?.pinned === true,
     tint: str(raw?.tint),
     alerts: normalizeAlerts(raw?.alerts),
+    flagged: raw?.flagged === true,
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }

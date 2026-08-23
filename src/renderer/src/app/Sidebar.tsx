@@ -15,6 +15,7 @@ interface SidebarProps {
   onScope: (scope: ScopeFilter) => void
   ops: NibOps
   onDeleteCategory: (category: Category) => void
+  onDeleteSub: (categoryId: string, subId: string, name: string) => void
 }
 
 /** Which row a dragged note is currently hovering over. */
@@ -35,7 +36,8 @@ export function Sidebar({
   scope,
   onScope,
   ops,
-  onDeleteCategory
+  onDeleteCategory,
+  onDeleteSub
 }: SidebarProps): React.JSX.Element {
   const counts = smartCounts(index, scope)
   const categories = index.categories.filter((category) => categoryInScope(category, scope))
@@ -118,6 +120,7 @@ export function Sidebar({
             onSelect={onSelect}
             ops={ops}
             onDelete={() => onDeleteCategory(category)}
+            onDeleteSub={onDeleteSub}
             categorySlot={categorySlot}
             setCategorySlot={setCategorySlot}
             noteTarget={noteTarget}
@@ -170,6 +173,7 @@ function CategoryRow({
   onSelect,
   ops,
   onDelete,
+  onDeleteSub,
   categorySlot,
   setCategorySlot,
   noteTarget,
@@ -182,6 +186,7 @@ function CategoryRow({
   onSelect: (selection: Selection) => void
   ops: NibOps
   onDelete: () => void
+  onDeleteSub: (categoryId: string, subId: string, name: string) => void
   categorySlot: DropSlot
   setCategorySlot: (slot: DropSlot) => void
   noteTarget: NoteTarget
@@ -321,6 +326,7 @@ function CategoryRow({
               }
               onSelect={onSelect}
               ops={ops}
+              onDeleteSub={onDeleteSub}
               isDropTarget={noteTarget?.categoryId === category.id && noteTarget.subId === sub.id}
               setNoteTarget={setNoteTarget}
               clearTargets={clearTargets}
@@ -345,6 +351,7 @@ function SubRow({
   active,
   onSelect,
   ops,
+  onDeleteSub,
   isDropTarget,
   setNoteTarget,
   clearTargets
@@ -356,6 +363,7 @@ function SubRow({
   active: boolean
   onSelect: (selection: Selection) => void
   ops: NibOps
+  onDeleteSub: (categoryId: string, subId: string, name: string) => void
   isDropTarget: boolean
   setNoteTarget: (target: NoteTarget) => void
   clearTargets: () => void
@@ -414,7 +422,7 @@ function SubRow({
         type="button"
         className="row-action danger"
         title="Delete sub-category"
-        onClick={() => ops.deleteSub(categoryId, subId)}
+        onClick={() => onDeleteSub(categoryId, subId, name)}
       >
         ×
       </button>

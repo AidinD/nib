@@ -34,6 +34,18 @@ const api = {
   toggleAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-always-on-top'),
 
   /**
+   * Fires when a sticky window is closed, so its note can stop being pinned.
+   * Returns its own unsubscribe.
+   */
+  onStickyClosed: (handler: (noteId: string) => void): (() => void) => {
+    const listener = (_event: unknown, noteId: string): void => handler(noteId)
+    ipcRenderer.on('sticky:closed', listener)
+    return () => {
+      ipcRenderer.removeListener('sticky:closed', listener)
+    }
+  },
+
+  /**
    * Fires when the data on disk changed - another window of ours, or an external
    * writer such as Dropbox syncing the folder down. Returns its own unsubscribe.
    */

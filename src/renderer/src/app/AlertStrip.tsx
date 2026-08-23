@@ -28,9 +28,9 @@ export function AlertStrip({
 }: {
   index: NibIndex
   scope: ScopeFilter
-  onOpen: (note: NoteMeta, alertId: string) => void
+  onOpen: (note: NoteMeta, alertId: string | null) => void
   onShowAll: () => void
-  onClear: (note: NoteMeta, alertId: string) => void
+  onClear: (note: NoteMeta, alertId: string | null) => void
 }): React.JSX.Element | null {
   const alerts = allAlerts(index, scope)
   if (alerts.length === 0) {
@@ -45,25 +45,29 @@ export function AlertStrip({
       <span className="alert-label">Needs you</span>
       <div className="alert-chips">
         {shown.map(({ note, alert }) => (
-          <span key={`${note.id}-${alert.id}`} className="alert-chip">
+          <span key={`${note.id}-${alert?.id ?? 'note'}`} className="alert-chip">
             <button
               type="button"
               className="alert-chip-open"
-              title={`${noteTrail(index.categories, note)} › ${note.title}\n${alert.text}`}
-              onClick={() => onOpen(note, alert.id)}
+              title={`${noteTrail(index.categories, note)} › ${note.title}${
+                alert === null ? '' : `\n${alert.text}`
+              }`}
+              onClick={() => onOpen(note, alert?.id ?? null)}
             >
               <span className="alert-chip-note">
                 {note.title.length > 0 ? note.title : 'Untitled'}
               </span>
-              <span className="alert-chip-text">{alert.text}</span>
+              {/* A whole note flagged as the action point has no line to quote,
+                  so the chip is just its name. */}
+              {alert !== null && <span className="alert-chip-text">{alert.text}</span>}
             </button>
-            {/* Ticking it off here clears the flag on the block itself, without
-                having to open the note and hunt for the line. */}
+            {/* Ticking it off here marks the block done, or unflags the note,
+                without opening it and hunting for the line. */}
             <button
               type="button"
               className="alert-tick"
               title="Done with this"
-              onClick={() => onClear(note, alert.id)}
+              onClick={() => onClear(note, alert?.id ?? null)}
             >
               ✓
             </button>

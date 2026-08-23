@@ -3,6 +3,89 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-23 - A toolbar button must not take the focus
+
+Every button in the editor's toolbar swallows its own `mousedown`, so pressing
+one never moves focus out of the document.
+
+Without it the formatting buttons did nothing at all - not intermittently,
+always. Pressing a button focused it, the selection in the contenteditable
+collapsed, and `execCommand` then had nothing to act on. The same cause made the
+Alert button need several tries: it looks for the block the caret is in, and by
+the time it ran there was no caret.
+
+There is a second line of defence for the cases where focus legitimately left the
+body first - the title field, another pane: the last selection seen inside the
+body is remembered and restored before a command runs. The mousedown fix is what
+makes the ordinary case work; this is what makes the awkward one work.
+
+The lesson generalises past this app: a contenteditable's selection is global
+state that any focus change can wipe, so every control acting on it has to either
+preserve focus or restore the range.
+
+## 2026-08-23 - An action point has three states, in a marker beside the line
+
+A line is not flagged, flagged, or done - and one marker in the document's left
+column carries all three, cycling in that order as it is clicked.
+
+Ticking one off used to remove the flag, which threw away the interesting part: a
+line that needed doing and has been dealt with should still read as one. So `done`
+keeps the mark - the box, now ticked, the bar gone grey, the text dimmed - while
+leaving the strip and the count. One more click clears it, for the line that
+should never have been flagged at all.
+
+Where the control lives matters as much as what it does. It began as a button at
+the right-hand end of the toolbar, which is a long way from the sentence it is
+about; now every line has a marker in its own margin, faint while the pointer is
+in the document and solid once the line is flagged.
+
+Three details that had to be got right:
+
+- **The column is permanent**, not conjured on hover. A marker that appeared inside the line would push every paragraph sideways as the pointer crossed it.
+- **The markers appear on hovering the document, not the line.** The marker sits beside the line, so reaching for it leaves the line - and a marker that fades as you reach for it cannot be clicked.
+- **It is drawn by CSS, not as an element.** A real checkbox in the document would be content: selectable, deletable halfway through, and visible in the note's preview and word count.
+
+The same box appears beside each line in the "Needs you" list, doing the same job
+from the outside, and `Ctrl+Shift+A` is the keyboard route - which, with the caret
+in no particular line, flags the whole note.
+
+## 2026-08-23 - A note can be the action point, not just a line in it
+
+Alerts exist at both levels: a block inside a note, and the whole note.
+
+Some notes are the action. A card that says "call the contractor" has no line
+worth singling out, and flagging its only paragraph to make it show up in the strip
+is a workaround, not a design. So a note carries `flagged` as well, toggled by the
+flag that appears on its card on hover - or by `Ctrl+Shift+A` with the caret in no
+particular line, so the editor is not a dead end for it.
+
+A flagged note shows an orange edge on its card, appears in the strip as its own
+chip with no line to quote, and counts as one thing that needs you.
+
+## 2026-08-23 - Destructive actions ask first, in the app's own dialog
+
+Deleting a note, a category or a sub-category now opens a confirmation. All three
+used to happen on a single stray click, next to controls you click all the time -
+the pin, the scope chip, the disclosure caret.
+
+The dialog is the app's own, never `window.confirm`. The native one is a
+light-mode Windows box in the middle of a dark frameless app, and it blocks the
+renderer thread while it is up. Cancel takes focus, so an absent-minded Enter
+cancels rather than deletes, and the message says what goes with it - a category
+takes its notes, a sub-category leaves them behind and moves them up.
+
+## 2026-08-23 - Closing a sticky window unpins its note
+
+A sticky window is what a pin means, so closing the window clears the pin and the
+card stops being marked sticky. It was possible to end up with a card claiming to
+be sticky and no window anywhere.
+
+The signal comes from the window's own `closed` event rather than from its × - Alt+F4,
+the taskbar and every other way of closing a window has to count too. The one
+exception is quitting: shutting the app down closes every sticky window, and
+unpinning them all would mean coming back to none.
+
+
 ## 2026-08-23 - Orphaned images are swept, not deleted with the note
 
 Deleting a note - or a section of one - does not delete "its" images, because

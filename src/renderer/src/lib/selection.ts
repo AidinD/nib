@@ -57,9 +57,10 @@ export function selectedNotes(
       break
     // The review view for action points: the notes that hold one, newest first,
     // because an action point you wrote today is the one still on your mind.
+    // Ticked-off ones do not bring a note in here; they stay visible in it.
     case 'alerts':
       notes = allNotes(index, filter)
-        .filter((note) => note.alerts.length > 0)
+        .filter((note) => note.flagged || note.alerts.some((alert) => !alert.done))
         .sort((a, b) => b.edited - a.edited)
       break
     case 'category': {
@@ -153,18 +154,32 @@ export function smartCounts(
     recent: Math.min(notes.length, RECENT_LIMIT),
     sticky: notes.filter((note) => note.pinned).length,
     // Counted in action points, not in notes: the row answers "how many things
-    // need me", and one note can hold several.
-    alerts: notes.reduce((total, note) => total + note.alerts.length, 0)
+    // need me", and one note can hold several - plus the notes that are
+    // themselves the action point.
+    alerts: notes.reduce(
+      (total, note) =>
+        total + note.alerts.filter((alert) => !alert.done).length + (note.flagged ? 1 : 0),
+      0
+    )
   }
 }
 
-/** Every flagged block in the app, with the note it lives in - what the strip shows. */
-export function allAlerts(
-  index: NibIndex,
-  filter: ScopeFilter
-): Array<{ note: NoteMeta; alert: AlertMeta }> {
+/**
+ * One thing that needs you: a flagged block, or a whole note that is itself the
+ * action point - which is what `alert: null` means.
+ */
+export interface AlertEntry {
+  note: NoteMeta
+  alert: AlertMeta | null
+}
+
+/** Everything outstanding, newest note first - what the strip shows. */
+export function allAlerts(index: NibIndex, filter: ScopeFilter): AlertEntry[] {
   return allNotes(index, filter)
     .slice()
     .sort((a, b) => b.edited - a.edited)
-    .flatMap((note) => note.alerts.map((alert) => ({ note, alert })))
+    .flatMap((note) => [
+      ...(note.flagged ? [{ note, alert: null }] : []),
+      ...note.alerts.filter((alert) => !alert.done).map((alert) => ({ note, alert }))
+    ])
 }

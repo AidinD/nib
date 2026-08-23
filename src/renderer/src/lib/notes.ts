@@ -141,7 +141,10 @@ export function extractAlerts(html: string): AlertMeta[] {
   const alerts: AlertMeta[] = []
   for (const block of holder.querySelectorAll(`${ALERT_BLOCKS}`)) {
     const element = block as HTMLElement
-    if (element.dataset.alert !== '1') {
+    const state = element.dataset.alert
+    // '1' is an open action point, 'done' one that has been ticked off but is
+    // still marked in the note. Anything else is not an action point at all.
+    if (state !== '1' && state !== 'done') {
       continue
     }
     const id = element.dataset.alertId
@@ -150,7 +153,8 @@ export function extractAlerts(html: string): AlertMeta[] {
     }
     alerts.push({
       id,
-      text: (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160)
+      text: (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160),
+      done: state === 'done'
     })
   }
   return alerts

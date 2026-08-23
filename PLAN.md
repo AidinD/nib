@@ -1,6 +1,6 @@
 # Nib - plan
 
-Last reconciled: 2026-08-23 (third pass).
+Last reconciled: 2026-08-23 (fourth pass, after the first round of use).
 
 ## Status
 
@@ -51,7 +51,8 @@ the sidebar for working through them.
 - **Housekeeping**: images and drawings nothing refers to any more are swept from disk a few seconds after writing stops and once at startup, with a ten-minute grace period so a fresh paste is never mistaken for an orphan.
 - **An installer**: `npm run package` produces a Windows NSIS installer under `dist/`, per-user and unsigned, with a generated app icon in `resources/`.
 - **Canvas**: a drawing is a block inside a note. `Canvas` inserts one, clicking it opens the surface over the document - pen, highlighter and eraser, a 1-18 width slider, six inks, a live pressure readout and meter, undo and redo by whole stroke. Strokes go to their own file, a PNG cropped to the ink goes to the assets folder, and the block shows it as a 170px thumbnail.
-- **Alerts**: an `Alert` button flags the block the caret is in; the strip under the header lists them across every note and jumps to the exact line, flashing it on arrival; the "Needs you" sidebar row lists the notes with their flagged lines. A tick on the chip and on each line clears the flag without opening the note.
+- **Alerts**, at two levels. Every line has a marker in the document's left column - faint on hover, an orange box once flagged, ticked once done - and clicking it cycles the three states; `Ctrl+Shift+A` does the same from the keyboard, and flags the whole note when the caret is in no line. A card carries the same flag on hover, for the notes that are themselves the action. The strip under the header lists everything outstanding and jumps to the exact line, flashing it on arrival; the "Needs you" row is the review list, with the same box beside each line.
+- **Confirmations**: deleting a note, a category or a sub-category asks first, in the app's own dialog, with a message that says what goes with it.
 - **Drag and drop** on the native API: notes reorder within a category, categories reorder against each other, and a note dropped on a sub-category or category row moves there. The insertion marker is the spec's 3px inset accent bar with its glow, not a hairline - Jot's own CSS records why.
 
 ## Verified against the running app
@@ -60,6 +61,10 @@ the sidebar for working through them.
 - **Drag and drop.** A note dropped on a sub-category row moves into it, a note dropped on a category row leaves its sub-category, cards reorder within a category, and categories reorder against each other. Each one checked in `index.json` afterwards, not just on screen.
 - **Two windows on one note.** Typing in a sticky window shows up in the main window's editor, and vice versa, as soon as the window being typed into is not the one you are looking at.
 - **The `NIB_DATA_DIR` migration.** Pointed at an empty folder with data in `userData`, the index, the note files and the assets all moved across on first start.
+- **The toolbar.** Selecting a line and pressing `B` now bolds it, and the tag is in the saved file - it did nothing at all before, for every formatting button.
+- **Alerts.** Hovering the document showed the markers; clicking one flagged its line, clicking a flagged one wrote `data-alert="done"` to the note file and dimmed the line while keeping it marked.
+- **Confirmations.** Deleting a note opens the app's own dialog naming the note, with Cancel focused.
+- **Sticky windows.** Closing one set its note's `pinned` back to false in the index, so the card stops claiming to be sticky.
 - **The sweep.** With an orphaned image planted in the assets folder and back-dated, a start of the app removed it, along with a superseded drawing render and an orphaned drawing file - and left every referenced file alone.
 - **The packaged build.** `npm run package` produced `dist/Nib Setup 0.1.0.exe`, and the unpacked build started and opened its window.
 - **The canvas.** Drawing with a mouse, switching tools, undoing a stroke and closing it wrote the strokes to `drawings/<id>.json` and a cropped PNG to the assets folder, and the block came back as a thumbnail. Reopening the drawing kept the strokes and let more be added. Closing an untouched canvas removed its block.
@@ -69,10 +74,9 @@ the sidebar for working through them.
 
 Every requirement on the original list is now built. What is left is smaller:
 
-1. **Verify the tick on the alert strip by hand.** The button renders and is wired to the same handler as the tick in the "Needs you" list; its click path was not exercised, because the machine driving the test was in use at the time.
-2. **Try the canvas with a real stylus.** The pressure curve, the per-tool nibs and the palm rejection are all implemented, but this machine has only a mouse - which reports a constant 0.5 - so none of the pressure behaviour has been seen for real.
-3. The `Select` tool the design spec lists in the canvas strip is not built. Pen, highlighter and eraser are. A dead button seemed worse than a missing one.
-4. Worth considering once alerts have been lived with: whether a flagged block should carry a deadline the way a Jot todo does.
+1. **Try the canvas with a real stylus.** The pressure curve, the per-tool nibs and the palm rejection are all implemented, but this machine has only a mouse - which reports a constant 0.5 - so none of the pressure behaviour has been seen for real.
+2. The `Select` tool the design spec lists in the canvas strip is not built. Pen, highlighter and eraser are. A dead button seemed worse than a missing one.
+3. Worth considering once alerts have been lived with: whether a flagged block should carry a deadline the way a Jot todo does.
 
 Everything else in the first version's scope is done: the three panes, the
 sidebar, the editor, persistence, inline images, sticky windows, drag and drop,

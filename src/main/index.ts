@@ -7,7 +7,14 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import { NoteStorage } from './storage'
-import { allWindows, closeStickyWindow, createMainWindow, openStickyWindow } from './windows'
+import {
+  allWindows,
+  closeStickyWindow,
+  createMainWindow,
+  mainWindows,
+  onStickyClosed,
+  openStickyWindow
+} from './windows'
 
 /**
  * Images pasted into a note are written to the assets folder and referenced
@@ -27,6 +34,14 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let storage: NoteStorage | null = null
+
+/**
+ * Set once the app is on its way out.
+ *
+ * Quitting closes every sticky window, and unpinning notes because the app is
+ * closing would mean coming back to none of them.
+ */
+let quitting = false
 
 function store(): NoteStorage {
   if (storage === null) {
@@ -242,6 +257,19 @@ void app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // A sticky window closing is the note being unpinned - unless the whole app is
+  // going down, in which case the pins are exactly what should survive.
+  onStickyClosed((noteId) => {
+    if (quitting) {
+      return
+    }
+    for (const window of mainWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('sticky:closed', noteId)
+      }
+    }
+  })
+
   createMainWindow()
 
   // Pinning a note is what produces its sticky window, and a pin outlives a
@@ -267,6 +295,10 @@ void app.whenReady().then(() => {
       createMainWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  quitting = true
 })
 
 app.on('window-all-closed', () => {

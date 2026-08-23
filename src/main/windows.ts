@@ -72,6 +72,20 @@ export function createMainWindow(): BrowserWindow {
  */
 const stickyWindows = new Map<string, BrowserWindow>()
 
+/**
+ * Called when a sticky window closes, so the note can stop being pinned.
+ *
+ * A sticky window IS the note's pin - closing the window and leaving the card
+ * marked sticky would be a lie. This has to come from the window's own `closed`
+ * event rather than from the × button, so that Alt+F4 and every other way of
+ * closing a window is covered too.
+ */
+let stickyClosedHandler: ((noteId: string) => void) | null = null
+
+export function onStickyClosed(handler: (noteId: string) => void): void {
+  stickyClosedHandler = handler
+}
+
 /** 280x320, always on top, frameless - the drag strip in the window does that job. */
 export function openStickyWindow(noteId: string): BrowserWindow {
   const existing = stickyWindows.get(noteId)
@@ -103,6 +117,7 @@ export function openStickyWindow(noteId: string): BrowserWindow {
   })
   window.on('closed', () => {
     stickyWindows.delete(noteId)
+    stickyClosedHandler?.(noteId)
   })
   openLinksExternally(window)
   loadRenderer(window, `sticky/${noteId}`)

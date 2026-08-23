@@ -21,6 +21,16 @@ import {
 /** How long after the last keystroke the note is written to disk. */
 const SAVE_DELAY = 600
 
+/**
+ * The strip of margin to the left of every line, where its alert marker is drawn
+ * and where a click on that marker lands. In the margin rather than inside the
+ * line, so showing the marker on hover cannot shift the text sideways.
+ */
+const ALERT_GUTTER = 26
+
+/** The lines that can carry an alert - kept in step with ALERT_BLOCKS in notes.ts. */
+const ALERT_LINES = 'p, h1, h2, h3, h4, li, blockquote'
+
 interface EditorProps {
   index: NibIndex
   note: NoteMeta | null
@@ -31,6 +41,7 @@ interface EditorProps {
   onAlertFocused: () => void
   onSaved: (noteId: string, patch: Partial<NoteMeta>) => void
   onTogglePin: (note: NoteMeta) => void
+  onToggleFlag: (note: NoteMeta) => void
 }
 
 type SaveState = 'saved' | 'dirty' | 'saving'
@@ -42,7 +53,8 @@ export function Editor({
   focusAlertId,
   onAlertFocused,
   onSaved,
-  onTogglePin
+  onTogglePin,
+  onToggleFlag
 }: EditorProps): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [title, setTitle] = useState('')
@@ -58,6 +70,8 @@ export function Editor({
   // The `edited` stamp of what is currently in the body. Anything newer on disk
   // came from somewhere else - this note's sticky window, or another machine.
   const loadedEdited = useRef(0)
+  // The last selection that was inside the body. See `withSelection`.
+  const savedRange = useRef<Range | null>(null)
 
   const category = index.categories.find((c) => c.id === note?.categoryId)
 
@@ -186,6 +200,57 @@ export function Editor({
     }, SAVE_DELAY)
   }, [save])
 
+  /**
+   * Remember where the caret was.
+   *
+   * Every toolbar button also swallows its mousedown so focus never leaves the
+   * body in the first place - that alone is what fixes the formatting buttons,
+   * which did nothing because by the time the click arrived there was no
+   * selection left to format. This is the belt to that braces: if the selection
+   * has moved out anyway (the title field, another pane), the last one inside
+   * the body is restored before the command runs.
+   */
+  useEffect(() => {
+    const remember = (): void => {
+      const root = bodyRef.current
+      const selection = window.getSelection()
+      if (root === null || selection === null || selection.rangeCount === 0) {
+        return
+      }
+      const range = selection.getRangeAt(0)
+      if (root.contains(range.commonAncestorContainer)) {
+        savedRange.current = range.cloneRange()
+      }
+    }
+    document.addEventListener('selectionchange', remember)
+    return () => {
+      document.removeEventListener('selectionchange', remember)
+    }
+  }, [])
+
+  /** Run something with the caret guaranteed to be back inside the body. */
+  const withSelection = useCallback((run: () => void) => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const selection = window.getSelection()
+    const inside =
+      selection !== null &&
+      selection.rangeCount > 0 &&
+      root.contains(selection.getRangeAt(0).commonAncestorContainer)
+
+    if (!inside) {
+      root.focus()
+      const range = savedRange.current
+      if (range !== null && root.contains(range.commonAncestorContainer)) {
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+      }
+    }
+    run()
+  }, [])
+
   const onBodyInput = useCallback(() => {
     const element = bodyRef.current
     if (element !== null) {
@@ -204,11 +269,12 @@ export function Editor({
    */
   const exec = useCallback(
     (command: string, value?: string) => {
-      bodyRef.current?.focus()
-      document.execCommand(command, false, value)
-      onBodyInput()
+      withSelection(() => {
+        document.execCommand(command, false, value)
+        onBodyInput()
+      })
     },
-    [onBodyInput]
+    [onBodyInput, withSelection]
   )
 
   /**
@@ -221,23 +287,63 @@ export function Editor({
    */
   const toggleAlert = useCallback(() => {
     const root = bodyRef.current
-    if (root === null) {
+    if (root === null || note === null) {
       return
     }
-    const block = blockAtSelection(root)
-    if (block === null) {
-      return
-    }
-    if (block.dataset.alert === '1') {
-      delete block.dataset.alert
-    } else {
-      block.dataset.alert = '1'
-      if (block.dataset.alertId === undefined || block.dataset.alertId.length === 0) {
-        block.dataset.alertId = newId('alert')
+    withSelection(() => {
+      const block = blockAtSelection(root)
+      if (block === null) {
+        // No line to flag, so the note itself is the action point. A card that
+        // says "call the contractor" has no line worth singling out.
+        onToggleFlag(note)
+        return
       }
-    }
-    onBodyInput()
-  }, [onBodyInput])
+      if (block.dataset.alert === undefined) {
+        block.dataset.alert = '1'
+        if (block.dataset.alertId === undefined || block.dataset.alertId.length === 0) {
+          block.dataset.alertId = newId('alert')
+        }
+      } else {
+        // Flagged already, open or done: the button clears it outright. Ticking
+        // it off - keeping the mark, losing the nag - is what the checkbox does.
+        delete block.dataset.alert
+        delete block.dataset.alertId
+      }
+      onBodyInput()
+    })
+  }, [note, onBodyInput, onToggleFlag, withSelection])
+
+  /**
+   * The marker in a line's margin, clicked.
+   *
+   * One control, three states, in the order you meet them: not flagged, flagged,
+   * done - and round again, so an accidental flag is one more click to undo. It
+   * sits in the margin rather than in the toolbar because that is where the line
+   * is; a button at the far end of a toolbar is a long way from the sentence it
+   * is about.
+   *
+   * It is drawn by CSS, not as an element, so a click inside the marker's strip
+   * of margin is what counts. A real checkbox in the document would be content:
+   * selectable, deletable halfway, and visible in previews and word counts.
+   */
+  const cycleAlert = useCallback(
+    (block: HTMLElement) => {
+      const state = block.dataset.alert
+      if (state === undefined) {
+        block.dataset.alert = '1'
+        if (block.dataset.alertId === undefined || block.dataset.alertId.length === 0) {
+          block.dataset.alertId = newId('alert')
+        }
+      } else if (state === '1') {
+        block.dataset.alert = 'done'
+      } else {
+        delete block.dataset.alert
+        delete block.dataset.alertId
+      }
+      onBodyInput()
+    },
+    [onBodyInput]
+  )
 
   /** Scroll to a flagged block and flash it, when arriving from the alert strip. */
   useEffect(() => {
@@ -464,6 +570,11 @@ export function Editor({
       // Matched on `code`, not `key`: on a Swedish layout Shift+8 produces '(',
       // not '*', so keying off the character would make the shortcut disappear on
       // the author's own keyboard.
+      if (event.ctrlKey && event.shiftKey && event.code === 'KeyA') {
+        event.preventDefault()
+        toggleAlert()
+        return
+      }
       if (event.ctrlKey && event.shiftKey && event.code === 'Digit8') {
         event.preventDefault()
         exec('insertUnorderedList')
@@ -478,7 +589,7 @@ export function Editor({
         setSelectedImage(null)
       }
     },
-    [exec, removeImage, save, selectedImage]
+    [exec, removeImage, save, selectedImage, toggleAlert]
   )
 
   if (note === null) {
@@ -491,7 +602,17 @@ export function Editor({
 
   return (
     <section className="editor">
-      <div className="toolbar">
+      {/* Mousedown is swallowed for the buttons, so pressing one never takes
+          focus - and with it the selection - out of the document. Without this
+          the formatting buttons did nothing at all. */}
+      <div
+        className="toolbar"
+        onMouseDown={(event) => {
+          if ((event.target as HTMLElement).closest('button') !== null) {
+            event.preventDefault()
+          }
+        }}
+      >
         {/* The formatting groups scroll when the panel is narrow; the save state
             and the sticky toggle sit outside that, so they can never be the part
             that gets clipped. */}
@@ -524,14 +645,6 @@ export function Editor({
         <div className="toolbar-right">
           {/* Outside the scrolling half on purpose: the formatting buttons can
               scroll out of reach on a narrow panel, this must not. */}
-          <button
-            type="button"
-            className="alert-button"
-            title="Flag the block the caret is in as an action point"
-            onClick={toggleAlert}
-          >
-            Alert
-          </button>
           <span className={`save-state${saveState === 'saved' ? '' : ' is-pending'}`}>
             {saveState === 'saved' ? 'Saved' : 'Saving…'}
           </span>
@@ -603,6 +716,24 @@ export function Editor({
           }}
           onClick={(event) => {
             const target = event.target as HTMLElement
+
+            // The marker column: flag this line, tick it off, or clear it. The
+            // click lands on the body's padding rather than on any line, so the
+            // line is the one the pointer is level with.
+            const body = bodyRef.current
+            if (body !== null && event.clientX - body.getBoundingClientRect().left <= ALERT_GUTTER) {
+              const line = Array.from(body.querySelectorAll<HTMLElement>(ALERT_LINES)).find(
+                (candidate) => {
+                  const box = candidate.getBoundingClientRect()
+                  return event.clientY >= box.top && event.clientY <= box.bottom
+                }
+              )
+              if (line !== undefined) {
+                cycleAlert(line)
+                return
+              }
+            }
+
             // A click anywhere in a drawing block opens the drawing, image and
             // label alike, which is what "click to open" promises.
             const canvas = target.closest('[data-canvas]')

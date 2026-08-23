@@ -16,7 +16,8 @@ interface NoteListProps {
   onDelete: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
   onReorder: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
-  onClearAlert: (note: NoteMeta, alertId: string) => void
+  onToggleFlag: (note: NoteMeta) => void
+  onTickAlert: (note: NoteMeta, alertId: string, done: boolean) => void
 }
 
 /** The 280px middle pane: a header line, an add field, then the cards. */
@@ -30,7 +31,8 @@ export function NoteList({
   onDelete,
   onTogglePin,
   onReorder,
-  onClearAlert
+  onToggleFlag,
+  onTickAlert
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [slot, setSlot] = useState<DropSlot>(null)
@@ -100,7 +102,9 @@ export function NoteList({
           <div key={note.id} className="card-slot">
             {slot !== null && slot.before === note.id && <div className="drop-marker" />}
             <article
-              className={`card${note.id === activeNoteId ? ' is-active' : ''}`}
+              className={`card${note.id === activeNoteId ? ' is-active' : ''}${
+                note.flagged ? ' is-flagged' : ''
+              }`}
               draggable
               onClick={() => onOpen(note.id)}
               onDragStart={(event) =>
@@ -132,6 +136,19 @@ export function NoteList({
                 <span className="card-title">
                   {note.title.length > 0 ? note.title : 'Untitled'}
                 </span>
+                {/* The whole note as an action point, for the cards that are
+                    themselves the thing to do. */}
+                <button
+                  type="button"
+                  className={`card-flag${note.flagged ? ' is-flagged' : ''}`}
+                  title={note.flagged ? 'Not an action point after all' : 'Flag this note'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onToggleFlag(note)
+                  }}
+                >
+                  ⚑
+                </button>
                 <button
                   type="button"
                   className={`pin${note.pinned ? ' is-pinned' : ''}`}
@@ -161,17 +178,17 @@ export function NoteList({
               {selection.kind === 'alerts' && note.alerts.length > 0 ? (
                 <ul className="card-alerts">
                   {note.alerts.map((alert) => (
-                    <li key={alert.id}>
+                    <li key={alert.id} className={alert.done ? 'is-done' : ''}>
                       <button
                         type="button"
-                        className="alert-tick"
-                        title="Done with this"
+                        className={`alert-box${alert.done ? ' is-done' : ''}`}
+                        title={alert.done ? 'Not done after all' : 'Done with this'}
                         onClick={(event) => {
                           event.stopPropagation()
-                          onClearAlert(note, alert.id)
+                          onTickAlert(note, alert.id, !alert.done)
                         }}
                       >
-                        ✓
+                        {alert.done ? '✓' : ''}
                       </button>
                       <span>{alert.text}</span>
                     </li>

@@ -606,6 +606,9 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* The alert column. Every line's marker is drawn in here, so revealing one on
+     hover never nudges the text. */
+  padding-left: 26px;
   font-size: 14px;
   line-height: 1.7;
   outline: none;
@@ -1299,4 +1302,238 @@ body.is-sticky-window {
 
 .card-alerts li::marker {
   content: '';
+}
+
+/* ---------- confirmation modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal {
+  width: 340px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-message {
+  margin: 0 0 16px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.modal-btn:hover {
+  background: var(--surface-hover);
+}
+
+.modal-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modal-btn.is-danger {
+  color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+.modal-btn.is-danger:hover {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: var(--danger);
+}
+
+/* ---------- action points, marked and ticked off ---------- */
+
+/*
+ * Every line in the document has a marker in its left margin: faint on hover,
+ * an orange box once the line is flagged, ticked once it is done.
+ *
+ * In the MARGIN, not in the line: showing it on hover has to not move the text,
+ * and a marker that nudged every paragraph sideways as the pointer crossed it
+ * would be unusable. Clicking it cycles the three states - see cycleAlert.
+ */
+.doc-body > p,
+.doc-body > h1,
+.doc-body > h2,
+.doc-body > h3,
+.doc-body > h4,
+.doc-body > blockquote,
+.doc-body li {
+  position: relative;
+}
+
+.doc-body > p::before,
+.doc-body > h1::before,
+.doc-body > h2::before,
+.doc-body > h3::before,
+.doc-body > h4::before,
+.doc-body > blockquote::before,
+.doc-body li::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 0.35em;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1.5px solid var(--text-dim);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 100ms ease;
+}
+
+/*
+ * The markers appear while the pointer is anywhere in the document, and the
+ * hovered line's own marker is stronger.
+ *
+ * Hover on the line alone will not do: the marker sits in the column beside it,
+ * so reaching for it leaves the line and the marker you were reaching for fades
+ * out from under the pointer.
+ */
+.doc-body:hover > p::before,
+.doc-body:hover > h1::before,
+.doc-body:hover > h2::before,
+.doc-body:hover > h3::before,
+.doc-body:hover > h4::before,
+.doc-body:hover > blockquote::before,
+.doc-body:hover li::before {
+  opacity: 0.22;
+}
+
+.doc-body > p:hover::before,
+.doc-body > h1:hover::before,
+.doc-body > h2:hover::before,
+.doc-body > h3:hover::before,
+.doc-body > h4:hover::before,
+.doc-body > blockquote:hover::before,
+.doc-body li:hover::before {
+  opacity: 0.55;
+}
+
+/* Flagged: the box is the alert colour and stays put. */
+.doc-body [data-alert]::before {
+  opacity: 1;
+  border-color: var(--alert);
+}
+
+/* And a bar in the margin beside it, so a flagged line reads as flagged from
+   across the page, not just at the marker. */
+.doc-body [data-alert]::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--alert);
+}
+
+/* Done: still marked, ticked, and dimmed - the line needed doing and has been
+   dealt with, which is worth seeing. */
+.doc-body [data-alert='done'] {
+  color: var(--text-dim);
+}
+
+.doc-body [data-alert='done']::before {
+  content: '✓';
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 11px;
+  text-align: center;
+  opacity: 1;
+}
+
+.doc-body [data-alert='done']::after {
+  background: var(--border);
+}
+
+/* A sticky window shows the same marks, without the click target. */
+.sticky-body [data-alert] {
+  padding-left: 10px;
+  border-left: 2px solid var(--alert);
+}
+
+.sticky-body [data-alert='done'] {
+  border-left-color: var(--border);
+  color: var(--text-dim);
+}
+
+/* The flag on a card: a whole note as the action point. */
+.card-flag {
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0;
+}
+
+.card:hover .card-flag {
+  opacity: 1;
+}
+
+.card-flag.is-flagged {
+  color: var(--alert);
+  opacity: 1;
+}
+
+.card.is-flagged {
+  /* Marked on the edge rather than by a fill: colour means active state, and a
+     flagged card is not selected. */
+  box-shadow: inset 2px 0 0 var(--alert);
+}
+
+/* The checkbox in the review list, which mirrors the one in the document. */
+.alert-box {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 3px;
+  border: 1.5px solid var(--alert);
+  font-size: 9px;
+  line-height: 10px;
+  text-align: center;
+  color: transparent;
+}
+
+.alert-box:hover {
+  background: rgba(255, 140, 66, 0.15);
+}
+
+.alert-box.is-done {
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+}
+
+.card-alerts li.is-done span {
+  color: var(--text-dim);
 }

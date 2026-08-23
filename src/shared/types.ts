@@ -21,6 +21,13 @@ export interface AlertMeta {
   /** Matches `data-alert-id` on the block, which is how a click jumps to it. */
   id: string
   text: string
+  /**
+   * Ticked off, but still marked in the note.
+   *
+   * A done action point leaves the strip and stops counting, and stays visible
+   * in the document as something that was needed and has been dealt with.
+   */
+  done: boolean
 }
 
 /**
@@ -46,6 +53,13 @@ export interface NoteMeta {
   tint: string
   /** The action points flagged inside this note, in document order. */
   alerts: AlertMeta[]
+  /**
+   * The whole note flagged as an action point, rather than a line inside it.
+   *
+   * Some notes are the action - a card that says "call the contractor" has no
+   * line worth singling out - so the flag exists at both levels.
+   */
+  flagged: boolean
   hasImage: boolean
   hasDrawing: boolean
 }

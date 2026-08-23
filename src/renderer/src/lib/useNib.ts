@@ -70,6 +70,9 @@ export interface NibOps {
   addNote: (categoryId: string, subId: string | null, title: string) => string
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
+  /** Flag or unflag the whole note as an action point. */
+  toggleFlag: (noteId: string) => void
+  setPinned: (noteId: string, pinned: boolean) => void
   moveNote: (noteId: string, categoryId: string, subId: string | null) => void
   /** Reorder within a category: place the note just before `beforeNoteId`, or last when null. */
   moveNoteBefore: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
@@ -224,6 +227,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               pinned: false,
               tint: '',
               alerts: [],
+              flagged: false,
               hasImage: false,
               hasDrawing: false
             },
@@ -244,6 +248,13 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
       })),
 
     togglePin: (noteId) => mutate((index) => mapNote(index, noteId, (n) => ({ ...n, pinned: !n.pinned }))),
+
+    toggleFlag: (noteId) =>
+      mutate((index) => mapNote(index, noteId, (n) => ({ ...n, flagged: !n.flagged }))),
+
+    /** Used when a sticky window is closed: the card must not stay marked sticky. */
+    setPinned: (noteId, pinned) =>
+      mutate((index) => mapNote(index, noteId, (n) => ({ ...n, pinned }))),
 
     moveNote: (noteId, categoryId, subId) =>
       mutate((index) => {
