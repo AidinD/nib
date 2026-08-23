@@ -1,0 +1,11 @@
+# LF in the repository, whatever the working tree looks like.
+#
+# Nib's files went in with a mix - 28 CRLF to 16 LF - because they were written
+# by different tools, and it cost a whole-file diff the first time one of them
+# rewrote a file with the other convention. Jot's repo is LF; two sibling
+# projects have no business disagreeing about this.
+* text=auto eol=lf
+
+# Left alone byte for byte. A text filter here would corrupt them.
+*.png binary
+*.ico binary
