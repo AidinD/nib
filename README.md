@@ -54,7 +54,9 @@ picks the new version up on its next launch. The upload uses a token from the
 `gh` CLI, so there is nothing to configure and nothing stored.
 
 The icon is committed under `resources/`; regenerate it with
-`node scripts/generate-icon.mjs` if it ever changes.
+`node scripts/generate-icon.mjs` if it ever changes. It draws two marks - the
+full nib for 48px and up, just the tip and a drop of ink for 16 and 32 - and
+packs both into a multi-size `icon.ico`.
 
 ## Where the data lives
 

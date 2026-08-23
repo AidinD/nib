@@ -8,7 +8,9 @@ files:
 win:
   target:
     - nsis
-  icon: resources/icon.png
+  # The multi-size .ico, so 16 and 32 get the simple drawing rather than a
+  # downscaled version of the detailed one. See scripts/generate-icon.mjs.
+  icon: resources/icon.ico
 nsis:
   oneClick: false
   perMachine: false
