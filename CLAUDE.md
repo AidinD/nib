@@ -23,7 +23,8 @@ logic directly: `npm test` runs against `src/` with no app at all.
 
 **keel** (github.com/AidinD/keel) is the suite's shared layer, linked as
 `file:../keel` — so it must be checked out at `D:\Repo\Tools\keel`. It is a
-devDependency used only by `npm run icon`; nothing from it ships in the app.
+devDependency, used by `npm run icon` and `npm run release`; nothing from it
+ships in the app.
 
 `npm install` does **not** fail when it is missing — npm 11 links a missing
 `file:` dependency to a dangling symlink and exits 0. The failure arrives later

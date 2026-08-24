@@ -41,8 +41,8 @@ git clone https://github.com/AidinD/keel ../keel
 
 Without the sibling checkout `npm install` still **exits 0** — npm links
 `file:../keel` to a dangling symlink and says nothing. What fails is the first
-import: `npm run icon` dies with `ERR_MODULE_NOT_FOUND`. keel is a devDependency,
-used only by that script — nothing from it ships inside the app.
+import: `npm run icon` and `npm run release` die with `ERR_MODULE_NOT_FOUND`. keel
+is a devDependency, used only by those two — nothing from it ships inside the app.
 
 ```
 npm install
