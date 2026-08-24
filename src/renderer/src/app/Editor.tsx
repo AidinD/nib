@@ -72,6 +72,16 @@ export function Editor({
   const loadedEdited = useRef(0)
   // The last selection that was inside the body. See `withSelection`.
   const savedRange = useRef<Range | null>(null)
+  /*
+   * The title as typed, kept in a ref as well as in state.
+   *
+   * The state is what renders; this is what saves. A debounced save captures the
+   * closure it was scheduled from, and that closure holds the title from BEFORE
+   * the keystroke that scheduled it - so the file ended up one character behind
+   * whatever was on screen, every time. Reading the ref makes the save see the
+   * present. The body never had the problem: it is read from the DOM.
+   */
+  const titleRef = useRef('')
 
   const category = index.categories.find((c) => c.id === note?.categoryId)
 
@@ -87,7 +97,8 @@ export function Editor({
 
     setSaveState('saving')
     const html = sanitizeHtml(element.innerHTML)
-    const resolvedTitle = title.trim().length > 0 ? title.trim() : deriveTitle(html)
+    const typed = titleRef.current.trim()
+    const resolvedTitle = typed.length > 0 ? typed : deriveTitle(html)
 
     const edited = await window.nib.writeNote({
       id: note.id,
@@ -109,7 +120,9 @@ export function Editor({
       alerts: extractAlerts(html)
     })
     setSaveState('saved')
-  }, [note, onSaved, title])
+    // No `title` in the dependencies on purpose: the ref carries it, and a new
+    // save closure per keystroke is what re-scheduled the stale one.
+  }, [note, onSaved])
 
   /** Load the note body whenever the open note changes. */
   useEffect(() => {
@@ -130,7 +143,9 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
-      setTitle(doc?.title ?? note.title)
+      const loadedTitle = doc?.title ?? note.title
+      titleRef.current = loadedTitle
+      setTitle(loadedTitle)
       setWords(wordCount(html))
       setSaveState('saved')
       loadedEdited.current = doc?.edited ?? note.edited
@@ -170,6 +185,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      titleRef.current = doc.title
       setTitle(doc.title)
       setWords(wordCount(html))
       loadedEdited.current = doc.edited
@@ -678,6 +694,7 @@ export function Editor({
           placeholder="Untitled"
           value={title}
           onChange={(event) => {
+            titleRef.current = event.target.value
             setTitle(event.target.value)
             scheduleSave()
           }}

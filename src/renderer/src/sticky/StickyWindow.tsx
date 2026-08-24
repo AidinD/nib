@@ -31,6 +31,9 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
   // The `edited` stamp of what the body holds, so an edit made in the main
   // window can be picked up instead of being overwritten by this one.
   const loadedEdited = useRef(0)
+  // As in the editor: the debounced save must read the title from now, not from
+  // the closure it was scheduled in, or the file lands one character behind.
+  const titleRef = useRef('')
 
   // The accent and the serif choice are shared with the main window; a sticky
   // reads them once on open rather than watching for changes.
@@ -60,7 +63,8 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       }
       bodyRef.current.innerHTML = sanitizeHtml(doc?.html ?? '')
       applyImageWidths(bodyRef.current)
-      setTitle(doc?.title ?? '')
+      titleRef.current = doc?.title ?? ''
+      setTitle(titleRef.current)
       loadedEdited.current = doc?.edited ?? 0
       setLoadedBody(true)
     })
@@ -92,6 +96,7 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       }
       bodyRef.current.innerHTML = sanitizeHtml(doc.html)
       applyImageWidths(bodyRef.current)
+      titleRef.current = doc.title
       setTitle(doc.title)
       loadedEdited.current = doc.edited
     })
@@ -110,24 +115,25 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       saveTimer.current = null
     }
     const html = sanitizeHtml(element.innerHTML)
+    const typed = titleRef.current
     const edited = await window.nib.writeNote({
       id: note.id,
       categoryId: note.categoryId,
       subId: note.subId,
-      title,
+      title: typed,
       html,
       created: note.created,
       edited: Date.now()
     })
     loadedEdited.current = edited
     ops.patchNoteMeta(note.id, {
-      title,
+      title: typed,
       preview: buildPreview(html),
       edited,
       hasImage: bodyHasImage(html),
       hasDrawing: bodyHasDrawing(html)
     })
-  }, [note, ops, title])
+  }, [note, ops])
 
   const scheduleSave = useCallback(() => {
     if (saveTimer.current !== null) {
@@ -191,6 +197,7 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
         value={title}
         placeholder="Untitled"
         onChange={(event) => {
+          titleRef.current = event.target.value
           setTitle(event.target.value)
           scheduleSave()
         }}
