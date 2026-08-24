@@ -43,6 +43,27 @@ function setDictionaries(window: BrowserWindow): void {
   }
 }
 
+/**
+ * The mouse's back and forward buttons, forwarded to the renderer.
+ *
+ * On Windows those two buttons do not arrive as mouse events at all - Chromium
+ * turns them into an `app-command`, which only the main process can hear. So
+ * listening for a `mousedown` with button 3 or 4 in the renderer, which is the
+ * obvious first attempt, hears nothing.
+ *
+ * What "back" MEANS is the renderer's business: it keeps the trail of notes that
+ * have been opened. This side only says which direction was asked for.
+ */
+function forwardHistoryButtons(window: BrowserWindow): void {
+  window.on('app-command', (_event, command) => {
+    if (command === 'browser-backward') {
+      window.webContents.send('history:step', 'back')
+    } else if (command === 'browser-forward') {
+      window.webContents.send('history:step', 'forward')
+    }
+  })
+}
+
 function openLinksExternally(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -88,6 +109,8 @@ export function createMainWindow(): BrowserWindow {
   })
   openLinksExternally(window)
   setDictionaries(window)
+  // Only the main window: a sticky shows one note and has nowhere to go back to.
+  forwardHistoryButtons(window)
   loadRenderer(window)
   return window
 }

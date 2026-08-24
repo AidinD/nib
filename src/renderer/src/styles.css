@@ -554,6 +554,137 @@ input {
   font-size: 10px;
 }
 
+/*
+ * A tag on a card.
+ *
+ * Shown at rest, unlike the buttons in the card's top row, because a tag is
+ * state and states do not hide - the same rule the pinned pin follows. The dot
+ * carries the colour and the text stays in the meta row's grey: a chip in full
+ * colour would outshout the title it sits under.
+ */
+.tag-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+}
+
+.tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* An affordance, so it follows the pin: invisible until the card is hovered. */
+.card-tag-add {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.card:hover .card-tag-add,
+.card-tag-add.is-open {
+  opacity: 1;
+}
+
+.card-tag-add.is-open {
+  color: var(--text);
+}
+
+/*
+ * The tag panel. Fixed and hung off the button's rect, like the slash menu and
+ * for the same reason: the card list scrolls and cards clip their own overflow,
+ * so a panel drawn inside a card would be cut off by it.
+ */
+.tag-picker {
+  position: fixed;
+  z-index: 40;
+  width: 232px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5);
+}
+
+.tag-search {
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.tag-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tag-options {
+  max-height: 208px;
+  overflow-y: auto;
+}
+
+.tag-option,
+.tag-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--text);
+}
+
+.tag-option:hover,
+.tag-create:hover {
+  background: var(--surface-hover);
+}
+
+.tag-option.is-on .tag-name {
+  color: var(--text);
+}
+
+.tag-option .tag-name {
+  flex: 1;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-check {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.tag-create {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  border-radius: 0 0 6px 6px;
+  color: var(--text-dim);
+}
+
+.tag-create strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tag-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
 .tag-image {
   color: var(--accent);
 }

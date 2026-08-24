@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { NibIndex, NoteKind, NoteMeta } from '@shared/types'
+import { tagsFor } from '@shared/tags'
+import { TagPicker } from './TagPicker'
 import { noteTrail, relativeTime } from '../lib/notes'
 import type { Selection } from '../lib/selection'
 import { selectionColor, selectionShowsCrumb, selectionTarget, selectionTitle } from '../lib/selection'
@@ -22,6 +24,9 @@ interface NoteListProps {
   ) => void
   onCycleFlag: (note: NoteMeta) => void
   onTickAlert: (note: NoteMeta, alertId: string, done: boolean) => void
+  onToggleTag: (note: NoteMeta, tagId: string) => void
+  /** Create a tag and put it straight on this note. */
+  onCreateTag: (note: NoteMeta, name: string) => void
   /** How many archived notes the current search would reach if it were allowed. */
   archivedHits: number
   includeArchived: boolean
@@ -42,12 +47,16 @@ export function NoteList({
   onReorder,
   onCycleFlag,
   onTickAlert,
+  onToggleTag,
+  onCreateTag,
   archivedHits,
   includeArchived,
   onIncludeArchived
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [slot, setSlot] = useState<DropSlot>(null)
+  /** Which card's tag panel is open, and the button rect to hang it off. */
+  const [picking, setPicking] = useState<{ noteId: string; anchor: DOMRect } | null>(null)
   const target = selectionTarget(selection)
   const showCrumb = selectionShowsCrumb(selection)
 
@@ -225,6 +234,27 @@ export function NoteList({
                 >
                   ⚑
                 </button>
+                {/*
+                  An affordance, so it hides until the card is hovered - the
+                  tags themselves are state and show at rest, down in the meta
+                  row. A "#" that sat there permanently would read as a mark on
+                  the note rather than as a button.
+                */}
+                <button
+                  type="button"
+                  className={`card-tag-add${picking?.noteId === note.id ? ' is-open' : ''}`}
+                  title="Tags"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setPicking(
+                      picking?.noteId === note.id
+                        ? null
+                        : { noteId: note.id, anchor: event.currentTarget.getBoundingClientRect() }
+                    )
+                  }}
+                >
+                  #
+                </button>
                 <button
                   type="button"
                   className={`pin${note.pinned ? ' is-pinned' : ''}`}
@@ -297,6 +327,14 @@ export function NoteList({
               <div className="card-meta">
                 {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}
                 <span>{relativeTime(note.edited)}</span>
+                {/* What the note IS, in the catalog's order so two cards
+                    carrying the same pair show them the same way round. */}
+                {tagsFor(note, index.tags).map((tag) => (
+                  <span key={tag.id} className="tag tag-user" title={tag.description}>
+                    <span className="tag-dot" style={{ background: tag.color }} />
+                    {tag.name}
+                  </span>
+                ))}
                 {/* Only in a list that mixes the two. The Archive list needs no
                     marking: every card in it is archived. */}
                 {note.archived && selection.kind !== 'archive' && (
@@ -308,6 +346,21 @@ export function NoteList({
             </article>
           </div>
         ))}
+
+        {picking !== null &&
+          (() => {
+            const note = notes.find((n) => n.id === picking.noteId)
+            return note === undefined ? null : (
+              <TagPicker
+                tags={index.tags}
+                selected={note.tags}
+                anchor={picking.anchor}
+                onToggle={(tagId) => onToggleTag(note, tagId)}
+                onCreate={(name) => onCreateTag(note, name)}
+                onClose={() => setPicking(null)}
+              />
+            )
+          })()}
 
         {slot !== null && slot.before === null && <div className="drop-marker" />}
 

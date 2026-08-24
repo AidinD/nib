@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
+import { NOTE_COLORS } from '@shared/types'
 import { storyTemplate } from '@shared/story'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
@@ -413,6 +414,14 @@ export function App(): React.JSX.Element {
           }}
           onCycleFlag={(note) => ops.cycleFlag(note.id)}
           onTickAlert={(note, alertId, done) => void tickAlert(note, alertId, done)}
+          onToggleTag={(note, tagId) => ops.toggleNoteTag(note.id, tagId)}
+          onCreateTag={(note, name) => {
+            // Created and applied in one go: the moment a tag is worth
+            // making is the moment you are looking at the note that needs
+            // it, and a trip to Settings and back is where that stops.
+            const id = ops.addTag(name, NOTE_COLORS[index.tags.length % NOTE_COLORS.length], '')
+            ops.toggleNoteTag(note.id, id)
+          }}
         />
 
         <Editor
