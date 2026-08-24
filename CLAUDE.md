@@ -19,6 +19,22 @@ To test against fixtures, write the index and notes into the scratch directory
 **first**, so `migrateLegacyData` sees an index and returns. Or test the pure
 logic directly: `npm test` runs against `src/` with no app at all.
 
+## Nib depends on keel
+
+**keel** (github.com/AidinD/keel) is the suite's shared layer, linked as
+`file:../keel` — so it must be checked out at `D:\Repo\Tools\keel`. It is a
+devDependency used only by `npm run icon`; nothing from it ships in the app.
+
+`npm install` does **not** fail when it is missing — npm 11 links a missing
+`file:` dependency to a dangling symlink and exits 0. The failure arrives later
+and quieter, as `ERR_MODULE_NOT_FOUND` from `npm run icon`.
+
+Editing keel changes Nib immediately, with no rebuild step — that is the point of
+it having no build. It also means a change there can break other siblings, so run
+`npm test` in keel and `npm run icon` here before assuming it is fine. The icon
+output is committed, and regenerating it is supposed to leave `resources/` with
+an empty diff.
+
 ## Read these first
 
 - [PLAN.md](PLAN.md) - current status, scope, next steps, open questions.

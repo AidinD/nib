@@ -25,11 +25,31 @@ things are the way they are.
 
 ## Running it
 
+Nib depends on [**keel**](https://github.com/AidinD/keel), the shared layer under
+the suite, linked from the filesystem — so it has to be checked out **next to**
+this repo before `npm install` will work:
+
+```
+Tools/
+├── nib/
+└── keel/
+```
+
+```bash
+git clone https://github.com/AidinD/keel ../keel
+```
+
+Without the sibling checkout `npm install` still **exits 0** — npm links
+`file:../keel` to a dangling symlink and says nothing. What fails is the first
+import: `npm run icon` dies with `ERR_MODULE_NOT_FOUND`. keel is a devDependency,
+used only by that script — nothing from it ships inside the app.
+
 ```
 npm install
 npm run dev        # the app, with the renderer hot-reloaded
 npm run typecheck  # both TypeScript projects
 npm run build      # compile without packaging
+npm run icon       # regenerate resources/icon.png and icon.ico
 ```
 
 ## Building an installer
