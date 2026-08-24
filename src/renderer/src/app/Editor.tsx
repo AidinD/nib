@@ -3,11 +3,16 @@ import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
 import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
+import { NotePicker, listNotes } from './NotePicker'
+import type { NoteChoice } from './NotePicker'
 import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyImageWidths,
+  applyNoteLinks,
+  noteLinkHtml,
+  noteTitles,
   normaliseBlocks,
   leaveEmptyItem,
   normaliseLists,
@@ -49,6 +54,8 @@ interface EditorProps {
   onSaved: (noteId: string, patch: Partial<NoteMeta>) => void
   onTogglePin: (note: NoteMeta) => void
   onCycleFlag: (note: NoteMeta) => void
+  /** Follow a link to another note - the list and the sidebar go there too. */
+  onOpenNote: (noteId: string) => void
 }
 
 type SaveState = 'saved' | 'dirty' | 'saving'
@@ -61,7 +68,8 @@ export function Editor({
   onAlertFocused,
   onSaved,
   onTogglePin,
-  onCycleFlag
+  onCycleFlag,
+  onOpenNote
 }: EditorProps): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [title, setTitle] = useState('')
@@ -93,6 +101,17 @@ export function Editor({
   const [picker, setPicker] = useState<{
     at: { left: number; top: number }
     cursor: Date
+  } | null>(null)
+  /*
+   * The note picker, when `/link` is up.
+   *
+   * `spaced` is decided when the picker OPENS, while the caret is still in the
+   * document - by the time a note has been chosen, focus is in the picker's own
+   * search field and the document's selection says nothing useful.
+   */
+  const [linker, setLinker] = useState<{
+    at: { left: number; top: number }
+    spaced: boolean
   } | null>(null)
   const saveTimer = useRef<number | null>(null)
   // The note the body element currently holds, so a save that lands after a
@@ -167,6 +186,7 @@ export function Editor({
     setSelectedImage(null)
     setSlash(null)
     setPicker(null)
+    setLinker(null)
 
     void window.nib.readNote(note.id).then((doc) => {
       if (cancelled || bodyRef.current === null) {
@@ -178,6 +198,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
+      applyNoteLinks(bodyRef.current, noteTitles(index))
       const loadedTitle = doc?.title ?? note.title
       titleRef.current = loadedTitle
       setTitle(loadedTitle)
@@ -222,6 +243,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
+      applyNoteLinks(bodyRef.current, noteTitles(index))
       titleRef.current = doc.title
       setTitle(doc.title)
       setWords(wordCount(html))
@@ -822,6 +844,13 @@ export function Editor({
         case 'tomorrow':
           exec('insertText', formatDate(shiftDate(new Date(), { days: 1 })))
           break
+        case 'link': {
+          const point = caretPoint()
+          if (point !== null) {
+            setLinker({ at: point, spaced: !endsWithSpace() })
+          }
+          break
+        }
         case 'date': {
           // Opened after the query is out of the way, so the calendar hangs off
           // the caret where the date is going rather than off the slash.
@@ -893,6 +922,71 @@ export function Editor({
       exec('insertText', formatDate(date))
     },
     [exec]
+  )
+
+  /**
+   * Write the link where the caret was, with DOM calls rather than `insertHTML`.
+   *
+   * `insertHTML` will not be told where whitespace goes. Asked to insert a
+   * non-breaking space, the link and a zero-width space, Chromium wrapped both
+   * spaces in styled spans and put the leading one AFTER the link - so
+   * `Se ocksa /link` came out as `Se ocksa1.1 - Kritisera inte`, with the words
+   * run together and the space stranded on the far side.
+   *
+   * So the nodes are placed by hand: a space in front when the text does not
+   * already end in one (deleting `/link` takes the space before it along, since a
+   * trailing space at the end of a line collapses), and a zero-width space after,
+   * so the next word typed lands outside the link instead of being swallowed into
+   * its title.
+   */
+  const insertNoteLink = useCallback(
+    (choice: NoteChoice) => {
+      setLinker(null)
+      withSelection(() => {
+        const root = bodyRef.current
+        const selection = window.getSelection()
+        if (root === null || selection === null || selection.rangeCount === 0) {
+          return
+        }
+        const range = selection.getRangeAt(0)
+        if (!root.contains(range.commonAncestorContainer)) {
+          return
+        }
+        range.deleteContents()
+
+        /*
+         * What is in front of the caret is read BEFORE anything is inserted:
+         * `insertNode` splits the text node it lands in and moves the range, so
+         * asking afterwards asks about a different position. One test covers both
+         * kinds of space - a non-breaking space is whitespace to `\s`.
+         */
+        const host = range.startContainer
+        const previous =
+          host.nodeType === Node.TEXT_NODE && range.startOffset > 0
+            ? (host.textContent ?? '').charAt(range.startOffset - 1)
+            : ''
+        const needsSpace = previous.length > 0 && !/\s/.test(previous)
+
+        const anchor = document.createElement('a')
+        anchor.dataset.note = choice.note.id
+        anchor.textContent = choice.note.title.length > 0 ? choice.note.title : 'Untitled'
+
+        const tail = document.createTextNode('\u200b')
+        range.insertNode(tail)
+        range.insertNode(anchor)
+        if (needsSpace) {
+          anchor.before(document.createTextNode('\u00a0'))
+        }
+
+        const after = document.createRange()
+        after.setStartAfter(tail)
+        after.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(after)
+        onBodyInput()
+      })
+    },
+    [onBodyInput, withSelection]
   )
 
   const onBodyKeyDown = useCallback(
@@ -1179,6 +1273,15 @@ export function Editor({
           {note.archived && <span className="tag tag-archived">archived</span>}
         </div>
 
+        {linker !== null && (
+          <NotePicker
+            at={linker.at}
+            choices={listNotes(index, note?.id ?? null)}
+            onPick={insertNoteLink}
+            onClose={() => setLinker(null)}
+          />
+        )}
+
         {picker !== null && (
           <DatePicker
             at={picker.at}
@@ -1249,6 +1352,17 @@ export function Editor({
                 cycleAlert(line)
                 return
               }
+            }
+
+            // A link to another note goes there - the list and the sidebar
+            // follow, so it is clear where you have landed.
+            const link = target.closest<HTMLElement>('a[data-note]')
+            if (link !== null) {
+              const linkedId = link.dataset.note
+              if (linkedId !== undefined && link.dataset.gone === undefined) {
+                onOpenNote(linkedId)
+              }
+              return
             }
 
             // A click anywhere in a drawing block opens the drawing, image and

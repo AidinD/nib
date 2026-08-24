@@ -26,6 +26,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: 'tomorrow', label: 'Tomorrow', keywords: ['imorgon', 'morgon'], hint: 'Tomorrow’s date' },
   { id: 'date', label: 'Pick a date…', keywords: ['date', 'datum', 'calendar', 'kalender'], hint: 'Calendar' },
   { id: 'now', label: 'Now', keywords: ['time', 'tid', 'nu'], hint: 'Date and time' },
+  {
+    id: 'link',
+    label: 'Link to a note…',
+    keywords: ['link', 'note', 'lank', 'länk', 'notering', 'kort'],
+    hint: 'Another note'
+  },
   { id: 'h1', label: 'Heading 1', keywords: ['title', 'rubrik'] },
   { id: 'h2', label: 'Heading 2', keywords: ['subheading', 'rubrik'] },
   { id: 'h3', label: 'Heading 3', keywords: ['rubrik'] },

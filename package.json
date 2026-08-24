@@ -1,6 +1,6 @@
 {
   "name": "nib",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "A desktop note-taking app, sibling to Jot",
   "main": "./out/main/index.js",
   "author": "Aidin",

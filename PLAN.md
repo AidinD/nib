@@ -85,7 +85,12 @@ Every requirement on the original list is now built. What is left is smaller:
 2. The `Select` tool the design spec lists in the canvas strip is not built. Pen, highlighter and eraser are. A dead button seemed worse than a missing one.
 3. Worth considering once alerts have been lived with: whether a flagged block should carry a deadline the way a Jot todo does.
 4. **Editing is the part that use keeps finding faults in**, and they are the faults that matter most, since writing is what the app is for. Fixed so far: markdown shortcuts and a `/` menu (0.4.0), then Enter in a list, the flag column beside bullets, the divider leaving text in no block at all, and the slash menu missing a non-breaking space (0.4.1). Anything else in this area is worth fixing before new features.
-5. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
+5. **Links between notes are in (0.5.0).** `/link`, a search over the notebook, a
+   click that navigates, labels kept in step with titles. What is not built:
+   backlinks - a note cannot yet show what points AT it. That is the half that
+   makes linking a graph rather than a convenience, and it is the obvious next
+   step if the links get used.
+6. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
 sidebar, the editor, persistence, inline images, sticky windows, drag and drop,

@@ -1981,3 +1981,101 @@ body.is-sticky-window {
   font-size: 10px;
   text-align: center;
 }
+
+/* ---------- links to other notes ---------- */
+
+/*
+ * A note link reads as a name, not as a URL.
+ *
+ * No underline and no blue: the text is a title, usually mid-sentence, and a
+ * paragraph with three underlined blue phrases in it stops being a sentence. The
+ * accent colour and a hover rule are enough to say it can be followed.
+ */
+.doc-body a[data-note],
+.sticky-body a[data-note] {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.doc-body a[data-note]:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* Pointing at a note that no longer exists. Struck through rather than removed:
+   which note it WAS is part of what the sentence said. */
+.doc-body a[data-note][data-gone],
+.sticky-body a[data-note][data-gone] {
+  background: none;
+  color: var(--text-dim);
+  text-decoration: line-through;
+  cursor: default;
+}
+
+/* ---------- the note picker ---------- */
+
+.note-picker {
+  position: fixed;
+  z-index: 42;
+  width: 280px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5);
+}
+
+.note-picker-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.note-picker-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.note-picker-list {
+  max-height: 250px;
+  margin-top: 4px;
+  overflow-y: auto;
+}
+
+.note-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.note-picker-row.is-active {
+  background: var(--surface-hover);
+}
+
+.note-picker-title {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+/* Where it lives, because two notes can share a title - a 1-1 per person, say. */
+.note-picker-trail {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.note-picker-empty {
+  margin: 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}

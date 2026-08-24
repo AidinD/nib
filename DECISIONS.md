@@ -3,6 +3,59 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - A note can link to another note
+
+**Decided.** `/link` opens a search over the notebook and inserts a link to the
+note chosen. Clicking it opens that note and takes the list and the sidebar with
+it. The link stores `data-note="<id>"` and nothing else.
+
+**Why an id and not a title.** Titles change. A link that carried the title would
+be wrong the moment a note was renamed, and there would be no way to tell a stale
+link from a link to a different note. The label is refreshed from the index on
+every load, so renaming a note updates every sentence that mentions it.
+
+**Why not an `href`.** There is no URL for a note. A fake one would have to be
+intercepted before the browser tried to navigate, and any that escaped would open
+a browser window pointed at nothing.
+
+**A link to a deleted note is marked, not removed.** It keeps the title it had and
+is struck through. "This pointed at the 1-1 from March, which is gone" is worth
+more than a blank, and quietly editing a word out of someone's sentence is not a
+thing an editor should do.
+
+**The picker takes focus, unlike the slash menu and the calendar.** It needs a
+field of its own, because what is typed into it is a search over the notebook
+rather than text going into the note. The caret survives because the editor
+already keeps the last range inside the body and restores it before inserting -
+the same mechanism the toolbar buttons use.
+
+**Inserted with DOM calls, not `insertHTML`.** `insertHTML` will not be told where
+whitespace goes: given a space, a link and a zero-width space, it wrapped both
+spaces in styled spans and moved the leading one to the far side of the link, so
+`Se ocksa /link` came out with the words run together.
+
+## 2026-08-24 - A paste is stripped down to Nib's own blocks
+
+**Decided.** `class` is no longer an allowed attribute, and `div` and empty `span`
+wrappers are taken apart on load. The one class Nib needs - the drawing block's -
+is put back from its `data-canvas` when the note loads.
+
+**What made it necessary.** The 1-1 template in this notebook was pasted out of a
+web app and arrived as a list buried three `div`s deep, with `mat-mdc-menu-trigger`
+and `ng-star-inserted` on the wrappers and a `span` around every line. None of it
+styles anything here. It is not merely weight: a `div` is not a block this editor
+recognises, so a list inside one was out of reach of the markdown shortcuts, Tab
+and the alert marker - and a `span` splitting a line into pieces is enough to stop
+an inline shortcut from finding its own pair.
+
+**Rejected: cleaning only on paste.** Then the notes already carrying the mess
+would stay broken, and the one that mattered was the template every future 1-1
+gets copied from.
+
+**Rejected: keeping `class` and filtering by name.** A list of another app's class
+prefixes is a list that grows every time something is pasted from somewhere new.
+Nothing in a note needs a class, so the attribute goes.
+
 ## 2026-08-24 - A card shows state at rest, and affordances on hover
 
 **Decided.** The pin is hidden until the card is hovered, like the flag, the

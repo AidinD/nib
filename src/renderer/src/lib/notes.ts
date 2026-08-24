@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import type { AlertMeta, Category, NoteMeta } from '@shared/types'
+import type { AlertMeta, Category, NibIndex, NoteMeta } from '@shared/types'
 
 /**
  * Ids are used as filenames, so they stay inside the character class the storage
@@ -29,7 +29,16 @@ const PURIFY_CONFIG = {
     'a', 'img',
     'table', 'thead', 'tbody', 'tr', 'th', 'td'
   ],
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'class'],
+  /*
+   * No `class`.
+   *
+   * Nothing in a note needs one: the drawing block's class is put back on load by
+   * `applyCanvasBlocks`, from the `data-canvas` that identifies it. Allowing them
+   * meant every paste imported another app's CSS hooks - the 1-1 template came in
+   * carrying `mat-mdc-menu-trigger` and `ng-star-inserted` - which style nothing
+   * here and are pure weight in the file.
+   */
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt'],
   // The custom scheme is how a stored image is referenced; data: is what a paste
   // arrives as before it has been written to the assets folder.
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/|nib-asset:)/i
@@ -72,6 +81,9 @@ export function applyImageWidths(root: HTMLElement): void {
 export function applyCanvasBlocks(root: HTMLElement): void {
   for (const block of root.querySelectorAll('[data-canvas]')) {
     ;(block as HTMLElement).contentEditable = 'false'
+    // The class is not stored - see ALLOWED_ATTR. `data-canvas` is what makes
+    // this a drawing block; the class is only how it is painted.
+    block.classList.add('canvas-block')
   }
 }
 
@@ -99,15 +111,48 @@ export function applyCanvasBlocks(root: HTMLElement): void {
  * A canvas block is a div too, and stays one - it is not a line of text.
  */
 export function normaliseBlocks(root: HTMLElement): void {
-  for (const child of Array.from(root.children)) {
-    if (child.tagName !== 'DIV' || (child as HTMLElement).dataset.canvas !== undefined) {
+  /*
+   * Wrappers from somewhere else are taken apart.
+   *
+   * A paste out of a web app arrives wrapped in that app's own layout - the 1-1
+   * template pasted into this notebook came as a list buried three `div`s deep,
+   * each carrying a stack of classes. Nib has no meaning for a `div` other than a
+   * drawing block, and a list inside one is a list that markdown shortcuts, Tab
+   * and the alert marker can all still reach - but only once the wrapper is gone.
+   *
+   * A `div` holding blocks is unwrapped in place; one holding only text becomes a
+   * paragraph. Deepest first, so a wrapper full of wrappers comes apart in one
+   * pass.
+   */
+  const wrappers = Array.from(root.querySelectorAll('div')).reverse()
+  for (const wrapper of wrappers) {
+    if ((wrapper as HTMLElement).dataset.canvas !== undefined) {
+      continue
+    }
+    const holdsBlocks = wrapper.querySelector(
+      ':scope > p, :scope > ul, :scope > ol, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > blockquote, :scope > pre, :scope > hr, :scope > table, :scope > div'
+    )
+    if (holdsBlocks !== null) {
+      wrapper.replaceWith(...Array.from(wrapper.childNodes))
       continue
     }
     const paragraph = document.createElement('p')
-    while (child.firstChild !== null) {
-      paragraph.appendChild(child.firstChild)
+    while (wrapper.firstChild !== null) {
+      paragraph.appendChild(wrapper.firstChild)
     }
-    child.replaceWith(paragraph)
+    wrapper.replaceWith(paragraph)
+  }
+
+  /*
+   * And a `span` that says nothing is unwrapped too. What made it a span was a
+   * class or an inline style, and the sanitiser keeps neither - so it is left
+   * doing nothing but breaking the text into pieces, which is enough to stop an
+   * inline markdown shortcut from seeing its own pair.
+   */
+  for (const span of Array.from(root.querySelectorAll('span'))) {
+    if (span.attributes.length === 0) {
+      span.replaceWith(...Array.from(span.childNodes))
+    }
   }
 
   /*
@@ -440,4 +485,57 @@ export function leaveEmptyItem(item: HTMLElement): boolean {
   }
   caretInto(paragraph)
   return true
+}
+
+/**
+ * A link to another note, as the document stores it.
+ *
+ * `data-note` rather than an `href`: there is no URL for a note, and giving it a
+ * fake one would mean the click had to be intercepted before the browser tried
+ * to navigate. The visible text is the title as it read when the link was made,
+ * and it is refreshed on every load - so renaming a note does not leave stale
+ * names scattered through the notebook.
+ */
+export function noteLinkHtml(id: string, title: string): string {
+  const label = (title.length > 0 ? title : 'Untitled').replace(
+    /[&<>]/g,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character
+  )
+  return `<a data-note="${id}">${label}</a>`
+}
+
+/**
+ * Bring every note link's label up to date, and mark the ones that lead nowhere.
+ *
+ * A link to a deleted note is not removed. It is marked, and keeps the title it
+ * had: "this pointed at the 1-1 from March, which is gone" is worth more than a
+ * blank, and deciding on the author's behalf that the sentence should lose a word
+ * is not this function's business.
+ */
+export function applyNoteLinks(root: HTMLElement, titles: Map<string, string>): void {
+  for (const link of Array.from(root.querySelectorAll<HTMLElement>('a[data-note]'))) {
+    const id = link.dataset.note
+    const title = id === undefined ? undefined : titles.get(id)
+    if (title === undefined) {
+      link.dataset.gone = '1'
+      link.title = 'The note this pointed to is gone'
+      continue
+    }
+    delete link.dataset.gone
+    link.title = title
+    if (link.textContent !== title) {
+      link.textContent = title
+    }
+  }
+}
+
+/** Every note's title, by id - what `applyNoteLinks` needs. */
+export function noteTitles(index: NibIndex): Map<string, string> {
+  const titles = new Map<string, string>()
+  for (const category of index.categories) {
+    for (const note of category.notes) {
+      titles.set(note.id, note.title.length > 0 ? note.title : 'Untitled')
+    }
+  }
+  return titles
 }

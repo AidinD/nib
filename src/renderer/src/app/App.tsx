@@ -424,6 +424,16 @@ export function App(): React.JSX.Element {
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
           onTogglePin={(note) => void togglePin(note)}
           onCycleFlag={(note) => ops.cycleFlag(note.id)}
+          onOpenNote={(noteId) => {
+            // The link carries an id; where it lives is looked up here, because
+            // that is what `revealNote` needs to open the right category.
+            const target = index.categories
+              .flatMap((category) => category.notes)
+              .find((candidate) => candidate.id === noteId)
+            if (target !== undefined) {
+              revealNote(target)
+            }
+          }}
         />
       </main>
 
