@@ -75,6 +75,27 @@ export function applyCanvasBlocks(root: HTMLElement): void {
   }
 }
 
+/**
+ * Put nested lists where they belong: inside the item they hang off.
+ *
+ * Chromium's `indent` produces `<ul><li>a</li><ul><li>b</li></ul></ul>` - a list
+ * as a direct child of a list, which no HTML parser considers valid and which
+ * loses the relationship between the sub-item and its parent. The valid shape is
+ * `<ul><li>a<ul><li>b</li></ul></li></ul>`.
+ *
+ * It renders about the same either way, which is why it is easy to leave - but
+ * the note file is the durable artefact here, and it should be something another
+ * renderer can read correctly.
+ */
+export function normaliseLists(root: HTMLElement): void {
+  for (const nested of root.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol')) {
+    const previous = nested.previousElementSibling
+    if (previous?.tagName === 'LI') {
+      previous.appendChild(nested)
+    }
+  }
+}
+
 /** The stored width of an image, or its natural width when it has none yet. */
 export function imageWidth(image: HTMLImageElement): number {
   const stored = Number(image.dataset.w)

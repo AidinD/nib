@@ -163,20 +163,35 @@ function makePage(send) {
     }
   }
 
-  /** Press a key, optionally with modifiers (1 alt, 2 ctrl, 4 meta, 8 shift). */
-  const key = async (windowsVirtualKeyCode, code, keyName, modifiers = 0) => {
-    for (const type of ['rawKeyDown', 'keyUp']) {
+  /**
+   * Press a key, optionally with modifiers (1 alt, 2 ctrl, 4 meta, 8 shift).
+   *
+   * `text` is what separates a key the page merely observes from one that edits:
+   * Enter dispatched as a bare rawKeyDown reaches a keydown handler but inserts
+   * nothing, so a test of Enter-in-a-list quietly typed everything into one
+   * bullet. Pass the character - a carriage return - and Chromium performs the
+   * edit as well.
+   */
+  const key = async (windowsVirtualKeyCode, code, keyName, modifiers = 0, text = null) => {
+    for (const type of [text === null ? 'rawKeyDown' : 'keyDown', 'keyUp']) {
       await send('Input.dispatchKeyEvent', {
         type,
         windowsVirtualKeyCode,
         code,
         key: keyName,
-        modifiers
+        modifiers,
+        ...(text !== null && type === 'keyDown' ? { text, unmodifiedText: text } : {})
       })
       await sleep(30)
     }
     await sleep(120)
   }
+
+  /** Enter, as an edit rather than as an observation. */
+  const enter = async () => key(13, 'Enter', 'Enter', 0, '\r')
+
+  /** Tab, or Shift+Tab. */
+  const tab = async (shift = false) => key(9, 'Tab', 'Tab', shift ? 8 : 0)
 
   /** Wait until an expression returns something truthy. */
   const waitFor = async (expression, label = expression) => {
@@ -206,7 +221,7 @@ function makePage(send) {
     console.log(`wrote ${path}`)
   }
 
-  return { eval: evaluate, click, type, key, waitFor, shot, log: console.log, sleep }
+  return { eval: evaluate, click, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
 }
 
 const stepsPath = process.argv[2]

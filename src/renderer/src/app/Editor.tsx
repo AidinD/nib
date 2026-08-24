@@ -4,6 +4,7 @@ import { CanvasEditor } from './CanvasEditor'
 import {
   applyCanvasBlocks,
   applyImageWidths,
+  normaliseLists,
   blockAtSelection,
   bodyHasDrawing,
   bodyHasImage,
@@ -143,6 +144,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      normaliseLists(bodyRef.current)
       const loadedTitle = doc?.title ?? note.title
       titleRef.current = loadedTitle
       setTitle(loadedTitle)
@@ -185,6 +187,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      normaliseLists(bodyRef.current)
       titleRef.current = doc.title
       setTitle(doc.title)
       setWords(wordCount(html))
@@ -578,6 +581,49 @@ export function Editor({
 
   const onBodyKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      /*
+       * Tab nests a bullet, Shift+Tab lifts it back out.
+       *
+       * A contenteditable does nothing useful with Tab on its own: the browser
+       * treats it as "move to the next focusable thing" and the caret leaves the
+       * document altogether. So Enter-then-Tab, which is how every editor makes a
+       * sub-bullet, did nothing here.
+       *
+       * Outside a list the key is swallowed rather than passed on. There is no
+       * good meaning for a tab in a note - a tab character in HTML collapses to a
+       * space, and indenting a paragraph with `indent` wraps it in a blockquote,
+       * which says something the author did not - and letting focus jump out of
+       * the note mid-sentence is worse than nothing happening.
+       */
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        const root = bodyRef.current
+        if (root === null) {
+          return
+        }
+        const item = blockAtSelection(root)?.closest('li') ?? null
+        if (item === null) {
+          return
+        }
+        if (event.shiftKey) {
+          exec('outdent')
+          normaliseLists(root)
+          return
+        }
+        /*
+         * A bullet can only nest under the one above it.
+         *
+         * Chromium's `indent` does not check: on the first item of a list it
+         * wraps the whole list in another list instead, which is invalid HTML
+         * (a `ul` directly inside a `ul`) and renders as one indented bullet
+         * that has swallowed its siblings. So the first item stays put.
+         */
+        if (item.previousElementSibling?.tagName === 'LI') {
+          exec('indent')
+          normaliseLists(root)
+        }
+        return
+      }
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault()
         void save()

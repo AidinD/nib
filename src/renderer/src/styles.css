@@ -694,6 +694,41 @@ input {
   margin: 0 0 10px;
 }
 
+/*
+ * Lists, including the nested ones Tab produces.
+ *
+ * The indent is deliberately small - 22px, not the browser's 40 - because a
+ * note's column is narrow and three levels of default indent leaves no room for
+ * the text. The marker changes with depth so the nesting reads even when two
+ * levels are the same length.
+ */
+.doc-body ul,
+.doc-body ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.doc-body li ul,
+.doc-body li ol {
+  margin: 4px 0 0;
+}
+
+.doc-body ul {
+  list-style-type: disc;
+}
+
+.doc-body ul ul {
+  list-style-type: circle;
+}
+
+.doc-body ul ul ul {
+  list-style-type: square;
+}
+
+.doc-body li::marker {
+  color: var(--text-dim);
+}
+
 .doc-body blockquote {
   margin: 10px 0;
   padding-left: 12px;
