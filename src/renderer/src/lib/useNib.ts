@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Category, NibIndex, NoteFlag, NoteMeta, Scope, SubCategory } from '@shared/types'
+import type { Category, NibIndex, NoteFlag, NoteKind, NoteMeta, Scope, SubCategory } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { newId } from './notes'
 
@@ -67,7 +67,7 @@ export interface NibOps {
   addSub: (categoryId: string, name: string) => void
   renameSub: (categoryId: string, subId: string, name: string) => void
   deleteSub: (categoryId: string, subId: string) => void
-  addNote: (categoryId: string, subId: string | null, title: string) => string
+  addNote: (categoryId: string, subId: string | null, title: string, kind?: NoteKind) => string
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
   /** Cycle the whole note's flag: none, needs you, dealt with. */
@@ -210,7 +210,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
         }))
       ),
 
-    addNote: (categoryId, subId, title) => {
+    addNote: (categoryId, subId, title, kind = '') => {
       const id = newId('note')
       const now = Date.now()
       mutate((index) =>
@@ -229,6 +229,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               tint: '',
               alerts: [],
               flag: '',
+              kind,
               hasImage: false,
               hasDrawing: false
             },

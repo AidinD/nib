@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
+import { storyTemplate } from '@shared/story'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
@@ -270,7 +271,7 @@ export function App(): React.JSX.Element {
           notes={notes}
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
-          onAdd={(title) => {
+          onAdd={(title, kind) => {
             const target =
               selection.kind === 'category'
                 ? { categoryId: selection.categoryId, subId: null }
@@ -280,7 +281,21 @@ export function App(): React.JSX.Element {
             if (target === null) {
               return
             }
-            setActiveNoteId(ops.addNote(target.categoryId, target.subId, title))
+            const id = ops.addNote(target.categoryId, target.subId, title, kind)
+            // A story opens with its four questions already in it. An empty note
+            // asking you to remember the STAR shape is an empty note.
+            if (kind === 'story') {
+              void window.nib.writeNote({
+                id,
+                categoryId: target.categoryId,
+                subId: target.subId,
+                title,
+                html: storyTemplate(),
+                created: Date.now(),
+                edited: Date.now()
+              })
+            }
+            setActiveNoteId(id)
           }}
           onDelete={(note) => setPendingDelete({ kind: 'note', note })}
           onTogglePin={(note) => void togglePin(note)}

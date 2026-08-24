@@ -2,6 +2,23 @@
 
 Nib is a desktop note-taking app, a sibling to Jot (`D:\Repo\Tools\jot`) rather than a part of it.
 
+## Do NOT point NIB_DATA_DIR at a scratch folder to test
+
+It does the opposite of what the habit expects. `migrateLegacyData()` copies the
+whole notebook - index, notes, assets, drawings - into any `NIB_DATA_DIR` that
+has no index yet. That is correct for its actual job, relocating your data to a
+synced folder, and it is a trap for testing: instead of isolating the run from
+real notes, it **replicates real notes into the scratch directory**.
+
+This happened. A dev run against a fresh scratch dir came up showing a real note
+about a named colleague resigning, which is exactly the sort of content that must
+not end up in a temp folder. It copies rather than moves, so nothing was lost -
+and a copy of somebody's private notebook in `%TEMP%` is still a copy.
+
+To test against fixtures, write the index and notes into the scratch directory
+**first**, so `migrateLegacyData` sees an index and returns. Or test the pure
+logic directly: `npm test` runs against `src/` with no app at all.
+
 ## Read these first
 
 - [PLAN.md](PLAN.md) - current status, scope, next steps, open questions.

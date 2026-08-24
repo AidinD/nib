@@ -61,6 +61,18 @@ export interface NoteMeta {
    * same three states: unflagged, flagged, and dealt with but still marked.
    */
   flag: NoteFlag
+  /**
+   * What sort of note this is, when it is not just a note.
+   *
+   * Only `story` so far: a career story in STAR form, captured while it is fresh
+   * rather than reconstructed in March from October.
+   *
+   * A marker on the note rather than a dedicated category, deliberately. A story
+   * about an incident belongs filed with the incident, and forcing it into a
+   * "Story bank" folder fights the filing you already have - the same reason
+   * Tend binds Nib folders to people rather than relying on a naming convention.
+   */
+  kind: NoteKind
   hasImage: boolean
   hasDrawing: boolean
 }
@@ -97,6 +109,14 @@ export interface NibIndex {
  * the list.
  */
 export type NoteFlag = '' | 'open' | 'done'
+
+/**
+ * A note that is a particular kind of thing.
+ *
+ * Same shape as `flag` on purpose: a small enum on the note that drives a view
+ * and a count, rather than a new entity.
+ */
+export type NoteKind = '' | 'story'
 
 /** The tools a stroke can be drawn with. */
 export type StrokeTool = 'pen' | 'highlighter' | 'eraser'

@@ -169,6 +169,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     tint: str(raw?.tint),
     alerts: normalizeAlerts(raw?.alerts),
     flag: normalizeFlag(raw),
+    kind: raw?.kind === 'story' ? 'story' : '',
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }

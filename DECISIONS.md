@@ -3,6 +3,64 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - Story bank: a note kind, not a folder
+
+**Decided.** `NoteKind` on `NoteMeta`, currently `'' | 'story'`, plus a Story
+button beside the note field and a template of four questions.
+
+**A marker on the note rather than a category.** A story about an incident
+belongs filed with the incident. Sorting stories into a "Story bank" folder
+fights the filing you already have, and it is the same objection as binding Nib
+folders to people by naming convention rather than by an explicit binding.
+
+`kind` copies the shape of `flag` on purpose: a small enum on the note that
+drives a view and a marker, not a new entity. The idea note called for "a
+template and a tag" - Nib has no tags, so the tag is this.
+
+**The headings are questions, and the wording is load-bearing.** "Result"
+invites a summary; "What changed, and how you know" invites a number. `Action`
+is split from `Task` because collapsing them is what produces "we shipped it" -
+a sentence that says nothing about you - and the hint says so outright. A rewrite
+that softens those headings brings the problem back, so a test asserts the
+action prompt still asks what *you* did.
+
+**Capture, not composition.** Nobody writes career stories in advance; everybody
+tries to remember them afterwards, when the numbers are gone and "what I did"
+has blurred into "what the team did". So the button sits next to the note field
+rather than behind a menu: a button two clicks away is a button used in March,
+trying to remember October.
+
+**`unanswered()` tells a half-captured story from a finished one**, reading each
+section only as far as the next heading. Reading to the end of the document would
+let one answered section mark every later one as answered, which is the failure
+that makes such a check worthless.
+
+**Nib has tests now.** Eight, against `src/shared/story.ts`, which Node type-strips
+on import so they run against the source rather than a build. It was the only app
+in the suite with none.
+
+**A latent CSS bug came out with it:** `--accent-soft` was referenced by an
+existing rule and never defined, so that background painted nothing. Defined now.
+
+## 2026-08-24 - NIB_DATA_DIR is a relocation, not an isolation
+
+Worth its own entry because the habit from every sibling app is wrong here.
+
+Pointing `NIB_DATA_DIR` at an empty scratch folder does not isolate a test run
+from real notes. `migrateLegacyData()` copies the entire notebook into it, which
+is exactly right for its job - moving your data to a synced folder - and exactly
+wrong as a test habit.
+
+It surfaced the only way it could: a dev run against a fresh scratch directory
+came up showing a real note about a named colleague resigning. It copies rather
+than moving, so nothing was lost, and a copy of a private notebook sitting in
+`%TEMP%` is still a copy. Deleted, and written into CLAUDE.md as a rule.
+
+The general shape, which has now cost time twice in one day: a default that
+reaches for real data is not made safe by the caller being careful. Tend read the
+real Jot board until its harness was given a fixture; this copies the real
+notebook until the scratch directory already has an index.
+
 ## 2026-08-23 - The header mark was missing its slit, and the ladder was missing two rungs
 
 Two defects in the mark, both found while giving Loom the same treatment.

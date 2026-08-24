@@ -13,6 +13,9 @@
   --text: #e8e9ec;
   --text-dim: #9a9da3;
   --accent: #6f9cff;
+  /* Used by the scope pill and the story button. It was referenced before it
+     was defined, so that background quietly painted nothing. */
+  --accent-soft: rgba(111, 156, 255, 0.14);
   --danger: #ff6b6b;
   --amber: #ffb054;
   --green: #5fd0a0;
@@ -1592,4 +1595,50 @@ body.is-sticky-window {
 
 .tag-work {
   color: var(--accent);
+}
+
+/* ------------------------------------------------------------- stories -- */
+
+/*
+ * A story is filed wherever the thing happened, so it needs to be findable in
+ * a list of ordinary notes without being sorted into a folder of its own. One
+ * edge, in the accent, is enough - the same trick the flag uses.
+ */
+.add-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.add-row .add-note {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-story {
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.add-story:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.add-story:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.card.is-story {
+  border-left: 2px solid var(--accent);
 }

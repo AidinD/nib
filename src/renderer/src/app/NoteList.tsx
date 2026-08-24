@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { NibIndex, NoteMeta } from '@shared/types'
+import type { NibIndex, NoteKind, NoteMeta } from '@shared/types'
 import { noteTrail, relativeTime } from '../lib/notes'
 import type { Selection } from '../lib/selection'
 import { selectionColor, selectionShowsCrumb, selectionTarget, selectionTitle } from '../lib/selection'
@@ -12,7 +12,7 @@ interface NoteListProps {
   notes: NoteMeta[]
   activeNoteId: string | null
   onOpen: (noteId: string) => void
-  onAdd: (title: string) => void
+  onAdd: (title: string, kind?: NoteKind) => void
   onDelete: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
   onReorder: (
@@ -91,19 +91,39 @@ export function NoteList({
         <span className="row-count">{notes.length}</span>
       </header>
 
-      <input
-        className="add-note"
-        placeholder={target !== null ? 'Add a note…' : 'Pick a category to add a note'}
-        disabled={target === null}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && draft.trim().length > 0) {
-            onAdd(draft.trim())
+      <div className="add-row">
+        <input
+          className="add-note"
+          placeholder={target !== null ? 'Add a note…' : 'Pick a category to add a note'}
+          disabled={target === null}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && draft.trim().length > 0) {
+              onAdd(draft.trim())
+              setDraft('')
+            }
+          }}
+        />
+        {/*
+          A story is filed wherever the thing happened, so this sits beside the
+          note field rather than in a folder of its own. The point is capturing
+          it while it is fresh - a button two clicks away is a button used in
+          March, trying to remember October.
+        */}
+        <button
+          type="button"
+          className="add-story"
+          disabled={target === null}
+          title="A career story, in four questions. Fill it in while it is fresh."
+          onClick={() => {
+            onAdd(draft.trim().length > 0 ? draft.trim() : 'Untitled story', 'story')
             setDraft('')
-          }
-        }}
-      />
+          }}
+        >
+          Story
+        </button>
+      </div>
 
       <div
         className="cards"
@@ -122,7 +142,7 @@ export function NoteList({
             <article
               className={`card${note.id === activeNoteId ? ' is-active' : ''}${
                 note.flag === '' ? '' : ` is-${note.flag}`
-              }`}
+              }${note.kind === 'story' ? ' is-story' : ''}`}
               draggable
               onClick={() => onOpen(note.id)}
               onDragStart={(event) =>
