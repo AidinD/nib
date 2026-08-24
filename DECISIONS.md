@@ -3,6 +3,32 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - Six tag ids are a contract with Tend
+
+**Recorded, not decided here.** Tend maps a Nib tag to the kind of contact a note
+represents, and it keys on the tag's **id**, never its name. Six seeded ids are
+part of that agreement:
+
+`tag-one-to-one`, `tag-second-hand`, `tag-feedback`, `tag-observation`,
+`tag-sideways`, `tag-principle`.
+
+**Renaming or recolouring any of them in Nib is free.** Changing an id, or
+deleting one and re-creating it with a new id, silently breaks the mapping on the
+other side - Tend would go on working and would simply stop counting those notes
+as the thing they are. Nothing in Nib will complain, because nothing in Nib knows.
+
+**Why an id and not a name.** The same reason a note link stores an id: names are
+the part the author is meant to be free to change. This is the second place in
+Nib where that trade shows up, and both times the answer was the same.
+
+**A tag with no rule on the Tend side is ignored rather than guessed at.** Most of
+Nib's tags mean nothing to Tend and should keep meaning nothing.
+
+**The seam is pinned by a test on the Tend side** that builds a version 2 index in
+Nib's current shape and asserts the mapping still resolves. Worth knowing it
+exists: the two apps ship separately, and that is exactly where agreement stops
+quietly.
+
 ## 2026-08-24 - Backlinks are stored, not searched for
 
 **Decided.** Every note's meta carries `links`, the ids it links to, written from
