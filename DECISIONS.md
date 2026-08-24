@@ -43,16 +43,31 @@ things in the same place in the same colour would mean neither could be trusted.
 **Why a count and not a mark.** A note holding one loose end and a note holding
 five look identical otherwise, and the difference is the whole reason to look.
 
-## 2026-08-24 - Mouse back and forward come from the main process
+## 2026-08-24 - Mouse back and forward are ordinary mouse events
 
 **Decided.** Note navigation has a history, walked with the mouse's side buttons
-or Alt+Left / Alt+Right.
+or Alt+Left / Alt+Right. The buttons are read in the renderer, from `mouseup`
+with `button` 3 or 4 - the way Jot and Helm have both done it for months.
 
-**They are not mouse events.** On Windows those buttons arrive as an
-`app-command` on the window, which only the main process can hear - so listening
-for `mousedown` with button 3 or 4 in the renderer, which is the obvious first
-attempt, hears nothing at all. The main process forwards a direction; what "back"
-means is the renderer's business.
+**Superseded, same day: the first version routed them through the main process.**
+The reasoning was that Windows turns those buttons into an `app-command` on the
+window, which only the main process can hear. That is true in a browser, where
+the buttons already mean "go back". In an Electron window with nothing to
+navigate, Chromium hands them to the page as buttons 3 and 4 and no app-command
+is emitted - so the wiring was correct, listening in the right place for an event
+that never came, and the buttons did nothing at all.
+
+**The lesson is not about Electron.** Two sibling apps in this suite already had
+this working, and the answer was twenty lines away in Jot's `App.tsx`. The suite
+is the reference; reaching for it first would have cost a minute and saved a
+release. That is what CLAUDE.md means by "look at how Jot solved it before
+inventing something new", and this is the second time it has been the shortest
+path to a right answer.
+
+**One mechanism, not two with a guard.** The main-process forwarding is removed
+rather than kept as a fallback: if both ever fired, every gesture would step
+twice, and a dedupe window measured in milliseconds is a worse thing to own than
+a single event source that two other apps have proved.
 
 **The trail is recorded from an effect on the open note**, not at each place that
 opens one. There are five such places already - a card, a link in the text, the

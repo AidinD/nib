@@ -55,22 +55,6 @@ const api = {
     return () => {
       ipcRenderer.removeListener('index:changed', listener)
     }
-  },
-
-  /**
-   * The mouse's back and forward buttons.
-   *
-   * They arrive here rather than in the renderer because Windows sends them as an
-   * `app-command` to the window, not as a mouse event to the page - see
-   * `forwardHistoryButtons`.
-   */
-  onHistoryStep: (handler: (direction: 'back' | 'forward') => void): (() => void) => {
-    const listener = (_event: unknown, direction: 'back' | 'forward'): void =>
-      handler(direction)
-    ipcRenderer.on('history:step', listener)
-    return () => {
-      ipcRenderer.removeListener('history:step', listener)
-    }
   }
 }
 

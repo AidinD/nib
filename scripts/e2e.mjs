@@ -155,6 +155,28 @@ function makePage(send) {
     await sleep(150)
   }
 
+  /**
+   * Press one of the mouse's side buttons.
+   *
+   * `back` and `forward` are real button values in the protocol, and they arrive
+   * in the page as buttons 3 and 4 - so the navigation gesture can be tested
+   * without touching the machine's actual mouse.
+   */
+  const sideButton = async (which) => {
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', {
+        type,
+        x: 400,
+        y: 400,
+        button: which,
+        buttons: type === 'mousePressed' ? (which === 'back' ? 8 : 16) : 0,
+        clickCount: 1
+      })
+      await sleep(30)
+    }
+    await sleep(200)
+  }
+
   /** Move the pointer to a point - to hover something, or to hover nothing. */
   const moveTo = async (x, y) => {
     await send('Input.dispatchMouseEvent', {
@@ -274,7 +296,22 @@ function makePage(send) {
     console.log(`wrote ${path}`)
   }
 
-  return { eval: evaluate, click, clickAt, hover, moveTo, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
+  return {
+    eval: evaluate,
+    click,
+    clickAt,
+    hover,
+    moveTo,
+    sideButton,
+    type,
+    key,
+    enter,
+    tab,
+    waitFor,
+    shot,
+    log: console.log,
+    sleep
+  }
 }
 
 const stepsPath = process.argv[2]

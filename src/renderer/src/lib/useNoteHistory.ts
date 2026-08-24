@@ -77,16 +77,35 @@ export function useNoteHistory(open: (noteId: string) => void): NoteHistory {
   const back = useCallback(() => step(-1), [step])
   const forward = useCallback(() => step(1), [step])
 
-  // The mouse's two side buttons, which arrive from the main process because
-  // Windows sends them as an app-command rather than as a mouse event.
+  /*
+   * The mouse's two side buttons, as ordinary mouse events.
+   *
+   * The first attempt routed these through the main process, on the theory that
+   * Windows turns them into an `app-command` on the window and never lets the
+   * page see them. That is what happens in a browser, where the buttons already
+   * mean something - but Chromium in an Electron window with nothing to navigate
+   * delivers them here as buttons 3 and 4, and the app-command never fires. Jot
+   * and Helm have both done it this way for months.
+   *
+   * `mouseup` rather than `mousedown`, to match them: pressing and dragging with
+   * a side button should not navigate on the way down.
+   */
   useEffect(() => {
-    return window.nib.onHistoryStep((direction) => {
-      if (direction === 'back') {
+    const onMouseUp = (event: MouseEvent): void => {
+      if (event.button !== 3 && event.button !== 4) {
+        return
+      }
+      event.preventDefault()
+      if (event.button === 3) {
         back()
       } else {
         forward()
       }
-    })
+    }
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mouseup', onMouseUp)
+    }
   }, [back, forward])
 
   /*
