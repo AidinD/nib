@@ -454,9 +454,31 @@ input {
   background: var(--surface-hover);
 }
 
+/*
+ * The open note.
+ *
+ * It was --surface-hover with a --border outline, which is the same background
+ * as plain hover and a grey line - so the card you were editing looked like the
+ * card the pointer happened to be over. Selection is what --accent is for, per
+ * the design tokens, so it gets the accent outline and a lighter ground.
+ *
+ * The outline is drawn OUTSIDE the border rather than as a box-shadow, because
+ * a flagged card already spends its box-shadow on the alert edge and the two
+ * must be able to show at once.
+ */
 .card.is-active {
-  background: var(--surface-hover);
-  border-color: var(--border);
+  background: var(--surface-alt);
+  border-color: var(--accent);
+  /* Mixed from the token, not a hardcoded blue: the accent is a setting, and a
+     halo that stayed blue while the border went green would be a bug nobody
+     would think to look for. */
+  outline: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  outline-offset: 1px;
+}
+
+.card.is-active .card-title {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .card-top {
