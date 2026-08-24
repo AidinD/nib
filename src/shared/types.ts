@@ -74,6 +74,19 @@ export interface NoteMeta {
    */
   kind: NoteKind
   /**
+   * Ids from the index's tag catalog, in the order they were added.
+   *
+   * Ids and never names, the way Jot references its own tags: renaming a tag
+   * must not quietly break everything pointing at it, and Tend maps these onto
+   * what a note counts as, so a rename in here would stop it counting at all.
+   *
+   * Separate from `kind` deliberately, rather than subsuming it. `kind` changes
+   * what a note IS - a story has its own structure and its own view - and a tag
+   * is something you say about a note. Merged, deleting a tag would delete a
+   * feature.
+   */
+  tags: string[]
+  /**
    * Out of the way, not gone.
    *
    * Notes are reference material, and the regret over a deleted one turns up
@@ -114,6 +127,29 @@ export interface Category {
 export interface NibIndex {
   version: 1
   categories: Category[]
+  /**
+   * Every tag that exists, whether or not a note uses it.
+   *
+   * A catalog rather than free strings on each note, so a tag has one name, one
+   * colour and one meaning everywhere, and renaming it is one edit. The same
+   * shape Jot uses.
+   */
+  tags: Tag[]
+}
+
+/**
+ * One tag in the catalog.
+ *
+ * `description` is not decoration. A tag whose meaning is obvious to you in
+ * August is a tag you will hesitate over in March, and the hesitation is what
+ * makes tagging stop - so every tag says what it is for, and the seeded ones
+ * say it in a sentence.
+ */
+export interface Tag {
+  id: string
+  name: string
+  color: string
+  description: string
 }
 
 /**

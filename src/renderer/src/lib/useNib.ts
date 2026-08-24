@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Category, NibIndex, NoteFlag, NoteKind, NoteMeta, Scope, SubCategory } from '@shared/types'
+import type { Category, NibIndex, NoteFlag, NoteKind, NoteMeta, Scope, SubCategory, Tag } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { newId } from './notes'
 
-const EMPTY: NibIndex = { version: 1, categories: [] }
+const EMPTY: NibIndex = { version: 1, categories: [], tags: [] }
 
 /**
  * The index, in memory, with every mutation writing straight through to disk.
@@ -80,6 +80,13 @@ export interface NibOps {
   /** Reorder within a category: place the note just before `beforeNoteId`, or last when null. */
   moveNoteBefore: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
   patchNoteMeta: (noteId: string, patch: Partial<NoteMeta>) => void
+  /** Add a tag to the catalog and return its id. */
+  addTag: (name: string, color: string, description: string) => string
+  editTag: (tagId: string, patch: Partial<Omit<Tag, 'id'>>) => void
+  /** Remove it from the catalog. Notes keep the id; it simply renders as nothing. */
+  deleteTag: (tagId: string) => void
+  /** Put the tag on the note, or take it off. */
+  toggleNoteTag: (noteId: string, tagId: string) => void
 }
 
 const SCOPE_CYCLE: Scope[] = ['', 'W', 'P']
@@ -232,6 +239,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               alerts: [],
               flag: '',
               kind,
+              tags: [],
               archived: false,
               hasImage: false,
               hasDrawing: false
@@ -310,6 +318,43 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
       ),
 
     patchNoteMeta: (noteId, patch) =>
-      mutate((index) => mapNote(index, noteId, (note) => ({ ...note, ...patch })))
+      mutate((index) => mapNote(index, noteId, (note) => ({ ...note, ...patch }))),
+
+    addTag: (name, color, description) => {
+      const id = newId('tag')
+      mutate((index) => ({
+        ...index,
+        tags: [...index.tags, { id, name: name.trim(), color, description: description.trim() }]
+      }))
+      return id
+    },
+
+    editTag: (tagId, patch) =>
+      mutate((index) => ({
+        ...index,
+        tags: index.tags.map((tag) => (tag.id === tagId ? { ...tag, ...patch } : tag))
+      })),
+
+    /**
+     * Deleting a tag removes it from the catalog and leaves the ids on the
+     * notes alone.
+     *
+     * Sweeping them would make one click erase a piece of every note that ever
+     * carried it, with nothing to undo it with. Left in place, re-creating the
+     * tag with the same id brings them all back, and until then the id renders
+     * as nothing at all.
+     */
+    deleteTag: (tagId) =>
+      mutate((index) => ({ ...index, tags: index.tags.filter((tag) => tag.id !== tagId) })),
+
+    toggleNoteTag: (noteId, tagId) =>
+      mutate((index) =>
+        mapNote(index, noteId, (note) => ({
+          ...note,
+          tags: note.tags.includes(tagId)
+            ? note.tags.filter((id) => id !== tagId)
+            : [...note.tags, tagId]
+        }))
+      )
   }
 }
