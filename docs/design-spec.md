@@ -85,7 +85,7 @@ Selecting a **category** lists every note under it. Selecting a **sub-category**
 
 A header line with the active list's dot, name and count, an "Add a note…" field, then the cards.
 
-Each card carries: the title, a pin marker (dim when unpinned, `--amber` when pinned, toggling on click), a delete affordance, a two-line preview built from the note's block elements joined with `·`, and a metadata row with the sub-category crumb, the relative edit time (`today`, `yesterday`, `3 days ago`, `2w ago`), an `image` tag in `--accent` when the note holds an image, and a `drawing` tag in `--violet` when it holds a canvas.
+Each card carries: the title, a pin marker (hidden until the card is hovered, `--amber` and always visible once pinned, toggling on click - it was dim-but-visible when it was the card's only affordance, and became the odd one out when the flag, archive and delete joined it), a delete affordance, a two-line preview built from the note's block elements joined with `·`, and a metadata row with the sub-category crumb, the relative edit time (`today`, `yesterday`, `3 days ago`, `2w ago`), an `image` tag in `--accent` when the note holds an image, and a `drawing` tag in `--violet` when it holds a canvas.
 
 The crumb only appears when the list spans more than one place: listing a whole category, or listing sticky notes, where the crumb is the full `Category › Sub-category` trail.
 

@@ -3,6 +3,27 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - A card shows state at rest, and affordances on hover
+
+**Decided.** The pin is hidden until the card is hovered, like the flag, the
+archive arrow and the delete cross. A note that IS pinned still shows its amber
+dot at all times.
+
+**Why it was the odd one out.** It sat at 0.35 opacity - dim but present - which
+the design spec asked for, and which was right when the pin was the only thing in
+a card's top row. Three affordances have joined it since, all appearing on hover,
+so the pin became the one mark on a resting card and read as a state rather than
+as a button.
+
+**The line it draws.** A state is always visible: pinned, flagged, dealt with. An
+affordance appears when the pointer is on the card. The pin is both, and it splits
+along exactly that line - invisible when there is nothing to say, amber when
+there is.
+
+**The spec is updated rather than overruled quietly.** Its original wording
+described a card with one affordance; leaving it as written would have made the
+implementation look like a mistake to the next reader.
+
 ## 2026-08-24 - Enter in a list is ours, not the browser's
 
 **Decided.** Enter on an empty bullet is handled in Nib: a sub-bullet outdents

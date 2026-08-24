@@ -155,6 +155,17 @@ function makePage(send) {
     await sleep(150)
   }
 
+  /** Move the pointer to a point - to hover something, or to hover nothing. */
+  const moveTo = async (x, y) => {
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(x),
+      y: Math.round(y),
+      buttons: 0
+    })
+    await sleep(150)
+  }
+
   /** Click a point, for the parts of the app that ARE a point - the flag column. */
   const clickAt = async (x, y) => {
     for (const type of ['mousePressed', 'mouseReleased']) {
@@ -263,7 +274,7 @@ function makePage(send) {
     console.log(`wrote ${path}`)
   }
 
-  return { eval: evaluate, click, clickAt, hover, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
+  return { eval: evaluate, click, clickAt, hover, moveTo, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
 }
 
 const stepsPath = process.argv[2]
