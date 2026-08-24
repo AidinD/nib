@@ -237,6 +237,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               pinned: false,
               tint: '',
               alerts: [],
+              links: [],
               flag: '',
               kind,
               tags: [],

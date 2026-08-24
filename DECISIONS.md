@@ -3,6 +3,67 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - Backlinks are stored, not searched for
+
+**Decided.** Every note's meta carries `links`, the ids it links to, written from
+the document on every save. A note's backlinks are then a walk over the index,
+which is in memory already.
+
+**Why not read the notebook when the question is asked.** The question actually
+asked is the reverse of what the text holds: a note's body says what it points
+at, and "what points at me" can only be answered by reading every other note.
+That is a read of the whole notebook every time a note is opened - fine today,
+and quietly worse every month the notebook grows.
+
+**The index version went from 1 to 2**, because the links cannot be derived from
+an old index - they are in the bodies. Loading a version 1 notebook reads every
+note once, fills the field in and saves. Leaving existing notes empty until they
+happened to be edited would have looked exactly like the feature not working.
+
+**The migration runs after the file watcher is set up**, so the renderer hears
+about the rewritten index through the same path as any other external change and
+reloads itself. No "migration finished" message to wire up.
+
+**A note is never listed as mentioning itself.** A link to the note you are
+reading tells you nothing.
+
+## 2026-08-24 - Where a card says what it needs, and where it says what it is
+
+**Decided.** The count of open action points inside a note goes beside the card's
+title. Not in the meta row with the tags, and not on the left edge.
+
+**The split it keeps.** The card's top row is what the note needs from you - the
+flag, the action-point count - and the meta row is what the note IS: where it
+lives, when it changed, what it is tagged with. Both rows stay scannable as long
+as neither borrows the other's job.
+
+**Why not the left edge.** A flagged NOTE already owns that edge. Two different
+things in the same place in the same colour would mean neither could be trusted.
+
+**Why a count and not a mark.** A note holding one loose end and a note holding
+five look identical otherwise, and the difference is the whole reason to look.
+
+## 2026-08-24 - Mouse back and forward come from the main process
+
+**Decided.** Note navigation has a history, walked with the mouse's side buttons
+or Alt+Left / Alt+Right.
+
+**They are not mouse events.** On Windows those buttons arrive as an
+`app-command` on the window, which only the main process can hear - so listening
+for `mousedown` with button 3 or 4 in the renderer, which is the obvious first
+attempt, hears nothing at all. The main process forwards a direction; what "back"
+means is the renderer's business.
+
+**The trail is recorded from an effect on the open note**, not at each place that
+opens one. There are five such places already - a card, a link in the text, the
+action-point strip, a search result, a fresh note - and a list of call sites to
+keep in step is a list that will fall out of step.
+
+**Walking the trail is self-cancelling.** A step back opens a note, the effect
+offers it to be recorded, and `visit` drops it because the cursor already points
+at it. Without that, every step back would append a new entry and there would
+always be somewhere further back to go.
+
 ## 2026-08-24 - A note can link to another note
 
 **Decided.** `/link` opens a search over the notebook and inserts a link to the

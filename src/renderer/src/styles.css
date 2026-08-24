@@ -2268,3 +2268,67 @@ body.is-sticky-window {
   line-height: 16px;
   white-space: nowrap;
 }
+
+/* ---------- backlinks ---------- */
+
+/*
+ * What points at this note, under the text.
+ *
+ * Quiet by default and separated by a rule: it is a footnote about the note's
+ * place in the notebook, not part of what the note says.
+ *
+ * It sits below the scrolling body, so it stays put while the text moves. The
+ * alternative - having it follow the end of the text - would mean scrolling to
+ * the bottom of a long note to find out what points at it, and the answer has
+ * nothing to do with where you are in the note.
+ */
+.backlinks {
+  margin: 26px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.backlinks-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.backlinks-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.backlink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-align: left;
+}
+
+.backlink:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.backlink-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlink-trail {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}

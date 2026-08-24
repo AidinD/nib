@@ -529,6 +529,26 @@ export function applyNoteLinks(root: HTMLElement, titles: Map<string, string>): 
   }
 }
 
+/**
+ * The notes a body links to, in the order they appear.
+ *
+ * Written to the note's meta on every save, which is what makes the reverse
+ * question - "what points at this note" - a walk over the index rather than a
+ * read of every file in the notebook.
+ */
+export function extractLinks(html: string): string[] {
+  const holder = document.createElement('div')
+  holder.innerHTML = html
+  const found = new Set<string>()
+  for (const link of holder.querySelectorAll<HTMLElement>('a[data-note]')) {
+    const id = link.dataset.note
+    if (id !== undefined && id.length > 0) {
+      found.add(id)
+    }
+  }
+  return [...found]
+}
+
 /** Every note's title, by id - what `applyNoteLinks` needs. */
 export function noteTitles(index: NibIndex): Map<string, string> {
   const titles = new Map<string, string>()

@@ -139,7 +139,14 @@ export interface Category {
 
 /** The whole index file: ordering and metadata, no note bodies. */
 export interface NibIndex {
-  version: 1
+  /**
+   * The shape of the file, so an older one can be recognised and upgraded.
+   *
+   * 1 was the original; 2 added `links` on a note. An index is always normalised
+   * to the current version on load, so this is only ever read from the raw file -
+   * see `backfillLinks`.
+   */
+  version: number
   categories: Category[]
   /**
    * Every tag that exists, whether or not a note uses it.

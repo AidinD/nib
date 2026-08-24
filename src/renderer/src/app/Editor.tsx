@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
 import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
@@ -22,6 +22,7 @@ import {
   buildPreview,
   deriveTitle,
   extractAlerts,
+  extractLinks,
   imageWidth,
   newId,
   noteTrail,
@@ -167,7 +168,8 @@ export function Editor({
       edited,
       hasImage: bodyHasImage(html),
       hasDrawing: bodyHasDrawing(html),
-      alerts: extractAlerts(html)
+      alerts: extractAlerts(html),
+      links: extractLinks(html)
     })
     setSaveState('saved')
     // No `title` in the dependencies on purpose: the ref carries it, and a new
@@ -915,6 +917,34 @@ export function Editor({
     [caretPoint, exec, addDivider, insertCanvas, pickImage, toggleAlert, wrapInCode]
   )
 
+  /*
+   * The notes that link to this one.
+   *
+   * Read from the index, which every note's links are written into on save - so
+   * this is a walk over metadata already in memory, not a read of the notebook.
+   * A note is never listed as mentioning itself, since a link to the note you are
+   * reading tells you nothing.
+   */
+  const mentions = useMemo(() => {
+    if (note === null) {
+      return []
+    }
+    const found: Array<{ note: NoteMeta; trail: string }> = []
+    for (const category of index.categories) {
+      for (const candidate of category.notes) {
+        if (candidate.id === note.id || !candidate.links.includes(note.id)) {
+          continue
+        }
+        const sub = category.subs.find((entry) => entry.id === candidate.subId)
+        found.push({
+          note: candidate,
+          trail: sub === undefined ? category.name : `${category.name} · ${sub.name}`
+        })
+      }
+    }
+    return found.sort((a, b) => b.note.edited - a.note.edited)
+  }, [index, note])
+
   /** Write the chosen day where the caret was, and put the calendar away. */
   const pickDate = useCallback(
     (date: Date) => {
@@ -1379,6 +1409,37 @@ export function Editor({
             setSelectedImage(target.tagName === 'IMG' ? (target as HTMLImageElement) : null)
           }}
         />
+
+        {/*
+          What points AT this note.
+          
+          Below the text rather than beside it: it is not part of what the note
+          says, it is a fact about where the note sits. And absent entirely when
+          nothing links here - an empty "mentioned in" heading on every note would
+          be a permanent reminder of a feature instead of a use of it.
+        */}
+        {mentions.length > 0 && (
+          <div className="backlinks">
+            <span className="backlinks-label">
+              Mentioned in {mentions.length === 1 ? '1 note' : `${mentions.length} notes`}
+            </span>
+            <div className="backlinks-rows">
+              {mentions.map((mention) => (
+                <button
+                  key={mention.note.id}
+                  type="button"
+                  className="backlink"
+                  onClick={() => onOpenNote(mention.note.id)}
+                >
+                  <span className="backlink-title">
+                    {mention.note.title.length > 0 ? mention.note.title : 'Untitled'}
+                  </span>
+                  <span className="backlink-trail">{mention.trail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

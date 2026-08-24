@@ -284,6 +284,24 @@ void app.whenReady().then(() => {
   // a tool editing the index - reaches the renderer the same way our own does.
   store().watchIndex(broadcastIndexChanged)
 
+  /*
+   * A notebook written before links were recorded gets them filled in once.
+   *
+   * After the watcher is set up, so the renderer hears about the rewritten index
+   * through the same path as any other external change and reloads on its own -
+   * no separate "the migration finished" message to wire up. Failures are logged
+   * and dropped: without it backlinks are empty until notes are edited, which is
+   * a smaller problem than refusing to start.
+   */
+  void store()
+    .backfillLinks()
+    .then((changed) => {
+      if (changed) {
+        console.log('[nib] filled in note links for a version 1 notebook')
+      }
+    })
+    .catch((error) => console.error('[nib] link backfill failed', error))
+
   // A sweep at startup catches anything orphaned by a crash, or by a note
   // deleted on another machine and synced down while this one was closed.
   scheduleSweep()
