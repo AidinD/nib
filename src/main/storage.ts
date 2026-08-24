@@ -120,6 +120,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     alerts: normalizeAlerts(raw?.alerts),
     flag: normalizeFlag(raw),
     kind: raw?.kind === 'story' ? 'story' : '',
+    archived: raw?.archived === true,
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }

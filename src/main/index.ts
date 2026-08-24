@@ -316,7 +316,12 @@ void app.whenReady().then(() => {
     .then((index) => {
       for (const category of index.categories) {
         for (const note of category.notes) {
-          if (note.pinned) {
+          // Archiving unpins, so the two should never disagree - but the index
+          // is a synced file, and a note archived on one machine can arrive here
+          // still carrying a pin from before. Archived wins: putting an archived
+          // note back on screen at every start is the one way this feature
+          // becomes an annoyance.
+          if (note.pinned && !note.archived) {
             openStickyWindow(note.id)
           }
         }

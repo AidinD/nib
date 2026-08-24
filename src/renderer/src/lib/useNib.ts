@@ -74,6 +74,8 @@ export interface NibOps {
   cycleFlag: (noteId: string) => void
   setFlag: (noteId: string, flag: NoteFlag) => void
   setPinned: (noteId: string, pinned: boolean) => void
+  /** Out of the way, not gone: filter the note out of every list but Archive. */
+  setArchived: (noteId: string, archived: boolean) => void
   moveNote: (noteId: string, categoryId: string, subId: string | null) => void
   /** Reorder within a category: place the note just before `beforeNoteId`, or last when null. */
   moveNoteBefore: (categoryId: string, noteId: string, beforeNoteId: string | null) => void
@@ -230,6 +232,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               alerts: [],
               flag: '',
               kind,
+              archived: false,
               hasImage: false,
               hasDrawing: false
             },
@@ -266,6 +269,9 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
     /** Used when a sticky window is closed: the card must not stay marked sticky. */
     setPinned: (noteId, pinned) =>
       mutate((index) => mapNote(index, noteId, (n) => ({ ...n, pinned }))),
+
+    setArchived: (noteId, archived) =>
+      mutate((index) => mapNote(index, noteId, (n) => ({ ...n, archived }))),
 
     moveNote: (noteId, categoryId, subId) =>
       mutate((index) => {

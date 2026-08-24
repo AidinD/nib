@@ -6,6 +6,7 @@ export type Selection =
   | { kind: 'recent' }
   | { kind: 'sticky' }
   | { kind: 'alerts' }
+  | { kind: 'archive' }
   | { kind: 'category'; categoryId: string }
   | { kind: 'sub'; categoryId: string; subId: string }
 
@@ -21,10 +22,30 @@ export function categoryInScope(category: Category, filter: ScopeFilter): boolea
   return category.scope === filter
 }
 
-function allNotes(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
+function everyNote(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
   return index.categories
     .filter((category) => categoryInScope(category, filter))
     .flatMap((category) => category.notes)
+}
+
+/**
+ * Every note that has not been archived - which is what every list means by
+ * "the notes", the Archive row excepted.
+ *
+ * The filter lives here, in the one function the lists and the counts and the
+ * alert strip all go through, rather than at each call site. An archived note
+ * that still counted towards "Needs you" or still showed in the strip would be
+ * the whole feature failing quietly.
+ */
+function allNotes(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
+  return everyNote(index, filter).filter((note) => !note.archived)
+}
+
+/** The notes in a category, or in one of its sub-categories, minus the archived. */
+export function liveNotes(category: Category, subId?: string): NoteMeta[] {
+  return category.notes.filter(
+    (note) => !note.archived && (subId === undefined || note.subId === subId)
+  )
 }
 
 /**
@@ -33,27 +54,42 @@ function allNotes(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
  * Pinned notes float to the top of every category-backed list, so a note you
  * pinned as a sticky stays where you can find it. The smart lists sort by their
  * own rule instead: Recent by edit time, Sticky by trail.
+ *
+ * `includeArchived` widens a SEARCH, and only a search. With nothing typed there
+ * is nothing to widen, and honouring it anyway would quietly merge the archive
+ * into every list - which is the one thing archiving is for preventing. So the
+ * flag is ignored unless there is a needle, and the toggle in the UI only exists
+ * while there is one.
  */
 export function selectedNotes(
   index: NibIndex,
   selection: Selection,
   filter: ScopeFilter,
-  search: string
+  search: string,
+  includeArchived = false
 ): NoteMeta[] {
+  const needle = search.trim().toLowerCase()
+  const wide = includeArchived && needle.length > 0
+  const pool = (): NoteMeta[] => (wide ? everyNote(index, filter) : allNotes(index, filter))
+  const within = (category: Category, subId?: string): NoteMeta[] =>
+    wide
+      ? category.notes.filter((note) => subId === undefined || note.subId === subId)
+      : liveNotes(category, subId)
+
   let notes: NoteMeta[]
 
   switch (selection.kind) {
     case 'all':
-      notes = pinnedFirst(allNotes(index, filter))
+      notes = pinnedFirst(pool())
       break
     case 'recent':
-      notes = allNotes(index, filter)
+      notes = pool()
         .slice()
         .sort((a, b) => b.edited - a.edited)
         .slice(0, RECENT_LIMIT)
       break
     case 'sticky':
-      notes = allNotes(index, filter).filter((note) => note.pinned)
+      notes = pool().filter((note) => note.pinned)
       break
     /*
      * The review view: every note carrying a flag at all, outstanding ones
@@ -64,29 +100,38 @@ export function selectedNotes(
      * the count are what they leave.
      */
     case 'alerts':
-      notes = allNotes(index, filter)
+      notes = pool()
         .filter((note) => note.flag !== '' || note.alerts.length > 0)
         .sort((a, b) => {
           const open = Number(isOutstanding(b)) - Number(isOutstanding(a))
           return open !== 0 ? open : b.edited - a.edited
         })
       break
+    /*
+     * The one list that shows archived notes, and shows nothing else.
+     *
+     * Newest first, by edit time: the reason to open the archive is almost
+     * always to pull back something recent that went in by mistake, not to
+     * browse a filing cabinet.
+     */
+    case 'archive':
+      notes = everyNote(index, filter)
+        .filter((note) => note.archived)
+        .slice()
+        .sort((a, b) => b.edited - a.edited)
+      break
     case 'category': {
       const category = index.categories.find((c) => c.id === selection.categoryId)
-      notes = category === undefined ? [] : pinnedFirst(category.notes)
+      notes = category === undefined ? [] : pinnedFirst(within(category))
       break
     }
     case 'sub': {
       const category = index.categories.find((c) => c.id === selection.categoryId)
-      notes =
-        category === undefined
-          ? []
-          : pinnedFirst(category.notes.filter((note) => note.subId === selection.subId))
+      notes = category === undefined ? [] : pinnedFirst(within(category, selection.subId))
       break
     }
   }
 
-  const needle = search.trim().toLowerCase()
   if (needle.length === 0) {
     return notes
   }
@@ -96,6 +141,27 @@ export function selectedNotes(
     (note) =>
       note.title.toLowerCase().includes(needle) || note.preview.toLowerCase().includes(needle)
   )
+}
+
+/**
+ * How many archived notes this search would find if it were allowed to look.
+ *
+ * This is what makes the toggle quiet: it is offered only when it would change
+ * the answer. A search that misses nothing shows no control at all, so the
+ * default stays clean and the archive stays out of the way - and the one case
+ * archiving makes worse, "I know I wrote this down somewhere", gets its answer
+ * in the same place the answer was missing.
+ */
+export function archivedHits(
+  index: NibIndex,
+  selection: Selection,
+  filter: ScopeFilter,
+  search: string
+): number {
+  if (search.trim().length === 0 || selection.kind === 'archive') {
+    return 0
+  }
+  return selectedNotes(index, selection, filter, search, true).filter((note) => note.archived).length
 }
 
 /** Does this note still need you, as opposed to carrying only dealt-with flags? */
@@ -125,6 +191,8 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
       return 'Sticky notes'
     case 'alerts':
       return 'Needs you'
+    case 'archive':
+      return 'Archive'
     case 'category':
       return index.categories.find((c) => c.id === selection.categoryId)?.name ?? ''
     case 'sub': {
@@ -160,12 +228,13 @@ export function selectionTarget(
 export function smartCounts(
   index: NibIndex,
   filter: ScopeFilter
-): { all: number; recent: number; sticky: number; alerts: number } {
+): { all: number; recent: number; sticky: number; alerts: number; archived: number } {
   const notes = allNotes(index, filter)
   return {
     all: notes.length,
     recent: Math.min(notes.length, RECENT_LIMIT),
     sticky: notes.filter((note) => note.pinned).length,
+    archived: everyNote(index, filter).filter((note) => note.archived).length,
     // Counted in action points, not in notes: the row answers "how many things
     // need me", and one note can hold several - plus the notes that are
     // themselves the action point.

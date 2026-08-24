@@ -709,6 +709,11 @@ export function Editor({
               unmarked, which read as "no scope" rather than "work". */}
           {category?.scope === 'P' && <span className="tag tag-private">private</span>}
           {category?.scope === 'W' && <span className="tag tag-work">work</span>}
+          {/* The editor shows one note whatever list it came from, so this is
+              where being archived is ambiguous - and where "why is this not in
+              my category" gets its answer. The Archive list needs no such tag:
+              every card in it is archived. */}
+          {note.archived && <span className="tag tag-archived">archived</span>}
         </div>
 
         {selectedImage !== null && (

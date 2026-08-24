@@ -47,6 +47,7 @@ the sidebar for working through them.
 - **Main window**: header with wordmark, version and a search field - `Ctrl+Shift+F` reaches it from anywhere in the window, Escape or its × clears it; 210px sidebar with smart rows, the scope filter, categories, sub-categories, inline rename and the dashed add fields; 280px note list with previews, crumbs, relative times, pin and delete; the editor panel with the toolbar, title, metadata row and the document body.
 - **Editor**: headings, body, bold/italic/underline/strike, inline code, bullet and numbered lists, quote, divider, image insert, 600ms debounced autosave with a Saved/Saving indicator, `Ctrl+Enter` to save now, `Ctrl+Shift+8` for a bullet list, paste and drop of images, and the floating Smaller/Larger/Remove toolbar on a selected image.
 - **Sticky windows**: 280x320, frameless, always on top, tint swatches, editable in place, footer trail. Bound to the pinned note, editing the same file the main window edits.
+- **Archive** in [selection.ts](src/renderer/src/lib/selection.ts): an `archived` flag on the note, filtered out in `allNotes` so the lists, the counts and the alert strip all drop it at once, plus an Archive smart row that appears only when there is something in it and an archive/restore action on every card. Archiving lets go of the pin. Search leaves the archive alone until a line above the cards - offered only when the archive actually holds matches the search is not showing - is clicked. Categories and sub-categories are unchanged: they delete.
 - **Settings**: a popover in the header for the accent colour, the serif body and the measure - the three things the mock left adjustable. Per machine, not synced.
 - **Housekeeping**: images and drawings nothing refers to any more are swept from disk a few seconds after writing stops and once at startup, with a ten-minute grace period so a fresh paste is never mistaken for an orphan.
 - **An installer**: `npm run package` produces a Windows NSIS installer under `dist/`, per-user and unsigned, with a generated app icon in `resources/`.
@@ -72,6 +73,9 @@ the sidebar for working through them.
 - **The packaged build.** `npm run package` produced `dist/Nib Setup 0.1.0.exe`, and the unpacked build started and opened its window.
 - **The canvas.** Drawing with a mouse, switching tools, undoing a stroke and closing it wrote the strokes to `drawings/<id>.json` and a cropped PNG to the assets folder, and the block came back as a thumbnail. Reopening the drawing kept the strokes and let more be added. Closing an untouched canvas removed its block.
 - **Alerts.** Flagging a heading wrote `data-alert` and an id into the note file and an entry into the index; the strip and the "Needs you" row both appeared; the chip jumped back to the flagged block.
+- **Searching with an archive.** A search showed only the live note and said nothing about the archive; a search the archive could not help with offered nothing at all; the offered line named the count, brought the archived match in on one click with an `archived` tag on it, took it out again, and reset itself when the search was cleared.
+- **Archiving.** A pinned, flagged note carrying a block alert left every list, every count and the alert strip; the Archive row appeared; the pin was let go and did not come back on restore; the round trip reached `index.json`. An index planted with `archived` and `pinned` both true - which only a sync can produce - opened no sticky window.
+- **The delete confirmation.** Four fixture categories through the harness - subs and loose notes, one of each for the singular wording, no subs, and empty - each naming exactly what it holds; then a real delete, with the sub-categories gone from the sidebar and the note files, including the ones inside subs, gone from disk.
 
 ## Next steps
 
@@ -91,6 +95,8 @@ start for notes that are still pinned.
 - **Does anything move between Jot and Nib?** Settled for now: nothing automatic. A manual `Add to Jot` button on a flagged line is the shape it would take, and it is not scheduled - see DECISIONS 2026-08-23. Alerts stay in Nib meanwhile, overlap and all.
 
 Settled: the name, the separate-app question, the storage format and location, the
-sub-category depth, the whole visual design, and - as of this session - where
-images live and how the two window types share one renderer bundle.
+sub-category depth, the whole visual design, where images live, how the two window
+types share one renderer bundle, and - as of 2026-08-24 - that archiving is a
+note-level flag beside delete rather than a replacement for it, and that
+categories and sub-categories still only delete.
 See [DECISIONS.md](DECISIONS.md).

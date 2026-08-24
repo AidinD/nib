@@ -1642,3 +1642,75 @@ body.is-sticky-window {
 .card.is-story {
   border-left: 2px solid var(--accent);
 }
+
+/* ------------------------------------------------------------- archive -- */
+
+/*
+ * The Archive row's marker: a hollow square, the quietest of the four.
+ *
+ * Sticky is a filled amber square and an alert is an orange ring, both of which
+ * are asking for attention. The archive is the opposite - a place you go when
+ * you want something, not one that calls to you - so it borrows the border
+ * colour and nothing else.
+ */
+.marker-archive {
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  opacity: 0.7;
+}
+
+/*
+ * The editor's archived tag.
+ *
+ * The Archive list itself needs no marking - every card in it is archived - but
+ * the editor shows one note whatever list opened it, and an archived note open
+ * there looks exactly like a live one. This is the answer to "why is this not in
+ * my category any more".
+ */
+.tag-archived {
+  color: var(--text-dim);
+}
+
+/*
+ * The archive toggle, above the cards.
+ *
+ * Quiet on purpose: it is a footnote to the search, not a filter control. It
+ * borrows the dashed edge of the add fields, which is the app's existing way of
+ * saying "this row is an offer, not content".
+ */
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* The list is a flex column with its own 8px gap; a margin here would double it. */
+  width: 100%;
+  flex: none;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.archive-toggle:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+/* Solid once the archive is actually in the list, so the list never quietly
+   contains more than it looks like it does. */
+.archive-toggle.is-on {
+  border-style: solid;
+  color: var(--text);
+}
+
+.archive-toggle-action {
+  margin-left: auto;
+  color: var(--accent);
+}

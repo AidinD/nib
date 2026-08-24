@@ -73,6 +73,21 @@ export interface NoteMeta {
    * Tend binds Nib folders to people rather than relying on a naming convention.
    */
   kind: NoteKind
+  /**
+   * Out of the way, not gone.
+   *
+   * Notes are reference material, and the regret over a deleted one turns up
+   * months later - so a finished project should be able to leave the sidebar
+   * without leaving the disk. An archived note is filtered out of every list
+   * except the Archive row, and is otherwise an ordinary note: same file, same
+   * category, restorable in one click.
+   *
+   * Only notes archive. A category or a sub-category still deletes, because
+   * archiving one immediately raises "and what about the notes inside it",
+   * which is the question the two delete paths already answer two different
+   * ways. See PLAN's open questions.
+   */
+  archived: boolean
   hasImage: boolean
   hasDrawing: boolean
 }

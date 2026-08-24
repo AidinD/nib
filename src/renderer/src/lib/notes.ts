@@ -229,7 +229,9 @@ export function categoryCount(category: Category): number {
 }
 
 export function subCount(category: Category, subId: string): number {
-  return category.notes.filter((note) => note.subId === subId).length
+  // Archived notes are excluded, because this number is a promise about what
+  // clicking the row will show, and the row's list leaves them out.
+  return category.notes.filter((note) => note.subId === subId && !note.archived).length
 }
 
 /** The `Category › Sub-category` trail shown on cards, in the editor and on stickies. */

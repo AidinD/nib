@@ -14,6 +14,7 @@ interface NoteListProps {
   onOpen: (noteId: string) => void
   onAdd: (title: string, kind?: NoteKind) => void
   onDelete: (note: NoteMeta) => void
+  onArchive: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
   onReorder: (
     noteId: string,
@@ -21,6 +22,10 @@ interface NoteListProps {
   ) => void
   onCycleFlag: (note: NoteMeta) => void
   onTickAlert: (note: NoteMeta, alertId: string, done: boolean) => void
+  /** How many archived notes the current search would reach if it were allowed. */
+  archivedHits: number
+  includeArchived: boolean
+  onIncludeArchived: (include: boolean) => void
 }
 
 /** The 280px middle pane: a header line, an add field, then the cards. */
@@ -32,10 +37,14 @@ export function NoteList({
   onOpen,
   onAdd,
   onDelete,
+  onArchive,
   onTogglePin,
   onReorder,
   onCycleFlag,
-  onTickAlert
+  onTickAlert,
+  archivedHits,
+  includeArchived,
+  onIncludeArchived
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [slot, setSlot] = useState<DropSlot>(null)
@@ -125,6 +134,29 @@ export function NoteList({
         </button>
       </div>
 
+      {/*
+        The archive toggle.
+        
+        Not a permanent switch beside the search field: that would be a control
+        that does nothing almost every time it is looked at, and it would put the
+        archive on the reader's mind constantly - the opposite of filing
+        something away. It appears only when the search actually missed
+        something, says how much, and goes when the search does.
+      */}
+      {archivedHits > 0 && (
+        <button
+          type="button"
+          className={`archive-toggle${includeArchived ? ' is-on' : ''}`}
+          onClick={() => onIncludeArchived(!includeArchived)}
+        >
+          <span className="marker marker-archive" />
+          <span>
+            {archivedHits === 1 ? '1 match' : `${archivedHits} matches`} in the archive
+          </span>
+          <span className="archive-toggle-action">{includeArchived ? 'Hide' : 'Show'}</span>
+        </button>
+      )}
+
       <div
         className="cards"
         onDragLeave={(event) => {
@@ -204,6 +236,26 @@ export function NoteList({
                 >
                   ●
                 </button>
+                {/*
+                  Sits before the delete cross on purpose: the reversible action
+                  is the one the pointer reaches first, and the destructive one
+                  is the one further away. In the archive it reads Restore -
+                  the same button, running the other way.
+                */}
+                <button
+                  type="button"
+                  className="row-action"
+                  title={note.archived ? 'Restore from the archive' : 'Archive: out of the way, not gone'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onArchive(note)
+                  }}
+                >
+                  {/* Down into the archive, up out of it. The first try was
+                      ⌦, which is the erase-forward glyph - a delete sign
+                      sitting next to the actual delete. */}
+                  {note.archived ? '↑' : '↓'}
+                </button>
                 <button
                   type="button"
                   className="row-action danger"
@@ -245,6 +297,11 @@ export function NoteList({
               <div className="card-meta">
                 {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}
                 <span>{relativeTime(note.edited)}</span>
+                {/* Only in a list that mixes the two. The Archive list needs no
+                    marking: every card in it is archived. */}
+                {note.archived && selection.kind !== 'archive' && (
+                  <span className="tag tag-archived">archived</span>
+                )}
                 {note.hasImage && <span className="tag tag-image">image</span>}
                 {note.hasDrawing && <span className="tag tag-drawing">drawing</span>}
               </div>

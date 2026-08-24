@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Category, NibIndex } from '@shared/types'
 import type { NibOps } from '../lib/useNib'
-import { categoryInScope, smartCounts } from '../lib/selection'
+import { categoryInScope, liveNotes, smartCounts } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { subCount } from '../lib/notes'
 import type { DropSlot } from '../lib/dnd'
@@ -82,6 +82,18 @@ export function Sidebar({
             onClick={() => onSelect({ kind: 'alerts' })}
           />
         )}
+        {/* Same rule: the archive is a place you go looking for something, so
+            the row appears once there is something in it and stays out of the
+            way otherwise. */}
+        {counts.archived > 0 && (
+          <SmartRow
+            label="Archive"
+            count={counts.archived}
+            marker="archive"
+            active={selection.kind === 'archive'}
+            onClick={() => onSelect({ kind: 'archive' })}
+          />
+        )}
       </div>
 
       <div className="scope-filter" role="group" aria-label="Scope">
@@ -151,7 +163,7 @@ function SmartRow({
   label: string
   count: number
   active: boolean
-  marker?: 'plain' | 'sticky' | 'alert'
+  marker?: 'plain' | 'sticky' | 'alert' | 'archive'
   onClick: () => void
 }): React.JSX.Element {
   return (
@@ -324,7 +336,7 @@ function CategoryRow({
         <button type="button" className="row-action danger" title="Delete category" onClick={onDelete}>
           ×
         </button>
-        <span className="row-count">{category.notes.length}</span>
+        <span className="row-count">{liveNotes(category).length}</span>
       </div>
 
       {category.open && (

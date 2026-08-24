@@ -29,7 +29,27 @@ import { fileURLToPath } from 'url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
-const PORT = 9333
+/*
+ * The debugging port, overridable because it is shared ground.
+ *
+ * The sibling projects were all built from this file and all picked 9333, so a
+ * Helm run and a Nib run at the same time collide - and the collision is quiet:
+ * Chromium logs "Cannot start http server for devtools" and carries on, our own
+ * `findPage` then finds the OTHER app's window on the port, and the steps drive
+ * it. A steps file that clicks a delete button would have clicked Helm's.
+ * Refusing to start beats attaching to a stranger's renderer.
+ */
+const PORT = Number(process.env.NIB_E2E_PORT ?? 9333)
+
+/** Whether anything already answers on the debugging port. */
+async function portTaken() {
+  try {
+    await fetch(`http://127.0.0.1:${PORT}/json/version`)
+    return true
+  } catch {
+    return false
+  }
+}
 
 function sleep(ms) {
   return new Promise((done) => setTimeout(done, ms))
@@ -192,6 +212,14 @@ function makePage(send) {
 const stepsPath = process.argv[2]
 if (stepsPath === undefined) {
   console.error('Usage: node scripts/e2e.mjs <steps-file.mjs> [--keep]')
+  process.exit(1)
+}
+
+if (await portTaken()) {
+  console.error(
+    `Port ${PORT} is already serving a DevTools endpoint - another app's e2e run is on it.\n` +
+      'Wait for it to finish, or set NIB_E2E_PORT to a free port.'
+  )
   process.exit(1)
 }
 

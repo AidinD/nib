@@ -3,6 +3,130 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - Search reaches the archive only when it would have missed something
+
+**Decided.** A search never shows an archived note by default. When the archive
+holds matches the search is not showing, a line appears above the cards saying so
+and how many, and one click brings them in. Clearing the search clears the choice.
+
+**The problem archiving created.** "I know I wrote this down somewhere" is half
+the reason to archive rather than delete, and hiding archived notes from search
+is precisely what makes that fail. Archiving something and then being unable to
+find it is worse than not having archived it.
+
+**Rejected: a permanent "include archived" checkbox beside the search field.** It
+would be a control that does nothing almost every time it is looked at, and it
+would keep the archive on the reader's mind constantly - which is the opposite of
+filing something away. Worse, it invites being left switched on, and then the
+archive is quietly back in every search.
+
+**So the control is offered rather than parked.** It exists only when it would
+change the answer: no search, no line; a search the archive cannot help with, no
+line. What is left is a footnote that reads "1 match in the archive - Show", in
+the one place the answer was missing. When there is nothing to say, the feature
+is invisible, which is what a default of "don't pollute the search" means.
+
+**The flag widens a search, not a mode.** `selectedNotes` ignores
+`includeArchived` when the needle is empty: honoured with nothing typed, it would
+merge the archive into every list and there would be no archive left. A test
+asserts that, because it is the one line that would quietly undo the whole
+feature.
+
+**It is not remembered between launches, and resets when the search is cleared.**
+A decision made about one search should not silently apply to the next one a week
+later. Filing something away has to keep meaning it stays away.
+
+**An archived card in a mixed list carries an `archived` tag**, since that list is
+now the only place the two can appear side by side. The Archive list itself still
+carries no tags: every card in it is archived.
+
+## 2026-08-24 - Archive is a note-level flag, and delete stays final
+
+**Decided.** `archived` on `NoteMeta`, an Archive smart row, and an archive/restore
+action on every card. Categories and sub-categories still only delete.
+
+**Why archiving at all.** Every delete in Nib was final - no trash, no undo - and
+notes are the kind of thing whose loss is discovered months later, when you go
+looking for something you half remember. That is exactly the case a confirmation
+does not cover: the click was deliberate, the regret was not.
+
+**Notes only, deliberately.** Archiving a category immediately raises "and the
+notes inside it?", which is the question the two delete paths already answer two
+different ways - a category takes its notes, a sub-category does not. A third
+answer on top of those would make the confirmation dialog harder to write than
+the one just fixed, and the dialog is the part that has to stay legible.
+
+**Not a trash, and not a replacement for delete.** Two different needs get
+confused here. Getting a finished project out of the sidebar is what archive is
+for; surviving a mis-click is what a trash is for, and a trash was not built -
+the data is plain files in a synced folder, so file history already covers the
+catastrophic case. An archive that doubled as a safety net would also make the
+delete confirmation feel less final, which makes the mis-click *more* likely.
+
+**The filter lives in `allNotes`**, the one function the lists, the counts and
+the alert strip all pass through - not at each call site. The way this feature
+fails quietly is an archived note that still counts towards "Needs you", or still
+shows in the strip, or inflates a sidebar number the list then contradicts. Tests
+assert each of those, because none of them is visible until weeks later.
+
+**Archiving lets go of the pin.** A sticky window is a note kept in front of you,
+which is the opposite of what archiving says. Restoring does not bring the pin
+back: it was given up, not stashed. The start-up sticky restore also refuses an
+archived note outright, because a synced index can carry a pin from a machine
+that had not archived it yet.
+
+**A category delete still takes the archived notes, and now says so** - "and the
+5 notes inside it, 2 of them archived". Archiving promises "not gone", and the
+sidebar has been showing the smaller number all along, so the count in the dialog
+would otherwise be the first and last warning.
+
+**Verified in the running app**: a pinned, flagged note carrying a block alert
+left every list and every count, the strip went with it, the Archive row appeared,
+the round trip reached `index.json`, and an index planted with `archived` and
+`pinned` both true opened no sticky window.
+
+## 2026-08-24 - The delete confirmation names the sub-categories too
+
+**Decided.** The category delete dialog says what is in the category - the
+sub-categories as well as the notes - and an empty category is not described as
+taking "0 notes" with it.
+
+The dialog's one job is to say what is about to be lost, and it was leaving out a
+whole level of it: `"Work" and 7 notes inside it will be deleted for good.` A
+category holds sub-categories, and deleting it takes them, because they live
+inside the category object the index filters out. Somebody reading that sentence
+with three sub-categories on screen has to already know the answer to trust it.
+
+The note count was never wrong - `Category.notes` is flat and already includes the
+notes sitting in sub-categories - which is exactly why the omission was easy to
+miss. It reads correct and is incomplete.
+
+**The behaviour is unchanged, and worth writing down while it is in view:**
+deleting a category removes the sub-categories and deletes every note file,
+including the ones inside subs; deleting a sub-category keeps its notes and moves
+them up to the category (`subId` becomes null); images and drawings are not
+deleted with either, because they are content-addressed and shared, so
+`note:delete` schedules the orphan sweep instead.
+
+**Verified against the running app**, four fixture categories through
+`scripts/e2e.mjs`: subs and loose notes, one of each for the singular wording,
+no subs, and empty - then a real delete, checking the sub-categories left the
+sidebar and the note files left the disk.
+
+## 2026-08-24 - The e2e harness refuses a port it does not own
+
+**Decided.** `scripts/e2e.mjs` fails if something already answers on the
+debugging port, and `NIB_E2E_PORT` overrides it.
+
+Every sibling app's harness was copied from this one and every copy picked 9333.
+Two runs at once collide, and the collision is silent: Chromium logs `Cannot
+start http server for devtools` and carries on, `findPage` then finds the *other*
+app's window on the port, and the steps drive it. This was found by a Nib run
+attaching to a Helm run - with a steps file whose next click was a delete button.
+
+Failing to start is the whole fix. Guessing a free port would hide the collision
+again, one layer down.
+
 ## 2026-08-24 - Story bank: a note kind, not a folder
 
 **Decided.** `NoteKind` on `NoteMeta`, currently `'' | 'story'`, plus a Story

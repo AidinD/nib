@@ -9,7 +9,7 @@ import { NoteList } from './NoteList'
 import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
-import { selectedNotes } from '../lib/selection'
+import { archivedHits, selectedNotes } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
@@ -28,9 +28,24 @@ function deleteTitle(pending: NonNullable<PendingDelete>): string {
   return pending.kind === 'category' ? 'Delete this category?' : 'Delete this sub-category?'
 }
 
+/** "1 note" / "3 notes", so the message never reads "1 notes". */
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`
+}
+
 /**
  * The message says what goes with it, because that is the part that is easy to
  * get wrong: a category takes its notes, a sub-category does not.
+ *
+ * A category takes its sub-categories too, and the notes counted here include
+ * the ones sitting inside them - the category's note list is flat. Saying only
+ * the note count left the sub-categories unmentioned in the one dialog whose
+ * whole job is to say what is about to be lost.
+ *
+ * The archived ones are counted in the total and then called out, for the same
+ * reason. Archiving promises "not gone", and a delete that silently takes the
+ * archive with it breaks that promise - quietly, since the sidebar has been
+ * showing a smaller number all along.
  */
 function deleteMessage(pending: NonNullable<PendingDelete>): string {
   if (pending.kind === 'note') {
@@ -38,9 +53,17 @@ function deleteMessage(pending: NonNullable<PendingDelete>): string {
     return `"${title.length > 0 ? title : 'Untitled'}" and its text will be deleted for good.`
   }
   if (pending.kind === 'category') {
-    const count = pending.category.notes.length
-    const notes = count === 1 ? '1 note' : `${count} notes`
-    return `"${pending.category.name}" and ${notes} inside it will be deleted for good.`
+    const noteCount = pending.category.notes.length
+    const subCount = pending.category.subs.length
+    if (noteCount === 0 && subCount === 0) {
+      return `"${pending.category.name}" will be deleted for good.`
+    }
+    const notes = plural(noteCount, 'note', 'notes')
+    const contents =
+      subCount > 0 ? `${plural(subCount, 'sub-category', 'sub-categories')} and ${notes}` : notes
+    const archived = pending.category.notes.filter((note) => note.archived).length
+    const aside = archived > 0 ? `, ${archived} of them archived,` : ''
+    return `"${pending.category.name}" and the ${contents} inside it${aside} will be deleted for good.`
   }
   return `"${pending.name}" will be deleted. The notes in it stay, and move up to the category.`
 }
@@ -50,6 +73,14 @@ export function App(): React.JSX.Element {
   const [selection, setSelection] = useState<Selection>({ kind: 'all' })
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [search, setSearch] = useState('')
+  /*
+   * Whether a search is allowed to reach into the archive.
+   *
+   * Off by default and NOT remembered between launches: filing something away
+   * has to mean it stays away, and a preference silently left on from last week
+   * would undo that. It is a widening of one search, not a mode.
+   */
+  const [includeArchived, setIncludeArchived] = useState(false)
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [prefs, setPrefs] = useState(readPrefs)
   // Set when arriving from the alert strip: the editor scrolls to this block and
@@ -61,9 +92,22 @@ export function App(): React.JSX.Element {
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   const notes = useMemo(
-    () => selectedNotes(index, selection, scope, search),
+    () => selectedNotes(index, selection, scope, search, includeArchived),
+    [index, selection, scope, search, includeArchived]
+  )
+
+  const archived = useMemo(
+    () => archivedHits(index, selection, scope, search),
     [index, selection, scope, search]
   )
+
+  // Clearing the search puts the archive back out of reach, so the next search
+  // starts clean rather than inheriting a decision made about a different one.
+  useEffect(() => {
+    if (search.trim().length === 0 && includeArchived) {
+      setIncludeArchived(false)
+    }
+  }, [search, includeArchived])
 
   const activeNote = useMemo(
     () =>
@@ -113,6 +157,25 @@ export function App(): React.JSX.Element {
       await window.nib.closeSticky(note.id)
     }
     await window.nib.deleteNote(note.id)
+  }
+
+  /**
+   * Archive a note, or bring it back.
+   *
+   * A pinned note loses its pin on the way in: a sticky window is a note kept in
+   * front of you, which is the opposite of what archiving it says, and leaving
+   * the two states to disagree would put an archived note back on screen at the
+   * next start.
+   *
+   * The note itself is untouched - same file, same category - so restoring it is
+   * the same click the other way, and there is nothing to undo.
+   */
+  const archiveNote = async (note: NoteMeta): Promise<void> => {
+    ops.setArchived(note.id, !note.archived)
+    if (!note.archived && note.pinned) {
+      ops.setPinned(note.id, false)
+      await window.nib.closeSticky(note.id)
+    }
   }
 
   /** Deleting a category takes its notes' files with it, not just the index rows. */
@@ -298,6 +361,10 @@ export function App(): React.JSX.Element {
             setActiveNoteId(id)
           }}
           onDelete={(note) => setPendingDelete({ kind: 'note', note })}
+          onArchive={(note) => void archiveNote(note)}
+          archivedHits={archived}
+          includeArchived={includeArchived}
+          onIncludeArchived={setIncludeArchived}
           onTogglePin={(note) => void togglePin(note)}
           onReorder={(noteId, landing) => {
             // A drop can be a move and a reorder at once: in the flat lists the
