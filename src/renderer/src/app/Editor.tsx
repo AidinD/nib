@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
-import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut } from '../lib/markdown'
+import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
+import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyImageWidths,
   normaliseBlocks,
+  leaveEmptyItem,
   normaliseLists,
   blockAtSelection,
   bodyHasDrawing,
@@ -81,6 +83,17 @@ export function Editor({
     query: string
     active: number
   } | null>(null)
+  /*
+   * The date picker, when it is up.
+   *
+   * The highlighted day lives here rather than in the component for the same
+   * reason the slash menu's does: the picker takes no focus, so the arrow keys
+   * arrive at the document and are routed on from the editor's key handler.
+   */
+  const [picker, setPicker] = useState<{
+    at: { left: number; top: number }
+    cursor: Date
+  } | null>(null)
   const saveTimer = useRef<number | null>(null)
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
@@ -153,6 +166,7 @@ export function Editor({
     loadedId.current = note.id
     setSelectedImage(null)
     setSlash(null)
+    setPicker(null)
 
     void window.nib.readNote(note.id).then((doc) => {
       if (cancelled || bodyRef.current === null) {
@@ -315,7 +329,16 @@ export function Editor({
       return false
     }
     const before = (node.textContent ?? '').slice(0, range.startOffset)
-    return before.length === 0 || before.endsWith(' ')
+    /*
+     * A non-breaking space counts.
+     *
+     * A contenteditable stores the space at the END of a line as `&nbsp;` -
+     * an ordinary space there would collapse and the line would lose its width.
+     * So `endsWith(' ')` was false for exactly the case this is for: typing
+     * `Deadline: /` and expecting the menu. It opened at the start of a line and
+     * nowhere else, which read as the menu being unreliable.
+     */
+    return before.length === 0 || /[\s\u00a0]$/.test(before)
   }, [])
 
   /** Where the caret is on screen, for hanging the slash menu off. */
@@ -357,8 +380,9 @@ export function Editor({
       return null
     }
     const query = before.slice(at + 1)
-    // A space closes the menu: at that point it is prose, not a command.
-    return query.includes(' ') ? null : query
+    // A space closes the menu: at that point it is prose, not a command. Either
+    // kind of space - see the note on `&nbsp;` above.
+    return /[\s\u00a0]/.test(query) ? null : query
   }, [])
 
   /**
@@ -425,6 +449,9 @@ export function Editor({
     if (element !== null) {
       setWords(wordCount(element.innerHTML))
     }
+    // Typing means the calendar is not what is wanted after all; a stale one
+    // hanging by the caret is worse than no calendar.
+    setPicker(null)
     setSlash((current) => {
       if (current === null) {
         return null
@@ -741,6 +768,28 @@ export function Editor({
   }, [onBodyInput, selectedImage])
 
   /** Take the `/query` back out, then do what was asked. */
+  /**
+   * A divider, and a paragraph after it.
+   *
+   * Not `insertHorizontalRule`: that command leaves the next line typed as a
+   * bare text node under the body, belonging to no block, and the alert marker,
+   * the markdown shortcuts and Tab all work by asking which block the caret is
+   * in. The `---` shortcut goes to the same place.
+   */
+  const addDivider = useCallback(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    withSelection(() => {
+      const line = blockAtSelection(root)
+      if (line !== null && line !== root) {
+        insertDivider(line)
+        onBodyInput()
+      }
+    })
+  }, [onBodyInput, withSelection])
+
   const runSlashCommand = useCallback(
     (command: SlashCommand) => {
       const root = bodyRef.current
@@ -768,8 +817,20 @@ export function Editor({
 
       switch (command.id) {
         case 'today':
-          exec('insertText', new Date().toLocaleDateString('sv-SE'))
+          exec('insertText', formatDate(new Date()))
           break
+        case 'tomorrow':
+          exec('insertText', formatDate(shiftDate(new Date(), { days: 1 })))
+          break
+        case 'date': {
+          // Opened after the query is out of the way, so the calendar hangs off
+          // the caret where the date is going rather than off the slash.
+          const point = caretPoint()
+          if (point !== null) {
+            setPicker({ at: point, cursor: new Date() })
+          }
+          break
+        }
         case 'now':
           exec(
             'insertText',
@@ -797,7 +858,7 @@ export function Editor({
           wrapInCode()
           break
         case 'divider':
-          exec('insertHorizontalRule')
+          addDivider()
           break
         case 'alert':
           toggleAlert()
@@ -808,9 +869,30 @@ export function Editor({
         case 'image':
           pickImage()
           break
+        case 'bold':
+          exec('bold')
+          break
+        case 'italic':
+          exec('italic')
+          break
+        case 'strike':
+          exec('strikeThrough')
+          break
+        case 'clear':
+          exec('removeFormat')
+          break
       }
     },
-    [exec, insertCanvas, pickImage, toggleAlert, wrapInCode]
+    [caretPoint, exec, addDivider, insertCanvas, pickImage, toggleAlert, wrapInCode]
+  )
+
+  /** Write the chosen day where the caret was, and put the calendar away. */
+  const pickDate = useCallback(
+    (date: Date) => {
+      setPicker(null)
+      exec('insertText', formatDate(date))
+    },
+    [exec]
   )
 
   const onBodyKeyDown = useCallback(
@@ -829,6 +911,38 @@ export function Editor({
        * which says something the author did not - and letting focus jump out of
        * the note mid-sentence is worse than nothing happening.
        */
+      /*
+       * The calendar owns the arrows while it is up, and nothing else - so any
+       * other key just goes on typing, and the calendar closes on its own once
+       * the caret has moved on.
+       */
+      if (picker !== null) {
+        const steps: Record<string, { days?: number; months?: number }> = {
+          ArrowLeft: { days: -1 },
+          ArrowRight: { days: 1 },
+          ArrowUp: { days: -7 },
+          ArrowDown: { days: 7 },
+          PageUp: { months: -1 },
+          PageDown: { months: 1 }
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setPicker(null)
+          return
+        }
+        if (event.key === 'Enter' || event.key === 'Tab') {
+          event.preventDefault()
+          pickDate(picker.cursor)
+          return
+        }
+        const step = steps[event.key]
+        if (step !== undefined) {
+          event.preventDefault()
+          setPicker({ ...picker, cursor: shiftDate(picker.cursor, step) })
+          return
+        }
+      }
+
       /*
        * While the menu is up it owns the arrows, Enter, Tab and Escape - and
        * nothing else, so typing keeps filtering it rather than being captured.
@@ -885,6 +999,37 @@ export function Editor({
         }
         return
       }
+      /*
+       * Enter on an EMPTY bullet leaves the list, one level at a time.
+       *
+       * Left to Chromium this is where a nested list falls apart. Pressing Enter
+       * twice in a sub-bullet did not lift the caret out of it - the sub-list was
+       * moved to sit BESIDE its parent item instead, as `<li>Two</li><ul>...</ul>`,
+       * which is invalid (a `ul` cannot be a child of a `ul`) and puts the caret
+       * on a top-level bullet several lines from where the author was looking. The
+       * next line typed then joined the list again. That is the "Enter sometimes
+       * jumps to another line" - the jump was the list being rebuilt underneath it.
+       *
+       * The rule instead is the one every editor uses: an empty sub-bullet
+       * outdents, and an empty top-level bullet becomes a paragraph after the
+       * list. Nothing is restructured, so nothing moves.
+       */
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey) {
+        const root = bodyRef.current
+        const item = root === null ? null : (blockAtSelection(root)?.closest('li') ?? null)
+        if (
+          root !== null &&
+          item !== null &&
+          (item.textContent ?? '').trim().length === 0 &&
+          item.querySelector('ul, ol') === null
+        ) {
+          event.preventDefault()
+          leaveEmptyItem(item)
+          onBodyInput()
+          return
+        }
+      }
+
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault()
         void save()
@@ -912,7 +1057,18 @@ export function Editor({
         setSelectedImage(null)
       }
     },
-    [exec, onBodyInput, removeImage, runSlashCommand, save, selectedImage, slash, toggleAlert]
+    [
+      exec,
+      onBodyInput,
+      picker,
+      pickDate,
+      removeImage,
+      runSlashCommand,
+      save,
+      selectedImage,
+      slash,
+      toggleAlert
+    ]
   )
 
   if (note === null) {
@@ -957,7 +1113,7 @@ export function Editor({
           <button type="button" onClick={() => exec('insertUnorderedList')}>Bullets</button>
           <button type="button" onClick={() => exec('insertOrderedList')}>1. List</button>
           <button type="button" onClick={() => exec('formatBlock', 'blockquote')}>Quote</button>
-          <button type="button" onClick={() => exec('insertHorizontalRule')}>Divider</button>
+          <button type="button" onClick={addDivider}>Divider</button>
         </div>
         <div className="toolbar-group">
           <button type="button" onClick={pickImage}>Image</button>
@@ -1023,6 +1179,15 @@ export function Editor({
           {note.archived && <span className="tag tag-archived">archived</span>}
         </div>
 
+        {picker !== null && (
+          <DatePicker
+            at={picker.at}
+            cursor={picker.cursor}
+            onPick={pickDate}
+            onMove={(date) => setPicker({ ...picker, cursor: date })}
+          />
+        )}
+
         {slash !== null && (
           <SlashMenu
             at={slash.at}
@@ -1064,12 +1229,22 @@ export function Editor({
             // line is the one the pointer is level with.
             const body = bodyRef.current
             if (body !== null && event.clientX - body.getBoundingClientRect().left <= ALERT_GUTTER) {
-              const line = Array.from(body.querySelectorAll<HTMLElement>(ALERT_LINES)).find(
-                (candidate) => {
-                  const box = candidate.getBoundingClientRect()
-                  return event.clientY >= box.top && event.clientY <= box.bottom
-                }
-              )
+              /*
+               * The last match, not the first.
+               *
+               * A list item that contains a sub-list is as tall as all of it, so
+               * the pointer level with a sub-bullet is inside the parent item's
+               * box too - and taking the first match flagged the line above
+               * instead of the one clicked. Document order puts the innermost
+               * item last among the matches.
+               */
+              const candidates = Array.from(
+                body.querySelectorAll<HTMLElement>(ALERT_LINES)
+              ).filter((candidate) => {
+                const box = candidate.getBoundingClientRect()
+                return event.clientY >= box.top && event.clientY <= box.bottom
+              })
+              const line = candidates[candidates.length - 1]
               if (line !== undefined) {
                 cycleAlert(line)
                 return

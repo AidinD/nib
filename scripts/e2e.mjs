@@ -155,6 +155,48 @@ function makePage(send) {
     await sleep(150)
   }
 
+  /** Click a point, for the parts of the app that ARE a point - the flag column. */
+  const clickAt = async (x, y) => {
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', {
+        type,
+        x: Math.round(x),
+        y: Math.round(y),
+        button: 'left',
+        buttons: type === 'mousePressed' ? 1 : 0,
+        clickCount: 1
+      })
+      await sleep(30)
+    }
+    await sleep(150)
+  }
+
+  /**
+   * Move the pointer over an element, so `:hover` rules apply.
+   *
+   * A synthetic mouseMoved, not the desktop cursor - the real pointer belongs to
+   * whoever is using the machine. Anything that only appears on hover needs this
+   * before a screenshot will show it.
+   */
+  const hover = async (selector, offset = { x: 0, y: 0 }) => {
+    const box = await evaluate(`
+      const element = document.querySelector(${JSON.stringify(selector)})
+      if (element === null) { return null }
+      const rect = element.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    `)
+    if (box === null) {
+      throw new Error(`No element matched ${selector}`)
+    }
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(box.x + offset.x),
+      y: Math.round(box.y + offset.y),
+      buttons: 0
+    })
+    await sleep(150)
+  }
+
   /** Type into whatever has focus. */
   const type = async (text) => {
     for (const character of text) {
@@ -221,7 +263,7 @@ function makePage(send) {
     console.log(`wrote ${path}`)
   }
 
-  return { eval: evaluate, click, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
+  return { eval: evaluate, click, clickAt, hover, type, key, enter, tab, waitFor, shot, log: console.log, sleep }
 }
 
 const stepsPath = process.argv[2]

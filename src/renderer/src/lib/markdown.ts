@@ -219,10 +219,29 @@ export function applyDividerShortcut(root: HTMLElement, blockOfCaret: HTMLElemen
     return false
   }
 
+  insertDivider(blockOfCaret, true)
+  return true
+}
+
+/**
+ * Put a divider in, and a paragraph after it for the caret.
+ *
+ * The button and the slash command both come here rather than to
+ * `insertHorizontalRule`, which is where the loose-text bug came from: it left
+ * everything typed after the rule as a bare text node under the body, in no
+ * block at all, and every feature in this editor asks which block the caret is
+ * in. `replace` is for the `---` shortcut, whose line is consumed by the rule.
+ */
+export function insertDivider(blockOfCaret: HTMLElement, replace = false): void {
   const rule = document.createElement('hr')
   const after = document.createElement('p')
   after.appendChild(document.createElement('br'))
-  blockOfCaret.replaceWith(rule)
+
+  if (replace) {
+    blockOfCaret.replaceWith(rule)
+  } else {
+    blockOfCaret.after(rule)
+  }
   rule.after(after)
 
   const range = document.createRange()
@@ -231,5 +250,4 @@ export function applyDividerShortcut(root: HTMLElement, blockOfCaret: HTMLElemen
   const selection = window.getSelection()
   selection?.removeAllRanges()
   selection?.addRange(range)
-  return true
 }

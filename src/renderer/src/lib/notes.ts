@@ -155,6 +155,18 @@ export function normaliseLists(root: HTMLElement): void {
   }
 
   /*
+   * An item inside an item is lifted out to sit after it.
+   *
+   * Chromium's `outdent` leaves this shape - `<li>Two<ul>...</ul><li></li></li>` -
+   * when it takes an item one level out, and it renders as a bullet swallowed by
+   * the one above. Notes written before Enter stopped going through `outdent`
+   * still contain it, so this heals them on the way in.
+   */
+  for (const stray of root.querySelectorAll('li > li')) {
+    stray.parentElement?.after(stray)
+  }
+
+  /*
    * A list inside a paragraph is lifted out of it.
    *
    * `insertUnorderedList` on an empty paragraph wraps rather than replaces:
@@ -348,4 +360,84 @@ export function noteTrail(categories: Category[], note: NoteMeta): string {
   }
   const sub = category.subs.find((s) => s.id === note.subId)
   return sub === undefined ? category.name : `${category.name} › ${sub.name}`
+}
+
+/**
+ * Take an empty list item out of its list - one level, or out altogether.
+ *
+ * Done by moving nodes rather than with `document.execCommand('outdent')`, which
+ * is the one place in this editor where the browser's own command could not be
+ * trusted: it moved the item INSIDE its parent item, and on a sub-list it moved
+ * the whole sub-list out to sit beside the item it belonged to. Both are invalid
+ * HTML, and both put the caret a line or two from where the author was typing.
+ *
+ * The cost of doing it by hand is that this one step is not on the browser's undo
+ * stack, so Ctrl+Z will not put the bullet back. That is the better trade: the
+ * command that was on the undo stack produced a document that had to be repaired
+ * on its next read.
+ *
+ * Items below the empty one travel with it, so the order on screen never changes:
+ * out of a sub-list they become its children, and out of a top-level list they
+ * carry on as a second list below the new paragraph.
+ */
+export function leaveEmptyItem(item: HTMLElement): boolean {
+  const list = item.parentElement
+  if (list === null || (list.tagName !== 'UL' && list.tagName !== 'OL')) {
+    return false
+  }
+
+  const trailing: Element[] = []
+  for (let sibling = item.nextElementSibling; sibling !== null; ) {
+    const next = sibling.nextElementSibling
+    trailing.push(sibling)
+    sibling = next
+  }
+  const collectTrailing = (): HTMLElement | null => {
+    if (trailing.length === 0) {
+      return null
+    }
+    const rest = document.createElement(list.tagName.toLowerCase())
+    for (const node of trailing) {
+      rest.appendChild(node)
+    }
+    return rest
+  }
+
+  const parentItem = list.parentElement?.tagName === 'LI' ? list.parentElement : null
+  const caretInto = (target: HTMLElement): void => {
+    const range = document.createRange()
+    range.setStart(target, 0)
+    range.collapse(true)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }
+
+  if (parentItem !== null) {
+    item.remove()
+    const rest = collectTrailing()
+    if (rest !== null) {
+      item.appendChild(rest)
+    }
+    parentItem.after(item)
+    if (list.childElementCount === 0) {
+      list.remove()
+    }
+    caretInto(item)
+    return true
+  }
+
+  const paragraph = document.createElement('p')
+  paragraph.appendChild(document.createElement('br'))
+  item.remove()
+  list.after(paragraph)
+  const rest = collectTrailing()
+  if (rest !== null) {
+    paragraph.after(rest)
+  }
+  if (list.childElementCount === 0) {
+    list.remove()
+  }
+  caretInto(paragraph)
+  return true
 }

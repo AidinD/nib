@@ -3,6 +3,91 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-24 - Enter in a list is ours, not the browser's
+
+**Decided.** Enter on an empty bullet is handled in Nib: a sub-bullet outdents
+one level, a top-level bullet becomes a paragraph after the list, and items below
+the one being left travel with it. `document.execCommand('outdent')` is no longer
+in that path.
+
+**What went wrong.** Two Enters in a sub-bullet did not walk out of it. Chromium
+moved the whole sub-list out to sit BESIDE the item it belonged to -
+`<li>Two</li><ul>...</ul>` - which is invalid, since a `ul` cannot be a child of
+a `ul`, and put the caret on a new top-level bullet several lines up. The next
+line typed joined the list again. Reported as "Enter at a bullet sometimes jumps
+to another line", and the jump was the list being rebuilt underneath the caret.
+Worse, the invalid shape is exactly what `normaliseLists` repairs on load - so
+the lines moved again the next time the note was opened, which is what made it
+feel intermittent.
+
+**Rejected: let the browser do it and repair afterwards.** That is the pattern
+used everywhere else here, and it is why the editor is small. It fails for this
+one: the repair has to run while the caret is inside the nodes being moved, and
+the shape Chromium produced does not carry enough information to know which item
+the author was on. Repairing on load is fine; repairing under the caret is not.
+
+**The cost is the undo stack.** Moving nodes by hand keeps this one step off the
+browser's own undo, so Ctrl+Z does not put the bullet back. Accepted, because the
+alternative was a command that wrote a document needing repair on its next read.
+Everything else - the markdown shortcuts, every toolbar button - still goes
+through `execCommand` precisely to stay undoable.
+
+**`li > li` is now healed on load too**, so notes already carrying the shape come
+back right rather than staying broken.
+
+## 2026-08-24 - One flag column, outside the bullets
+
+**Decided.** A list item's flag is pushed back out of the list's indent, one step
+per level of nesting, so every line's flag sits in the same column in the
+document's margin. And a flagged line in the main window gets the margin bar
+only - the border-and-padding version is now for sticky windows alone.
+
+**What it looked like.** The flag is positioned relative to its line, and a
+bullet's line starts one indent further in - so the flag was drawn exactly where
+the bullet is, and hovering the document put a grey smudge on every bullet in the
+note. A flagged bullet was worse: two orange bars with the bullet trapped between
+them, and flagging a line shunted its text sideways.
+
+**Rejected: hiding the flag on list items.** Simpler, and it would have taken the
+feature away from the lines most likely to be action points - a bullet is what a
+follow-up gets written as.
+
+**Enumerated per level rather than computed**, because CSS cannot count
+ancestors. Three levels, the same limit the bullet shapes already have.
+
+**And a flagged flag no longer fades on hover.** The reveal-on-hover rule was one
+step more specific than the flagged rule, so moving the pointer into the document
+dimmed every flag that meant something to a quarter.
+
+## 2026-08-24 - `/date` opens a calendar; `/today` does not need one
+
+**Decided.** `/today` and `/tomorrow` insert a date directly. `/date` opens a
+month at the caret, driven by the arrow keys, Enter to take it.
+
+**Why both.** Today's date is one keystroke and the app already knows it; a
+calendar for it would be a click in the way. A date a fortnight out is the case
+worth a calendar - a follow-up, a deadline - and working that out by counting is
+what the calendar exists to stop.
+
+**It takes no focus.** The highlighted day lives in the editor beside the caret it
+is going to write to, and the arrow keys reach it through the same handler as the
+slash menu. A picker that took focus would have lost the caret, and there would
+be nowhere to put the date. Same reason its buttons swallow mousedown.
+
+**Dates are written `YYYY-MM-DD`.** Sortable, unambiguous, and the same string
+whichever command produced it.
+
+## 2026-08-24 - The slash menu counts a non-breaking space as a space
+
+**Decided.** The trigger accepts any whitespace before the `/`, including
+` `.
+
+**Why it had to.** A contenteditable stores the space at the end of a line as
+`&nbsp;`, because an ordinary one would collapse. So `endsWith(' ')` was false in
+exactly the situation the menu is for - typing `Deadline: /` - and the menu opened
+at the start of a line and nowhere else. It read as the menu being unreliable
+rather than as a rule, which is the worst way for a rule to be wrong.
+
 ## 2026-08-24 - Search reaches the archive only when it would have missed something
 
 **Decided.** A search never shows an archived note by default. When the archive

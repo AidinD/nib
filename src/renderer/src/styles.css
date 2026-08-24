@@ -667,6 +667,9 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Named because the flags have to be pushed back out by exactly this much per
+     level of nesting - see the flag rules. */
+  --list-indent: 22px;
   /* The alert column. Every line's marker is drawn in here, so revealing one on
      hover never nudges the text. */
   padding-left: 26px;
@@ -705,7 +708,7 @@ input {
 .doc-body ul,
 .doc-body ol {
   margin: 0 0 10px;
-  padding-left: 22px;
+  padding-left: var(--list-indent);
 }
 
 .doc-body li ul,
@@ -1122,9 +1125,16 @@ body.is-sticky-window {
   border: 1px dashed var(--border);
 }
 
-/* A flagged block in the document, and the same flag in a sticky. The bar is on
-   the left because that is where a reader's eye starts a line. */
-.doc-body [data-alert='1'],
+/*
+ * A flagged line in a sticky window. The bar is on the left because that is
+ * where a reader's eye starts a line.
+ *
+ * The main window does NOT get this treatment: it has the margin bar below,
+ * drawn outside the line, and having both meant a flagged bullet showed two
+ * orange bars with its own bullet trapped between them - and flagging a line
+ * shunted its text 10px to the right, which read as the line jumping. A sticky
+ * has no margin to draw in, so there it stays.
+ */
 .sticky-body [data-alert='1'] {
   position: relative;
   padding-left: 10px;
@@ -1511,6 +1521,34 @@ body.is-sticky-window {
   transition: opacity 100ms ease;
 }
 
+/*
+ * A list item's flag belongs in the document's margin, not on top of its bullet.
+ *
+ * The offset is relative to the line, and a list item's line starts one indent
+ * further in per level of nesting - so the flag landed exactly where the bullet
+ * is drawn and the two became one grey smudge. Each level pushes it back out.
+ *
+ * Enumerated rather than computed because CSS cannot count ancestors; the same
+ * limit the marker shapes already have. Past the third level the flag shares the
+ * margin with the level above it, which is untidy but not wrong.
+ */
+.doc-body li::before {
+  left: calc(-24px - var(--list-indent));
+}
+
+.doc-body li li::before {
+  left: calc(-24px - 2 * var(--list-indent));
+}
+
+.doc-body li li li::before {
+  left: calc(-24px - 3 * var(--list-indent));
+}
+
+/* And the flagged bar sits just outside the bullet, for the same reason. */
+.doc-body li[data-alert]::after {
+  left: calc(2px - var(--list-indent));
+}
+
 /* An empty line has nothing to flag, and a marker beside it is just clutter. */
 .doc-body > p:empty::before,
 .doc-body > p:has(br:only-child)::before {
@@ -1545,8 +1583,16 @@ body.is-sticky-window {
   opacity: 0.6;
 }
 
-/* Flagged: the flag is the alert colour and stays put. */
-.doc-body [data-alert]::before {
+/*
+ * Flagged: the flag is the alert colour and stays put.
+ *
+ * Listed a second time under `:hover` because the reveal-on-hover rule above is
+ * one step more specific than a bare `[data-alert]` - so moving the pointer into
+ * the document faded every flagged line's flag down to a quarter, which is the
+ * opposite of what a flag is for.
+ */
+.doc-body [data-alert]::before,
+.doc-body:hover [data-alert]::before {
   opacity: 1;
   color: var(--alert);
 }
@@ -1570,7 +1616,8 @@ body.is-sticky-window {
   color: var(--text-dim);
 }
 
-.doc-body [data-alert='done']::before {
+.doc-body [data-alert='done']::before,
+.doc-body:hover [data-alert='done']::before {
   color: var(--text-dim);
   opacity: 0.75;
 }
@@ -1831,4 +1878,96 @@ body.is-sticky-window {
 
 *:hover {
   scrollbar-color: var(--surface-hover) transparent;
+}
+
+/* ---------- the date picker ---------- */
+
+/*
+ * Same box as the slash menu, because it is opened from it and lands in the same
+ * place - a second visual language at the caret would read as a second app.
+ */
+.date-picker {
+  position: fixed;
+  z-index: 41;
+  width: 234px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+
+.date-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.date-head button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.date-head button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.date-weekday {
+  padding-bottom: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-align: center;
+}
+
+.date-day {
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The days either side of the month are there to keep the grid a rectangle;
+   they are pickable, but they should not compete with the month itself. */
+.date-day.is-outside {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+/* Today is marked, not selected - a ring rather than a fill, so it never looks
+   like the day about to be written. */
+.date-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.date-day:hover {
+  background: var(--surface-hover);
+}
+
+.date-day.is-active {
+  background: var(--accent);
+  color: #0f1115;
+  font-weight: 600;
+}
+
+.date-hint {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-align: center;
 }

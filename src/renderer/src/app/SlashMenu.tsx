@@ -22,7 +22,9 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { id: 'today', label: 'Today', keywords: ['date', 'datum', 'idag'], hint: 'Insert the date' },
+  { id: 'today', label: 'Today', keywords: ['datum', 'idag'], hint: 'Insert the date' },
+  { id: 'tomorrow', label: 'Tomorrow', keywords: ['imorgon', 'morgon'], hint: 'Tomorrow’s date' },
+  { id: 'date', label: 'Pick a date…', keywords: ['date', 'datum', 'calendar', 'kalender'], hint: 'Calendar' },
   { id: 'now', label: 'Now', keywords: ['time', 'tid', 'nu'], hint: 'Date and time' },
   { id: 'h1', label: 'Heading 1', keywords: ['title', 'rubrik'] },
   { id: 'h2', label: 'Heading 2', keywords: ['subheading', 'rubrik'] },
@@ -35,7 +37,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: 'divider', label: 'Divider', keywords: ['hr', 'line', 'avdelare'] },
   { id: 'alert', label: 'Flag as action point', keywords: ['alert', 'todo', 'flagga'] },
   { id: 'canvas', label: 'Drawing', keywords: ['canvas', 'sketch', 'rita'] },
-  { id: 'image', label: 'Image', keywords: ['picture', 'bild'] }
+  { id: 'image', label: 'Image', keywords: ['picture', 'bild'] },
+  { id: 'bold', label: 'Bold', keywords: ['strong', 'fet'] },
+  { id: 'italic', label: 'Italic', keywords: ['emphasis', 'kursiv'] },
+  { id: 'strike', label: 'Strikethrough', keywords: ['struck', 'genomstruken'] },
+  { id: 'clear', label: 'Clear formatting', keywords: ['plain', 'rensa', 'format'] }
 ]
 
 /** The commands matching what has been typed after the slash. */

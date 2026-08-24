@@ -1,6 +1,6 @@
 # Nib - plan
 
-Last reconciled: 2026-08-23 (fourth pass, after the first round of use).
+Last reconciled: 2026-08-24 (fifth pass, after the first round of writing in it for real).
 
 ## Status
 
@@ -84,11 +84,29 @@ Every requirement on the original list is now built. What is left is smaller:
 1. **Try the canvas with a real stylus.** The pressure curve, the per-tool nibs and the palm rejection are all implemented, but this machine has only a mouse - which reports a constant 0.5 - so none of the pressure behaviour has been seen for real.
 2. The `Select` tool the design spec lists in the canvas strip is not built. Pen, highlighter and eraser are. A dead button seemed worse than a missing one.
 3. Worth considering once alerts have been lived with: whether a flagged block should carry a deadline the way a Jot todo does.
+4. **Editing is the part that use keeps finding faults in**, and they are the faults that matter most, since writing is what the app is for. Fixed so far: markdown shortcuts and a `/` menu (0.4.0), then Enter in a list, the flag column beside bullets, the divider leaving text in no block at all, and the slash menu missing a non-breaking space (0.4.1). Anything else in this area is worth fixing before new features.
+5. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
 sidebar, the editor, persistence, inline images, sticky windows, drag and drop,
 and the mock's three adjustable settings. Sticky windows now also come back on
 start for notes that are still pinned.
+
+## Writing in it, and what that found
+
+The three reports that came out of using it for notes, all in the editor, all
+verified through `scripts/e2e.mjs` before and after:
+
+- **Enter at a bullet sometimes jumped to another line.** It was Chromium moving a
+  whole sub-list out to sit beside its parent item; see DECISIONS.
+- **Something grey appeared around every bullet on hover.** The alert flag was
+  being drawn on top of the bullet, at every level of nesting.
+- **`/date` was missing, and the menu felt unreliable.** The calendar is built,
+  and the unreliability was a non-breaking space.
+
+Two more were found while checking those, neither reported: clicking the flag
+column beside a sub-bullet flagged the line above it, and a flagged line's flag
+faded out when the pointer entered the document.
 
 ## Open questions
 

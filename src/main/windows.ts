@@ -14,7 +14,32 @@ function baseWebPreferences(): Electron.WebPreferences {
     preload,
     sandbox: false,
     contextIsolation: true,
-    nodeIntegration: false
+    nodeIntegration: false,
+    /*
+     * Swedish first, then English.
+     *
+     * The spell checker defaults to the app's own locale, which is English - so
+     * a notebook written in Swedish came up with a red line under almost every
+     * word, and the one language it could not check was the one being used. Both
+     * are listed because notes here mix them freely.
+     */
+    spellcheck: true
+  }
+}
+
+/**
+ * Which dictionaries the spell checker uses.
+ *
+ * Set per window rather than once at startup because a sticky window can be the
+ * first one opened, and a session's languages are only honoured from the point
+ * they are set - the window already loaded keeps the locale it started with.
+ */
+function setDictionaries(window: BrowserWindow): void {
+  try {
+    window.webContents.session.setSpellCheckerLanguages(['sv', 'en-US'])
+  } catch {
+    // An unavailable dictionary throws rather than degrading; English on its own
+    // is better than no window.
   }
 }
 
@@ -62,6 +87,7 @@ export function createMainWindow(): BrowserWindow {
     window.show()
   })
   openLinksExternally(window)
+  setDictionaries(window)
   loadRenderer(window)
   return window
 }
@@ -120,6 +146,7 @@ export function openStickyWindow(noteId: string): BrowserWindow {
     stickyClosedHandler?.(noteId)
   })
   openLinksExternally(window)
+  setDictionaries(window)
   loadRenderer(window, `sticky/${noteId}`)
 
   stickyWindows.set(noteId, window)
