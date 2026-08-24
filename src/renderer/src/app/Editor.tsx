@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
+import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut } from '../lib/markdown'
+import { SlashMenu, matchCommands } from './SlashMenu'
+import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyImageWidths,
+  normaliseBlocks,
   normaliseLists,
   blockAtSelection,
   bodyHasDrawing,
@@ -64,6 +68,19 @@ export function Editor({
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null)
   // The drawing currently open over the document, if any.
   const [openDrawingId, setOpenDrawingId] = useState<string | null>(null)
+  /*
+   * The slash menu, when it is up.
+   *
+   * `query` is read back out of the document on every keystroke rather than
+   * accumulated here, so backspacing over the query narrows the menu again and
+   * deleting the slash itself closes it - no second copy of the text to keep in
+   * step.
+   */
+  const [slash, setSlash] = useState<{
+    at: { left: number; top: number }
+    query: string
+    active: number
+  } | null>(null)
   const saveTimer = useRef<number | null>(null)
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
@@ -135,6 +152,7 @@ export function Editor({
     let cancelled = false
     loadedId.current = note.id
     setSelectedImage(null)
+    setSlash(null)
 
     void window.nib.readNote(note.id).then((doc) => {
       if (cancelled || bodyRef.current === null) {
@@ -144,6 +162,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       const loadedTitle = doc?.title ?? note.title
       titleRef.current = loadedTitle
@@ -187,6 +206,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       titleRef.current = doc.title
       setTitle(doc.title)
@@ -270,13 +290,154 @@ export function Editor({
     run()
   }, [])
 
+  /*
+   * New lines are paragraphs, not divs.
+   *
+   * A document-wide switch rather than a per-element one, so it is set once.
+   * Everything that asks "which line is the caret on" looks for a paragraph, a
+   * heading, a list item or a quote, and a div is none of those: with Chromium's
+   * default the alert marker, the markdown shortcuts and Tab all went quiet from
+   * the second line of a note onwards.
+   */
+  useEffect(() => {
+    document.execCommand('defaultParagraphSeparator', false, 'p')
+  }, [])
+
+  /** Whether the character before the caret is a space - see the slash trigger. */
+  const endsWithSpace = useCallback((): boolean => {
+    const selection = window.getSelection()
+    if (selection === null || selection.rangeCount === 0) {
+      return false
+    }
+    const range = selection.getRangeAt(0)
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) {
+      return false
+    }
+    const before = (node.textContent ?? '').slice(0, range.startOffset)
+    return before.length === 0 || before.endsWith(' ')
+  }, [])
+
+  /** Where the caret is on screen, for hanging the slash menu off. */
+  const caretPoint = useCallback((): { left: number; top: number } | null => {
+    const selection = window.getSelection()
+    if (selection === null || selection.rangeCount === 0) {
+      return null
+    }
+    const rects = selection.getRangeAt(0).getClientRects()
+    const rect = rects.length > 0 ? rects[0] : selection.getRangeAt(0).getBoundingClientRect()
+    return { left: rect.left, top: rect.bottom + 4 }
+  }, [])
+
+  /**
+   * The text between the slash and the caret, or null when there is no live
+   * slash any more.
+   *
+   * Read from the DOM because that is the only copy that cannot drift: a space
+   * ends it, backspacing over the slash ends it, and moving the caret elsewhere
+   * ends it.
+   */
+  const slashQuery = useCallback((): string | null => {
+    const root = bodyRef.current
+    const selection = window.getSelection()
+    if (root === null || selection === null || selection.rangeCount === 0) {
+      return null
+    }
+    const range = selection.getRangeAt(0)
+    if (!range.collapsed || !root.contains(range.startContainer)) {
+      return null
+    }
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) {
+      return null
+    }
+    const before = (node.textContent ?? '').slice(0, range.startOffset)
+    const at = before.lastIndexOf('/')
+    if (at === -1) {
+      return null
+    }
+    const query = before.slice(at + 1)
+    // A space closes the menu: at that point it is prose, not a command.
+    return query.includes(' ') ? null : query
+  }, [])
+
+  /**
+   * The markdown shortcuts listen to `beforeinput`, not to `keydown`.
+   *
+   * `keydown` was the first attempt and it is the wrong event: it only knows
+   * about keys. Text also arrives from an IME, from dictation and from a paste,
+   * and none of those press a key - so `## ` typed with a Swedish IME, or a line
+   * pasted in, would silently not format. `beforeinput` fires for every one of
+   * them and says what is about to be inserted.
+   *
+   * A native listener rather than React's synthetic `onBeforeInput`, whose
+   * event does not carry `inputType` reliably across versions - and `inputType`
+   * is what tells an Enter apart from a character.
+   */
+  useEffect(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const onBeforeInput = (event: Event): void => {
+      const input = event as InputEvent
+      const line = blockAtSelection(root)
+      let handled = false
+
+      if (input.inputType === 'insertParagraph') {
+        handled = applyDividerShortcut(root, line)
+      } else if (input.data === ' ') {
+        handled = applyBlockShortcut(root, line)
+      } else if (input.data === '*' || input.data === '`' || input.data === '_') {
+        handled = applyInlineShortcut(root, input.data)
+      } else if (input.data === '/') {
+        /*
+         * The slash is inserted as typed - it is text until a command is picked,
+         * and taking it out early would make the menu feel like it swallowed a
+         * keystroke. Only opened at the start of a line or after a space, so
+         * `and/or` and a path stay prose.
+         */
+        const line = blockAtSelection(root)
+        const query = slashQuery()
+        if (query === null && (line === null || line.textContent === '' || endsWithSpace())) {
+          window.setTimeout(() => {
+            const point = caretPoint()
+            if (point !== null) {
+              setSlash({ at: point, query: '', active: 0 })
+            }
+          }, 0)
+        }
+      }
+
+      if (handled) {
+        event.preventDefault()
+        onBodyInput()
+      }
+    }
+    root.addEventListener('beforeinput', onBeforeInput)
+    return () => {
+      root.removeEventListener('beforeinput', onBeforeInput)
+    }
+  })
+
   const onBodyInput = useCallback(() => {
     const element = bodyRef.current
     if (element !== null) {
       setWords(wordCount(element.innerHTML))
     }
+    setSlash((current) => {
+      if (current === null) {
+        return null
+      }
+      const query = slashQuery()
+      if (query === null) {
+        return null
+      }
+      // The highlight goes back to the top when the matches change under it.
+      return { ...current, query, active: 0 }
+    })
     scheduleSave()
-  }, [scheduleSave])
+  }, [scheduleSave, slashQuery])
 
   /**
    * Rich text through the browser's own editing commands.
@@ -579,6 +740,79 @@ export function Editor({
     onBodyInput()
   }, [onBodyInput, selectedImage])
 
+  /** Take the `/query` back out, then do what was asked. */
+  const runSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      const root = bodyRef.current
+      setSlash(null)
+      if (root === null) {
+        return
+      }
+      const selection = window.getSelection()
+      if (selection !== null && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const node = range.startContainer
+        if (node.nodeType === Node.TEXT_NODE) {
+          const before = (node.textContent ?? '').slice(0, range.startOffset)
+          const at = before.lastIndexOf('/')
+          if (at !== -1) {
+            const cut = document.createRange()
+            cut.setStart(node, at)
+            cut.setEnd(node, range.startOffset)
+            selection.removeAllRanges()
+            selection.addRange(cut)
+            document.execCommand('delete')
+          }
+        }
+      }
+
+      switch (command.id) {
+        case 'today':
+          exec('insertText', new Date().toLocaleDateString('sv-SE'))
+          break
+        case 'now':
+          exec(
+            'insertText',
+            new Date().toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
+          )
+          break
+        case 'h1':
+        case 'h2':
+        case 'h3':
+          exec('formatBlock', command.id)
+          break
+        case 'body':
+          exec('formatBlock', 'p')
+          break
+        case 'bullets':
+          exec('insertUnorderedList')
+          break
+        case 'numbers':
+          exec('insertOrderedList')
+          break
+        case 'quote':
+          exec('formatBlock', 'blockquote')
+          break
+        case 'code':
+          wrapInCode()
+          break
+        case 'divider':
+          exec('insertHorizontalRule')
+          break
+        case 'alert':
+          toggleAlert()
+          break
+        case 'canvas':
+          insertCanvas()
+          break
+        case 'image':
+          pickImage()
+          break
+      }
+    },
+    [exec, insertCanvas, pickImage, toggleAlert, wrapInCode]
+  )
+
   const onBodyKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       /*
@@ -595,6 +829,33 @@ export function Editor({
        * which says something the author did not - and letting focus jump out of
        * the note mid-sentence is worse than nothing happening.
        */
+      /*
+       * While the menu is up it owns the arrows, Enter, Tab and Escape - and
+       * nothing else, so typing keeps filtering it rather than being captured.
+       */
+      if (slash !== null) {
+        const matches = matchCommands(slash.query)
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setSlash(null)
+          return
+        }
+        if (matches.length > 0 && (event.key === 'Enter' || event.key === 'Tab')) {
+          event.preventDefault()
+          runSlashCommand(matches[Math.min(slash.active, matches.length - 1)])
+          return
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault()
+          const step = event.key === 'ArrowDown' ? 1 : -1
+          setSlash({
+            ...slash,
+            active: (slash.active + step + matches.length) % Math.max(1, matches.length)
+          })
+          return
+        }
+      }
+
       if (event.key === 'Tab') {
         event.preventDefault()
         const root = bodyRef.current
@@ -651,7 +912,7 @@ export function Editor({
         setSelectedImage(null)
       }
     },
-    [exec, removeImage, save, selectedImage, toggleAlert]
+    [exec, onBodyInput, removeImage, runSlashCommand, save, selectedImage, slash, toggleAlert]
   )
 
   if (note === null) {
@@ -761,6 +1022,16 @@ export function Editor({
               every card in it is archived. */}
           {note.archived && <span className="tag tag-archived">archived</span>}
         </div>
+
+        {slash !== null && (
+          <SlashMenu
+            at={slash.at}
+            query={slash.query}
+            active={slash.active}
+            onPick={runSlashCommand}
+            onHover={(index) => setSlash({ ...slash, active: index })}
+          />
+        )}
 
         {selectedImage !== null && (
           <div className="image-toolbar">

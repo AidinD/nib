@@ -87,11 +87,93 @@ export function applyCanvasBlocks(root: HTMLElement): void {
  * the note file is the durable artefact here, and it should be something another
  * renderer can read correctly.
  */
+/**
+ * Make the body's own blocks paragraphs.
+ *
+ * Chromium's default block for a new line is `div`, and a div is invisible to
+ * everything in this app that asks "which line am I on": the alert marker, the
+ * markdown shortcuts and Tab all look for a paragraph, a heading, a list item or
+ * a quote. Notes typed before the paragraph separator was set carry divs, so they
+ * are converted on load rather than left as lines the editor cannot see.
+ *
+ * A canvas block is a div too, and stays one - it is not a line of text.
+ */
+export function normaliseBlocks(root: HTMLElement): void {
+  for (const child of Array.from(root.children)) {
+    if (child.tagName !== 'DIV' || (child as HTMLElement).dataset.canvas !== undefined) {
+      continue
+    }
+    const paragraph = document.createElement('p')
+    while (child.firstChild !== null) {
+      paragraph.appendChild(child.firstChild)
+    }
+    child.replaceWith(paragraph)
+  }
+
+  /*
+   * Text sitting directly under the body, in no block at all, is adopted by a
+   * paragraph.
+   *
+   * It happens after a divider - and it is the worst kind of broken, because it
+   * looks perfectly normal and nothing works on it: no alert marker, no markdown
+   * shortcut, no Tab, since every one of them asks which block the caret is in.
+   */
+  let loose: ChildNode[] = []
+  const adopt = (): void => {
+    if (loose.length === 0) {
+      return
+    }
+    const paragraph = document.createElement('p')
+    loose[0].before(paragraph)
+    for (const node of loose) {
+      paragraph.appendChild(node)
+    }
+    loose = []
+  }
+  for (const node of Array.from(root.childNodes)) {
+    const isBlock =
+      node.nodeType === Node.ELEMENT_NODE &&
+      /^(P|H1|H2|H3|H4|UL|OL|BLOCKQUOTE|PRE|HR|DIV|TABLE)$/.test((node as Element).tagName)
+    if (isBlock) {
+      adopt()
+      continue
+    }
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length === 0) {
+      continue
+    }
+    loose.push(node)
+  }
+  adopt()
+}
+
 export function normaliseLists(root: HTMLElement): void {
   for (const nested of root.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol')) {
     const previous = nested.previousElementSibling
     if (previous?.tagName === 'LI') {
       previous.appendChild(nested)
+    }
+  }
+
+  /*
+   * A list inside a paragraph is lifted out of it.
+   *
+   * `insertUnorderedList` on an empty paragraph wraps rather than replaces:
+   * `<p><ul><li>...</li></ul></p>`. It looks right on screen and is invalid, so
+   * the parser rearranges it the next time the note is read from disk - which is
+   * how a note full of bullets came back as one run-together paragraph.
+   */
+  for (const list of root.querySelectorAll('p > ul, p > ol')) {
+    const paragraph = list.parentElement
+    if (paragraph === null) {
+      continue
+    }
+    const hasOtherContent = Array.from(paragraph.childNodes).some(
+      (node) => node !== list && (node.textContent ?? '').trim().length > 0
+    )
+    if (hasOtherContent) {
+      paragraph.after(list)
+    } else {
+      paragraph.replaceWith(list)
     }
   }
 }
