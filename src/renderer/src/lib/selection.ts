@@ -9,6 +9,14 @@ export type Selection =
   | { kind: 'archive' }
   | { kind: 'category'; categoryId: string }
   | { kind: 'sub'; categoryId: string; subId: string }
+  /**
+   * Every note carrying one tag, wherever it is filed.
+   *
+   * Cutting across the categories is the whole point of it: a tag answers "all
+   * my 1-1 notes" and a folder answers "everything about this person", and
+   * neither can answer the other's question.
+   */
+  | { kind: 'tag'; tagId: string }
 
 /** The sidebar's Work/Private segmented control. */
 export type ScopeFilter = 'all' | 'W' | 'P'
@@ -90,6 +98,9 @@ export function selectedNotes(
       break
     case 'sticky':
       notes = pool().filter((note) => note.pinned)
+      break
+    case 'tag':
+      notes = pinnedFirst(pool().filter((note) => note.tags.includes(selection.tagId)))
       break
     /*
      * The review view: every note carrying a flag at all, outstanding ones
@@ -193,6 +204,8 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
       return 'Needs you'
     case 'archive':
       return 'Archive'
+    case 'tag':
+      return index.tags.find((tag) => tag.id === selection.tagId)?.name ?? 'Tag'
     case 'category':
       return index.categories.find((c) => c.id === selection.categoryId)?.name ?? ''
     case 'sub': {
@@ -205,6 +218,9 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
 export function selectionColor(index: NibIndex, selection: Selection): string {
   if (selection.kind === 'category' || selection.kind === 'sub') {
     return index.categories.find((c) => c.id === selection.categoryId)?.color ?? '#9a9da3'
+  }
+  if (selection.kind === 'tag') {
+    return index.tags.find((tag) => tag.id === selection.tagId)?.color ?? '#9a9da3'
   }
   if (selection.kind === 'sticky') {
     return '#ffb054'

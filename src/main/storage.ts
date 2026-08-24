@@ -119,6 +119,7 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     pinned: raw?.pinned === true,
     tint: str(raw?.tint),
     alerts: normalizeAlerts(raw?.alerts),
+    links: normalizeIds(raw?.links),
     flag: normalizeFlag(raw),
     kind: raw?.kind === 'story' ? 'story' : '',
     tags: normalizeTagIds(raw?.tags),
@@ -126,6 +127,21 @@ function normalizeNoteMeta(raw: any, categoryId: string, subIds: Set<string>): N
     hasImage: raw?.hasImage === true,
     hasDrawing: raw?.hasDrawing === true
   }
+}
+
+/** A list of ids, from anything. Empty strings and duplicates are dropped. */
+function normalizeIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const seen = new Set<string>()
+  for (const value of raw) {
+    const id = str(value)
+    if (id.length > 0) {
+      seen.add(id)
+    }
+  }
+  return [...seen]
 }
 
 function normalizeCategory(raw: any): Category {

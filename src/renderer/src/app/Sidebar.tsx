@@ -16,6 +16,7 @@ interface SidebarProps {
   ops: NibOps
   onDeleteCategory: (category: Category) => void
   onDeleteSub: (categoryId: string, subId: string, name: string) => void
+  onDeleteTag: (tagId: string, name: string) => void
 }
 
 /** Which row a dragged note is currently hovering over. */
@@ -37,10 +38,32 @@ export function Sidebar({
   onScope,
   ops,
   onDeleteCategory,
-  onDeleteSub
+  onDeleteSub,
+  onDeleteTag
 }: SidebarProps): React.JSX.Element {
   const counts = smartCounts(index, scope)
   const categories = index.categories.filter((category) => categoryInScope(category, scope))
+  /**
+   * Tags that are actually on something, with how many notes each is on.
+   *
+   * A tag nobody has used is not listed. It still exists, still shows in the
+   * picker, and appears here the moment it is put on a note - which keeps this
+   * a list of what your notebook contains rather than a list of what you once
+   * typed.
+   */
+  const tagRows = index.tags
+    .map((tag) => ({
+      tag,
+      count: index.categories
+        .filter((category) => categoryInScope(category, scope))
+        .reduce(
+          (total, category) =>
+            total + category.notes.filter((note) => !note.archived && note.tags.includes(tag.id)).length,
+          0
+        )
+    }))
+    .filter((row) => row.count > 0)
+
   const [categorySlot, setCategorySlot] = useState<DropSlot>(null)
   const [noteTarget, setNoteTarget] = useState<NoteTarget>(null)
 
@@ -95,6 +118,43 @@ export function Sidebar({
           />
         )}
       </div>
+
+      {/*
+        Tags, listed only once at least one note carries one.
+        
+        Same rule the Archive and Needs-you rows follow: a section reading zero
+        is furniture. It sits below the smart rows and above the categories
+        because that is what it is - a way of cutting across the filing rather
+        than a part of it.
+      */}
+      {tagRows.length > 0 && (
+        <div className="tag-rows">
+          <div className="tag-rows-head">Tags</div>
+          {tagRows.map(({ tag, count }) => (
+            <div key={tag.id} className="tag-row-holder">
+              <button
+                type="button"
+                className={`row smart-row${
+                  selection.kind === 'tag' && selection.tagId === tag.id ? ' is-active' : ''
+                }`}
+                onClick={() => onSelect({ kind: 'tag', tagId: tag.id })}
+              >
+                <span className="marker" style={{ background: tag.color }} />
+                <span className="row-label">{tag.name}</span>
+                <span className="row-count">{count}</span>
+              </button>
+              <button
+                type="button"
+                className="row-action danger tag-row-delete"
+                title={`Delete the tag "${tag.name}". Notes keep it and get it back if you re-create it.`}
+                onClick={() => onDeleteTag(tag.id, tag.name)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="scope-filter" role="group" aria-label="Scope">
         {(

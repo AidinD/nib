@@ -8,6 +8,11 @@ import { selectionColor, selectionShowsCrumb, selectionTarget, selectionTitle } 
 import type { DropSlot } from '../lib/dnd'
 import { DRAG_MIME, draggedItem, endDrag, readDrop, slotEquals, slotFor, startDrag } from '../lib/dnd'
 
+/** Action points in a note that are still open - the ticked ones do not count. */
+function openPoints(note: NoteMeta): number {
+  return note.alerts.filter((alert) => !alert.done).length
+}
+
 interface NoteListProps {
   index: NibIndex
   selection: Selection
@@ -215,6 +220,26 @@ export function NoteList({
                 <span className="card-title">
                   {note.title.length > 0 ? note.title : 'Untitled'}
                 </span>
+                {/*
+                  Action points INSIDE the note, which the card said nothing about
+                  before: a note could hold three unanswered promises and look
+                  exactly like one holding none.
+
+                  Beside the title rather than among the buttons to its right,
+                  even though the flag glyph is over there. That row is what you
+                  can DO to the card, and it appears on hover; this is a fact
+                  about the note, so it belongs with the note's name and it stays
+                  visible. It also cannot be the left edge - a flagged NOTE
+                  already owns that - so the two never say the same thing twice.
+                */}
+                {openPoints(note) > 0 && (
+                  <span
+                    className="card-points"
+                    title={`${openPoints(note)} action ${openPoints(note) === 1 ? 'point' : 'points'} in this note`}
+                  >
+                    ⚑ {openPoints(note)}
+                  </span>
+                )}
                 {/* The whole note as an action point, for the cards that are
                     themselves the thing to do. Same three states as a line. */}
                 <button

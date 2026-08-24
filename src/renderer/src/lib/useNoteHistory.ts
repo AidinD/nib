@@ -28,8 +28,27 @@ export interface NoteHistory {
 export function useNoteHistory(open: (noteId: string) => void): NoteHistory {
   const trail = useRef<string[]>([])
   const cursor = useRef(-1)
+  /*
+   * `open` is held in a ref, not in a dependency array.
+   *
+   * The caller's version of it closes over the index and the current selection, so
+   * it is a new function on every render - and a dependency on it would tear down
+   * and re-attach the mouse and keyboard listeners every time anything on screen
+   * changed.
+   */
+  const openRef = useRef(open)
+  openRef.current = open
 
   const visit = useCallback((noteId: string) => {
+    /*
+     * Already here: nothing to record.
+     *
+     * This is also what makes walking the trail safe. `visit` is called from an
+     * effect that watches which note is open, so a step back opens a note and the
+     * effect immediately offers it back to be recorded - and this line drops it,
+     * because the cursor already points at it. Without it, going back would append
+     * and there would always be somewhere further back to go.
+     */
     if (trail.current[cursor.current] === noteId) {
       return
     }
@@ -44,19 +63,16 @@ export function useNoteHistory(open: (noteId: string) => void): NoteHistory {
     cursor.current = trail.current.length - 1
   }, [])
 
-  const step = useCallback(
-    (direction: -1 | 1): string | null => {
-      const next = cursor.current + direction
-      const noteId = trail.current[next]
-      if (noteId === undefined) {
-        return null
-      }
-      cursor.current = next
-      open(noteId)
-      return noteId
-    },
-    [open]
-  )
+  const step = useCallback((direction: -1 | 1): string | null => {
+    const next = cursor.current + direction
+    const noteId = trail.current[next]
+    if (noteId === undefined) {
+      return null
+    }
+    cursor.current = next
+    openRef.current(noteId)
+    return noteId
+  }, [])
 
   const back = useCallback(() => step(-1), [step])
   const forward = useCallback(() => step(1), [step])

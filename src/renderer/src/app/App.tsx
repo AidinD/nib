@@ -10,6 +10,7 @@ import { NoteList } from './NoteList'
 import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
+import { useNoteHistory } from '../lib/useNoteHistory'
 import { archivedHits, selectedNotes } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
@@ -20,11 +21,15 @@ type PendingDelete =
   | { kind: 'note'; note: NoteMeta }
   | { kind: 'category'; category: Category }
   | { kind: 'sub'; categoryId: string; subId: string; name: string }
+  | { kind: 'tag'; tagId: string; name: string; notes: number }
   | null
 
 function deleteTitle(pending: NonNullable<PendingDelete>): string {
   if (pending.kind === 'note') {
     return 'Delete this note?'
+  }
+  if (pending.kind === 'tag') {
+    return 'Delete this tag?'
   }
   return pending.kind === 'category' ? 'Delete this category?' : 'Delete this sub-category?'
 }
@@ -65,6 +70,13 @@ function deleteMessage(pending: NonNullable<PendingDelete>): string {
     const archived = pending.category.notes.filter((note) => note.archived).length
     const aside = archived > 0 ? `, ${archived} of them archived,` : ''
     return `"${pending.category.name}" and the ${contents} inside it${aside} will be deleted for good.`
+  }
+  if (pending.kind === 'tag') {
+    // Worth saying out loud, because it is the opposite of what deleting
+    // usually means here: the notes keep the id, so re-creating the tag with
+    // the same name brings every chip back. Nothing is lost, it stops showing.
+    const on = pending.notes > 0 ? ` It is on ${plural(pending.notes, 'note', 'notes')}.` : ''
+    return `"${pending.name}" will stop appearing.${on} The notes themselves keep it, so making the tag again brings it back.`
   }
   return `"${pending.name}" will be deleted. The notes in it stay, and move up to the category.`
 }
@@ -240,6 +252,30 @@ export function App(): React.JSX.Element {
     setActiveNoteId(note.id)
   }
 
+  /*
+   * The trail of notes visited, walked with the mouse's side buttons or
+   * Alt+Arrow.
+   *
+   * Recorded from an effect on the open note rather than at each place that opens
+   * one - a card, a link in the text, the action-point strip, a fresh note - so
+   * there is no path that navigates without being recorded, and no list of call
+   * sites to keep in step.
+   */
+  const history = useNoteHistory((noteId) => {
+    const target = index.categories
+      .flatMap((category) => category.notes)
+      .find((candidate) => candidate.id === noteId)
+    if (target !== undefined) {
+      revealNote(target)
+    }
+  })
+
+  useEffect(() => {
+    if (activeNoteId !== null) {
+      history.visit(activeNoteId)
+    }
+  }, [activeNoteId, history.visit])
+
   /** Pinning a note is what produces its sticky window, and unpinning closes it. */
   const togglePin = async (note: NoteMeta): Promise<void> => {
     ops.togglePin(note.id)
@@ -267,6 +303,12 @@ export function App(): React.JSX.Element {
       await deleteNote(pending.note)
     } else if (pending.kind === 'category') {
       await deleteCategory(pending.category)
+    } else if (pending.kind === 'tag') {
+      ops.deleteTag(pending.tagId)
+      // The list you were looking at just stopped existing.
+      if (selection.kind === 'tag' && selection.tagId === pending.tagId) {
+        setSelection({ kind: 'all' })
+      }
     } else {
       ops.deleteSub(pending.categoryId, pending.subId)
     }
@@ -357,6 +399,18 @@ export function App(): React.JSX.Element {
           onDeleteCategory={(category) => setPendingDelete({ kind: 'category', category })}
           onDeleteSub={(categoryId, subId, name) =>
             setPendingDelete({ kind: 'sub', categoryId, subId, name })
+          }
+          onDeleteTag={(tagId, name) =>
+            setPendingDelete({
+              kind: 'tag',
+              tagId,
+              name,
+              notes: index.categories.reduce(
+                (total, category) =>
+                  total + category.notes.filter((note) => note.tags.includes(tagId)).length,
+                0
+              )
+            })
           }
         />
 

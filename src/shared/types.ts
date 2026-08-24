@@ -54,6 +54,20 @@ export interface NoteMeta {
   /** The action points flagged inside this note, in document order. */
   alerts: AlertMeta[]
   /**
+   * The notes this one links to, by id.
+   *
+   * Kept here rather than worked out from the text when it is needed, because the
+   * question actually asked is the reverse one - "what points AT this note" - and
+   * answering that from the text would mean reading every note in the notebook
+   * every time one was opened. With this field it is a walk over the index, which
+   * is in memory already.
+   *
+   * Written from the document on every save, so it cannot drift from the text.
+   * Ids are not validated against anything: a link to a deleted note stays in the
+   * list and is shown as gone, which is the honest answer.
+   */
+  links: string[]
+  /**
    * The whole note as an action point, rather than a line inside it.
    *
    * Some notes are the action - a card that says "call the contractor" has no
