@@ -208,6 +208,37 @@ export function App(): React.JSX.Element {
     }
   }
 
+  /**
+   * Show a note where it lives, not just in the editor.
+   *
+   * Opening an action point from the strip used to load the note and leave the
+   * rest of the window where it was, so the note appeared with no clue as to
+   * which category it came from - and the list beside it was still showing
+   * something else entirely.
+   *
+   * Three things could hide it once we get there, and all three are cleared:
+   * a collapsed category, a scope filter the note is not in, and a search that
+   * it does not match. Landing on an empty list is worse than not navigating.
+   */
+  const revealNote = (note: NoteMeta): void => {
+    const category = index.categories.find((candidate) => candidate.id === note.categoryId)
+    if (category !== undefined && scope !== 'all' && category.scope !== scope) {
+      setScope('all')
+    }
+    if (search.trim().length > 0) {
+      setSearch('')
+    }
+    if (category !== undefined && !category.open && note.subId !== null) {
+      ops.setCategoryOpen(note.categoryId, true)
+    }
+    setSelection(
+      note.subId === null
+        ? { kind: 'category', categoryId: note.categoryId }
+        : { kind: 'sub', categoryId: note.categoryId, subId: note.subId }
+    )
+    setActiveNoteId(note.id)
+  }
+
   /** Pinning a note is what produces its sticky window, and unpinning closes it. */
   const togglePin = async (note: NoteMeta): Promise<void> => {
     ops.togglePin(note.id)
@@ -307,7 +338,7 @@ export function App(): React.JSX.Element {
         index={index}
         scope={scope}
         onOpen={(note, alertId) => {
-          setActiveNoteId(note.id)
+          revealNote(note)
           setFocusAlertId(alertId)
         }}
         onShowAll={() => setSelection({ kind: 'alerts' })}
