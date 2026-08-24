@@ -49,12 +49,12 @@ try {
   })
   if (existing.trim().length > 0) {
     console.error(
-      `
-v${version} is already released on GitHub. Bump the version in package.json,
-` +
-        'commit, and run this again. Publishing over it would upload the installer and
-' +
+      [
+        '',
+        `v${version} is already released on GitHub. Bump the version in package.json,`,
+        'commit, and run this again. Publishing over it would upload the installer and',
         'silently skip latest.yml, which leaves the updater on the old build.'
+      ].join('\n')
     )
     process.exit(1)
   }
