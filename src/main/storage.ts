@@ -1,11 +1,10 @@
-import { randomBytes } from 'crypto'
 import {
   promises as fs,
   watch as watchFs,
   watchFile as watchFileFs,
   unwatchFile as unwatchFileFs
 } from 'fs'
-import { basename, dirname, join } from 'path'
+import { basename, join } from 'path'
 import type {
   AlertMeta,
   Category,
@@ -21,71 +20,22 @@ import type {
 } from '@shared/types'
 import { ASSETS_DIR, DRAWINGS_DIR, INDEX_FILE, NOTES_DIR } from '@shared/paths'
 
-const MAX_WRITE_ATTEMPTS = 4
-
 /**
- * Is this error "something else is holding the file right now", rather than a
- * real failure?
+ * The atomic write comes from `keel/storage`, shared with Jot and Helm.
  *
- * Windows reports BOTH a locked file and a permission-denied folder as EPERM, so
- * the code alone cannot tell them apart. `targetExists` separates them: you can
- * only be fighting over a file that is already there. A folder we are not
- * allowed to write in produces the same EPERM with no file at the end of it, and
- * retrying that just delays a wrong answer.
- */
-function isTransientLock(error: unknown, targetExists: boolean): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
-  if (code === 'EBUSY') {
-    return true
-  }
-  if (code === 'EPERM' || code === 'EACCES') {
-    return targetExists
-  }
-  return false
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/**
- * Write `contents` to `filePath` atomically (temp file + rename), retrying while
- * the target is momentarily locked.
+ * Nib's own copy was Jot's copy, which retried the rename but cleaned up its temp
+ * file with a single silent unlink. That loses a race on Windows: the sync client
+ * can grab a lock on the temp the instant it appears, and the file is then left
+ * behind. Helm found that out the expensive way - 1462 orphaned `.tmp` files in
+ * one directory - and the shared version retries the cleanup over the same
+ * backoff as the rename.
  *
- * The data directory normally lives in Dropbox, and on Windows a sync client,
- * antivirus scanner or search indexer holding the destination makes the rename
- * fail with EPERM/EBUSY. Jot lost whole writes to exactly that before it
- * retried. Two details beyond the retry matter: the temp file carries a random
- * suffix per attempt so two writers never fight over one fixed name, and it is
- * cleaned up on failure so a crashed write leaves no litter.
+ * Imported and re-exported: it was exported from here before, and this is still
+ * where the rest of the main process looks for it.
  */
-export async function writeFileAtomic(filePath: string, contents: string): Promise<void> {
-  const directoryPath = dirname(filePath)
-  const targetName = basename(filePath)
-  await fs.mkdir(directoryPath, { recursive: true })
+import { writeFileAtomic } from 'keel/storage'
 
-  for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
-    const tempPath = join(directoryPath, `.${targetName}.${randomBytes(4).toString('hex')}.tmp`)
-    try {
-      await fs.writeFile(tempPath, contents, 'utf-8')
-      await fs.rename(tempPath, filePath)
-      return
-    } catch (error) {
-      await fs.unlink(tempPath).catch(() => {
-        // best-effort cleanup; the write already failed
-      })
-      const targetExists = await fs
-        .access(filePath)
-        .then(() => true)
-        .catch(() => false)
-      if (isTransientLock(error, targetExists) && attempt < MAX_WRITE_ATTEMPTS - 1) {
-        await delay(60 * (attempt + 1))
-        continue
-      }
-      throw error
-    }
-  }
-}
+export { writeFileAtomic }
 
 const EMPTY_INDEX: NibIndex = { version: 1, categories: [] }
 
