@@ -558,15 +558,34 @@ input {
  * A tag on a card.
  *
  * Shown at rest, unlike the buttons in the card's top row, because a tag is
- * state and states do not hide - the same rule the pinned pin follows. The dot
- * carries the colour and the text stays in the meta row's grey: a chip in full
- * colour would outshout the title it sits under.
+ * state and states do not hide - the same rule the pinned pin follows.
+ *
+ * A tinted pill in the tag's OWN colour rather than a dot beside grey text. The
+ * first version was a 6px dot and the name in --text-dim, sitting last in the
+ * meta row immediately after the relative time in that identical grey, and it
+ * read as part of the timestamp: you had to open the picker to find out what a
+ * card was tagged as. The dot is gone because a pill that is entirely the
+ * colour does not also need a spot of it.
+ *
+ * The colour arrives as a custom property from the catalog, which came from a
+ * JSON file, so both uses carry a fallback: a junk value in that file should
+ * make one chip look plain, not make it disappear.
+ *
+ * Weighted to sit beside `.card-points` rather than compete with it - the two
+ * are the same idea in different rows, and two badge styles on one card reads
+ * as two systems.
  */
 .tag-user {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tag, var(--text-dim));
+  background: color-mix(in srgb, var(--tag, var(--text-dim)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag, var(--text-dim)) 30%, transparent);
+  white-space: nowrap;
 }
 
 .tag-dot {
@@ -602,6 +621,23 @@ input {
 }
 
 .tag-row-holder .smart-row {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A button rather than a span, unlike the dot on a category: clicking it walks
+   the palette. It is the only way to fix a tag that landed on the grey. */
+.marker-tag {
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+
+.marker-tag:hover {
+  outline: 2px solid var(--surface-hover);
+}
+
+.tag-row-holder .rename-input {
   flex: 1;
   min-width: 0;
 }

@@ -350,16 +350,28 @@ export function NoteList({
               )}
 
               <div className="card-meta">
-                {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}
-                <span>{relativeTime(note.edited)}</span>
-                {/* What the note IS, in the catalog's order so two cards
-                    carrying the same pair show them the same way round. */}
+                {/*
+                  First in the row, ahead of the crumb and the time.
+                  
+                  It used to sit last, in the same grey and the same size as
+                  "7 days ago" - so it read as a suffix to the timestamp rather
+                  than as a label, and you had to open the picker to find out
+                  what a card was tagged. What a note IS outranks when it
+                  changed. In catalog order, so two cards carrying the same pair
+                  show them the same way round.
+                */}
                 {tagsFor(note, index.tags).map((tag) => (
-                  <span key={tag.id} className="tag tag-user" title={tag.description}>
-                    <span className="tag-dot" style={{ background: tag.color }} />
+                  <span
+                    key={tag.id}
+                    className="tag tag-user"
+                    title={tag.description}
+                    style={{ ['--tag' as string]: tag.color }}
+                  >
                     {tag.name}
                   </span>
                 ))}
+                {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}
+                <span>{relativeTime(note.edited)}</span>
                 {/* Only in a list that mixes the two. The Archive list needs no
                     marking: every card in it is archived. */}
                 {note.archived && selection.kind !== 'archive' && (

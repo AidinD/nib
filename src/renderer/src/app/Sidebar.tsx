@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Category, NibIndex } from '@shared/types'
+import type { Category, NibIndex, Tag } from '@shared/types'
+import { NOTE_COLORS } from '@shared/types'
 import type { NibOps } from '../lib/useNib'
 import { categoryInScope, liveNotes, smartCounts } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
@@ -131,27 +132,15 @@ export function Sidebar({
         <div className="tag-rows">
           <div className="tag-rows-head">Tags</div>
           {tagRows.map(({ tag, count }) => (
-            <div key={tag.id} className="tag-row-holder">
-              <button
-                type="button"
-                className={`row smart-row${
-                  selection.kind === 'tag' && selection.tagId === tag.id ? ' is-active' : ''
-                }`}
-                onClick={() => onSelect({ kind: 'tag', tagId: tag.id })}
-              >
-                <span className="marker" style={{ background: tag.color }} />
-                <span className="row-label">{tag.name}</span>
-                <span className="row-count">{count}</span>
-              </button>
-              <button
-                type="button"
-                className="row-action danger tag-row-delete"
-                title={`Delete the tag "${tag.name}". Notes keep it and get it back if you re-create it.`}
-                onClick={() => onDeleteTag(tag.id, tag.name)}
-              >
-                ×
-              </button>
-            </div>
+            <TagRow
+              key={tag.id}
+              tag={tag}
+              count={count}
+              active={selection.kind === 'tag' && selection.tagId === tag.id}
+              onSelect={() => onSelect({ kind: 'tag', tagId: tag.id })}
+              ops={ops}
+              onDelete={() => onDeleteTag(tag.id, tag.name)}
+            />
           ))}
         </div>
       )}
@@ -534,6 +523,80 @@ function SubRow({
  * Enter and cancel on Escape. `keepOpen` is what separates them - an add field
  * stays and clears itself, a rename closes.
  */
+/**
+ * One tag in the sidebar: filter, rename, recolour, delete.
+ *
+ * Both edits reuse an idiom that is already here rather than inventing one -
+ * double-click to rename, the way a category does. The colour cycles on its
+ * marker, which is new, and it is here because it was needed: a tag is created
+ * with the next colour in the palette and the seeded Principle lands on the
+ * grey, so without this there is a tag nobody can tell apart from the others
+ * and no way to fix it.
+ */
+function TagRow({
+  tag,
+  count,
+  active,
+  onSelect,
+  ops,
+  onDelete
+}: {
+  tag: Tag
+  count: number
+  active: boolean
+  onSelect: () => void
+  ops: NibOps
+  onDelete: () => void
+}): React.JSX.Element {
+  const [renaming, setRenaming] = useState(false)
+
+  return (
+    <div className="tag-row-holder" onDoubleClick={() => setRenaming(true)}>
+      <span className={`row smart-row${active ? ' is-active' : ''}`}>
+        <button
+          type="button"
+          className="marker marker-tag"
+          style={{ background: tag.color }}
+          title="Change the colour"
+          onClick={(event) => {
+            event.stopPropagation()
+            const next = NOTE_COLORS[(NOTE_COLORS.indexOf(tag.color as never) + 1) % NOTE_COLORS.length]
+            ops.editTag(tag.id, { color: next })
+          }}
+        />
+        {renaming ? (
+          <InlineInput
+            className="rename-input"
+            initial={tag.name}
+            placeholder="Tag name"
+            onCommit={(name) => {
+              if (name.length > 0) {
+                ops.editTag(tag.id, { name })
+              }
+              setRenaming(false)
+            }}
+            onCancel={() => setRenaming(false)}
+            keepOpen={false}
+          />
+        ) : (
+          <button type="button" className="row-label" onClick={onSelect} title={tag.description}>
+            {tag.name}
+          </button>
+        )}
+        <span className="row-count">{count}</span>
+      </span>
+      <button
+        type="button"
+        className="row-action danger tag-row-delete"
+        title={`Delete the tag "${tag.name}". Notes keep it and get it back if you re-create it.`}
+        onClick={onDelete}
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
 function InlineInput({
   placeholder,
   onCommit,
