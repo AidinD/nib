@@ -1312,12 +1312,19 @@ body.is-sticky-window {
   color: var(--alert);
 }
 
+/*
+ * The chips wrap rather than scroll.
+ *
+ * They used to sit in a horizontally scrolling row with a hidden scrollbar, which
+ * meant the fourth action point was off the edge with nothing to say so. A second
+ * line is worth more than a hidden one: the strip only ever holds a handful before
+ * the "+N more" chip hands over to the list.
+ */
 .alert-chips {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
   min-width: 0;
 }
 
@@ -1325,12 +1332,25 @@ body.is-sticky-window {
   display: none;
 }
 
+/*
+ * Wide enough to read, and it gives room back rather than truncating early.
+ *
+ * The old cap was 260px whatever the window was doing, so three chips truncated
+ * on a 1240px window with half the row empty beside them. `0 1 auto` lets a chip
+ * take what it needs and shrink only when the line is actually full.
+ */
 .alert-chip {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  flex: 0 0 auto;
-  max-width: 260px;
+  flex: 0 1 auto;
+  /*
+   * Generous, but still a cap. One long action point may not push the others off
+   * the line - the strip's job is to remind you that three things are waiting,
+   * and a chip that takes the whole row can only remind you of one. The tail of a
+   * long one lives in the tooltip, and the note itself is one click away.
+   */
+  max-width: 80ch;
   padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -1344,16 +1364,27 @@ body.is-sticky-window {
   border-color: var(--alert);
 }
 
+/*
+ * The note's name yields before the action does.
+ *
+ * Both were being cut at once, and of the two the title is the half you are not
+ * reading: you came to the strip for what you promised, not for where it is
+ * written down. So this shrinks first and the text below shrinks last - and the
+ * whole chip carries the full trail in its tooltip either way.
+ */
 .alert-chip-note {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 4ch;
   color: var(--alert);
-  max-width: 90px;
+  max-width: 22ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .alert-chip-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1418,7 +1449,16 @@ body.is-sticky-window {
 
 /* The chip reads as "note · what needs doing", so the two halves get a
    separator rather than only a gap. */
-.alert-chip-note::after {
+/*
+ * A chip with no action text IS its title - a whole note flagged, with no line to
+ * quote - so there is nothing for the title to yield to and cutting it is pure
+ * loss. Only the chips that carry both have to share.
+ */
+.alert-chip:not(:has(.alert-chip-text)) .alert-chip-note {
+  max-width: none;
+}
+
+.alert-chip:has(.alert-chip-text) .alert-chip-note::after {
   content: '·';
   margin-left: 6px;
   opacity: 0.5;
