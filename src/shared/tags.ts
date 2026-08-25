@@ -48,6 +48,12 @@ export const DEFAULT_TAGS: Tag[] = [
     description: 'A conversation with someone you lead.'
   },
   {
+    id: 'tag-casual',
+    name: 'Casual',
+    color: '#5fd0a0',
+    description: 'You spoke, but it was not a sit-down conversation.'
+  },
+  {
     id: 'tag-second-hand',
     name: 'Second-hand',
     color: '#b98cff',
