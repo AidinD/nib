@@ -177,6 +177,34 @@ function makePage(send) {
     await sleep(200)
   }
 
+  /**
+   * Press at one point, move to another, release - as pointer events.
+   *
+   * `mousePressed` / `mouseMoved` / `mouseReleased` arrive in the page as pointer
+   * events too, which is what a splitter listens to. Several intermediate moves
+   * rather than one jump: a handle that reads the pointer's travel needs
+   * something to travel through.
+   */
+  const drag = async (fromX, fromY, toX, toY, steps = 8) => {
+    await send('Input.dispatchMouseEvent', {
+      type: 'mousePressed', x: fromX, y: fromY, button: 'left', buttons: 1, clickCount: 1
+    })
+    for (let step = 1; step <= steps; step++) {
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: Math.round(fromX + ((toX - fromX) * step) / steps),
+        y: Math.round(fromY + ((toY - fromY) * step) / steps),
+        button: 'left',
+        buttons: 1
+      })
+      await sleep(20)
+    }
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased', x: toX, y: toY, button: 'left', buttons: 0, clickCount: 1
+    })
+    await sleep(150)
+  }
+
   /** Move the pointer to a point - to hover something, or to hover nothing. */
   const moveTo = async (x, y) => {
     await send('Input.dispatchMouseEvent', {
@@ -300,6 +328,7 @@ function makePage(send) {
     eval: evaluate,
     click,
     clickAt,
+    drag,
     hover,
     moveTo,
     sideButton,

@@ -29,6 +29,35 @@ Nib's current shape and asserts the mapping still resolves. Worth knowing it
 exists: the two apps ship separately, and that is exactly where agreement stops
 quietly.
 
+## 2026-08-25 - The note list is dragged, not configured
+
+**Decided.** The width of the note list is set by dragging the edge between it and
+the editor. It is remembered per machine, in the same place as the editor's
+measure, and Home or a double-click puts it back to 280.
+
+**Why not a setting.** The reason to widen the list is a truncated title in front
+of you right now, and a panel three clicks away is the wrong distance from that.
+The editor's measure is a slider in Settings because it is a typographic decision
+made once; a column width is a reaction to what is in the column today.
+
+**Pointer events with capture, not mouse events on the window.** The handle is six
+pixels wide and a hand is not, so the pointer leaves it in the first millisecond
+of every drag. `setPointerCapture` keeps the events coming and ends the drag by
+itself if the button is released outside the window.
+
+**The width comes from where the drag started, not from a running total.** Adding
+up per-event deltas drifts, because each one is rounded and clamped - and a drag
+that has hit the maximum then needs the same distance back before anything moves,
+which feels like the handle has stuck.
+
+**It is a real separator for the keyboard.** Arrows nudge it 16px, Home resets it.
+A control that can only be dragged cannot be used by someone who is not holding a
+mouse.
+
+**Clamped on read, not only on write.** The stored width outlives the window it
+was chosen in: 560 on a wide monitor leaves nothing for the editor on a laptop, so
+the value is checked against the bounds every time it is read.
+
 ## 2026-08-24 - Backlinks are stored, not searched for
 
 **Decided.** Every note's meta carries `links`, the ids it links to, written from

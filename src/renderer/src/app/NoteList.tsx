@@ -14,6 +14,8 @@ function openPoints(note: NoteMeta): number {
 }
 
 interface NoteListProps {
+  /** Set by dragging the edge between this pane and the editor. */
+  width: number
   index: NibIndex
   selection: Selection
   notes: NoteMeta[]
@@ -38,8 +40,15 @@ interface NoteListProps {
   onIncludeArchived: (include: boolean) => void
 }
 
-/** The 280px middle pane: a header line, an add field, then the cards. */
+/**
+ * The middle pane: a header line, an add field, then the cards.
+ *
+ * Its width comes in as a prop rather than from the stylesheet, because it is
+ * draggable - see `Splitter`. The stylesheet keeps a default so the pane is not
+ * zero-wide for the frame before the preferences are read.
+ */
 export function NoteList({
+  width,
   index,
   selection,
   notes,
@@ -107,7 +116,7 @@ export function NoteList({
   }
 
   return (
-    <section className="note-list">
+    <section className="note-list" style={{ width, flexBasis: width }}>
       <header className="list-header">
         <span className="dot" style={{ background: selectionColor(index, selection) }} />
         <span className="list-name">{selectionTitle(index, selection)}</span>

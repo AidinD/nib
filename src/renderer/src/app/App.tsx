@@ -7,13 +7,14 @@ import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
 import { NibMark } from './NibMark'
 import { NoteList } from './NoteList'
+import { Splitter } from './Splitter'
 import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
 import { useNoteHistory } from '../lib/useNoteHistory'
 import { archivedHits, selectedNotes } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
-import { applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
+import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
 
 /** What is waiting to be confirmed, and everything needed to say it out loud. */
@@ -415,6 +416,7 @@ export function App(): React.JSX.Element {
         />
 
         <NoteList
+          width={prefs.listWidth}
           index={index}
           selection={selection}
           notes={notes}
@@ -476,6 +478,24 @@ export function App(): React.JSX.Element {
             const id = ops.addTag(name, NOTE_COLORS[index.tags.length % NOTE_COLORS.length], '')
             ops.toggleNoteTag(note.id, id)
           }}
+        />
+
+        {/*
+          The list's width is a drag, not a setting.
+          
+          It belongs to the thing being sized rather than to a panel three clicks
+          away: the reason to widen it is a truncated title you are looking at
+          right now. It is remembered per machine, like the editor's measure and
+          for the same reason - a width chosen for this screen should not follow
+          the notes to another one.
+        */}
+        <Splitter
+          label="Note list width"
+          value={prefs.listWidth}
+          min={LIST_MIN}
+          max={LIST_MAX}
+          reset={280}
+          onChange={(listWidth) => setPrefs((current) => ({ ...current, listWidth }))}
         />
 
         <Editor
