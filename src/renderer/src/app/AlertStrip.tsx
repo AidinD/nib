@@ -44,7 +44,9 @@ export function AlertStrip({
     <div className="alert-strip">
       <span className="alert-label">Needs you</span>
       <div className="alert-chips">
-        {shown.map(({ note, alert }) => (
+        {shown.map(({ note, alert }) => {
+          const title = note.title.length > 0 ? note.title : 'Untitled'
+          return (
           <span key={`${note.id}-${alert?.id ?? 'note'}`} className="alert-chip">
             <button
               type="button"
@@ -54,21 +56,27 @@ export function AlertStrip({
               }`}
               onClick={() => onOpen(note, alert?.id ?? null)}
             >
-              <span className="alert-chip-note">
-                {note.title.length > 0 ? note.title : 'Untitled'}
+              {/*
+                Two lines, and the rule is the same for both kinds of chip: the
+                top line says where it is, the bottom line says what it is.
+
+                For a flagged LINE that is the note's title above the words of the
+                action point. For a whole note flagged there is no line to quote,
+                so the title moves down to be the thing itself and the trail takes
+                the top - which also tells you which "1-1" you are looking at, and
+                the one-line version never could.
+              */}
+              <span className="alert-chip-where">
+                {alert === null ? noteTrail(index.categories, note) : title}
               </span>
-              {/* A whole note flagged as the action point has no line to quote,
-                  so the chip is just its name. */}
               {/*
                 A flag on a line with no words yet still has to be findable: the
                 chip is how you get back to it, and a blank one reads as a bug in
                 the strip rather than as an empty line in a note.
               */}
-              {alert !== null && (
-                <span className="alert-chip-text">
-                  {alert.text.length > 0 ? alert.text : 'flagged line, no text'}
-                </span>
-              )}
+              <span className="alert-chip-what">
+                {alert === null ? title : alert.text.length > 0 ? alert.text : 'flagged line, no text'}
+              </span>
             </button>
             {/* Ticking it off here marks the block done, or unflags the note,
                 without opening it and hunting for the line. */}
@@ -81,7 +89,8 @@ export function AlertStrip({
               ✓
             </button>
           </span>
-        ))}
+          )
+        })}
         {hidden > 0 && (
           <button type="button" className="alert-more" onClick={onShowAll}>
             +{hidden} more
