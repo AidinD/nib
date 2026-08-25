@@ -67,6 +67,10 @@ export interface NibOps {
   addSub: (categoryId: string, name: string) => void
   renameSub: (categoryId: string, subId: string, name: string) => void
   deleteSub: (categoryId: string, subId: string) => void
+  /** Reorder within a category: place the sub just before `beforeSubId`, or last when null. */
+  moveSubBefore: (categoryId: string, subId: string, beforeSubId: string | null) => void
+  /** Move a sub, and every note filed in it, into another category. */
+  moveSub: (fromCategoryId: string, subId: string, toCategoryId: string) => void
   addNote: (categoryId: string, subId: string | null, title: string, kind?: NoteKind) => string
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
@@ -218,6 +222,60 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
           notes: c.notes.map((note) => (note.subId === subId ? { ...note, subId: null } : note))
         }))
       ),
+
+    moveSubBefore: (categoryId, subId, beforeSubId) =>
+      mutate((index) =>
+        mapCategory(index, categoryId, (c) => ({ ...c, subs: moveBefore(c.subs, subId, beforeSubId) }))
+      ),
+
+    /**
+     * Move a sub-category into another category, taking its notes with it.
+     *
+     * The notes are the reason this is not a two-line splice. A category holds
+     * a FLAT list of notes, each carrying the `subId` it belongs to - so a sub
+     * that moved without its notes would leave them behind as loose notes in
+     * the old category, which is data loss wearing the clothes of a reorder.
+     *
+     * `categoryId` on each note is rewritten as it crosses. The index is the
+     * authority on where a note lives and the storage layer normalises that
+     * field against it on load, so a stale one would be corrected rather than
+     * honoured - but leaving it wrong would mean the file on disk disagrees
+     * with the index until something happens to rewrite it, and a disagreement
+     * nobody can see is the kind that surfaces months later.
+     */
+    moveSub: (fromCategoryId, subId, toCategoryId) =>
+      mutate((index) => {
+        if (fromCategoryId === toCategoryId) {
+          return index
+        }
+        const source = index.categories.find((category) => category.id === fromCategoryId)
+        const sub = source?.subs.find((s) => s.id === subId)
+        if (source === undefined || sub === undefined) {
+          return index
+        }
+        const moving = source.notes.filter((note) => note.subId === subId)
+
+        return {
+          ...index,
+          categories: index.categories.map((category) => {
+            if (category.id === fromCategoryId) {
+              return {
+                ...category,
+                subs: category.subs.filter((s) => s.id !== subId),
+                notes: category.notes.filter((note) => note.subId !== subId)
+              }
+            }
+            if (category.id === toCategoryId) {
+              return {
+                ...category,
+                subs: [...category.subs, sub],
+                notes: [...moving.map((note) => ({ ...note, categoryId: toCategoryId })), ...category.notes]
+              }
+            }
+            return category
+          })
+        }
+      }),
 
     addNote: (categoryId, subId, title, kind = '') => {
       const id = newId('note')

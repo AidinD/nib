@@ -596,6 +596,19 @@ input {
 }
 
 /*
+ * A sub-category being reordered.
+ *
+ * A line rather than a highlight, because the question a reorder asks is WHERE
+ * it will land, not which row it is over - the same reason the note list draws
+ * a drop marker between cards. `is-drop-target` still means "this row will
+ * receive it", which is what a note dropped on a sub does; the two states look
+ * different because they mean different things.
+ */
+.sub-row.is-sub-slot {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/*
  * The Tags section in the sidebar.
  *
  * Its rows borrow `.smart-row` outright rather than getting a look of their own:

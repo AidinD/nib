@@ -11,6 +11,8 @@
 export type DragPayload =
   | { kind: 'note'; noteId: string; categoryId: string }
   | { kind: 'category'; categoryId: string }
+  /** A sub-category, which can reorder within its category or move to another. */
+  | { kind: 'sub'; categoryId: string; subId: string }
 
 export const DRAG_MIME = 'application/x-nib'
 
