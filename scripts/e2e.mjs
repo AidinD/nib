@@ -205,6 +205,22 @@ function makePage(send) {
     await sleep(150)
   }
 
+  /** Right-click a point, for a context menu. */
+  const rightClick = async (x, y) => {
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', {
+        type,
+        x: Math.round(x),
+        y: Math.round(y),
+        button: 'right',
+        buttons: type === 'mousePressed' ? 2 : 0,
+        clickCount: 1
+      })
+      await sleep(30)
+    }
+    await sleep(150)
+  }
+
   /** Move the pointer to a point - to hover something, or to hover nothing. */
   const moveTo = async (x, y) => {
     await send('Input.dispatchMouseEvent', {
@@ -328,6 +344,7 @@ function makePage(send) {
     eval: evaluate,
     click,
     clickAt,
+    rightClick,
     drag,
     hover,
     moveTo,

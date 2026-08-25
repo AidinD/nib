@@ -358,6 +358,52 @@ export function deriveTitle(html: string): string {
 const DAY = 86_400_000
 
 /** `today`, `yesterday`, `3 days ago`, `2w ago` - the spec's own vocabulary. */
+/**
+ * A fixed date, for the thing about a note that never changes.
+ *
+ * The year is left off when it is this one: "24 Aug" reads faster than
+ * "24 Aug 2026" on every card in a list where almost everything is from this
+ * year, and the moment it is not this year the year is exactly what you needed.
+ */
+export function dateStamp(timestamp: number, now = Date.now()): string {
+  const date = new Date(timestamp)
+  const sameYear = date.getFullYear() === new Date(now).getFullYear()
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' })
+  })
+}
+
+/** Whether two timestamps fall on the same calendar day. */
+export function sameDay(a: number, b: number): boolean {
+  const one = new Date(a)
+  const two = new Date(b)
+  return (
+    one.getFullYear() === two.getFullYear() &&
+    one.getMonth() === two.getMonth() &&
+    one.getDate() === two.getDate()
+  )
+}
+
+/**
+ * The reference for a note, to paste into a conversation.
+ *
+ * The note's own id, with the title beside it. The id is what makes it findable
+ * - it is the name of the file the body lives in, and what Tend keys its own rows
+ * on - and the title is there so the person pasting it can see they copied the
+ * right card.
+ *
+ * Deliberately NOT a new short number. A second identifier for the same note is
+ * a second thing that can be out of step with the first, and this notebook has
+ * already been bitten by that twice today: a tag mapped by name, and a folder
+ * addressed by its path.
+ */
+export function noteReference(id: string, title: string): string {
+  const name = title.trim().length > 0 ? title.trim() : 'Untitled'
+  return `nib:${id} "${name}"`
+}
+
 export function relativeTime(timestamp: number, now = Date.now()): string {
   const startOfToday = new Date(now)
   startOfToday.setHours(0, 0, 0, 0)

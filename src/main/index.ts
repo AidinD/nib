@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import { join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
-import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, net, protocol } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 // electron-updater is CommonJS, so a named ESM import does not work here - the
 // same shape Jot ended up with.
@@ -232,6 +232,18 @@ function registerIpc(): void {
   })
   ipcMain.handle('sticky:close', (_event, noteId: string) => {
     closeStickyWindow(noteId)
+  })
+
+  /*
+   * The clipboard, through the main process.
+   *
+   * Not `navigator.clipboard` in the renderer: that needs a secure context and a
+   * permission the app would have to grant itself, and it fails by resolving
+   * quietly rather than by throwing. Electron's own clipboard has neither
+   * problem and is two lines.
+   */
+  ipcMain.handle('clipboard:write', (_event, text: unknown) => {
+    clipboard.writeText(String(text ?? ''))
   })
 
   // Window controls, because the window is frameless and the header row owns them.

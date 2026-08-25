@@ -27,6 +27,9 @@ const api = {
   openSticky: (noteId: string): Promise<void> => ipcRenderer.invoke('sticky:open', noteId),
   closeSticky: (noteId: string): Promise<void> => ipcRenderer.invoke('sticky:close', noteId),
 
+  /** Put text on the system clipboard - see the handler for why not the renderer. */
+  copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
+
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   toggleMaximizeWindow: (): Promise<void> => ipcRenderer.invoke('window:toggle-maximize'),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),

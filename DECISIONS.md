@@ -29,6 +29,51 @@ Nib's current shape and asserts the mapping still resolves. Worth knowing it
 exists: the two apps ship separately, and that is exactly where agreement stops
 quietly.
 
+## 2026-08-25 - A card hands over its own id, not a new number
+
+**Decided.** Right-clicking a card offers "Copy reference", which puts
+`nib:<noteId> "Title"` on the clipboard. The id is the note's own - the name of
+the file its body lives in, and what Tend keys its rows on.
+
+**Rejected: a short human-friendly number.** It was the nicer thing to type and it
+was the wrong thing to build. A second identifier for the same note is a second
+thing that can disagree with the first, and this notebook has been bitten by
+exactly that twice in one day: a tag mapped by name instead of id, and a folder
+addressed by its path instead of its id. Both failed silently. A long ugly id that
+cannot drift beats a short one that can.
+
+**The title travels with it** so the person pasting can see they copied the right
+card. It is decoration for the reader, not part of the address.
+
+**The id is shown in the menu as well as copied**, monospaced and selectable,
+because sometimes the answer is to read it out rather than to paste it.
+
+**Built in the app, not as Electron's native context menu.** The suite's rule
+about native dialogs, and a practical reason: a native menu cannot show the id,
+and showing it is half the point.
+
+**The clipboard write goes through the main process.** `navigator.clipboard` needs
+a secure context and a permission the app would be granting itself, and it fails
+by resolving quietly. Electron's own clipboard has neither problem.
+
+## 2026-08-25 - A card shows when it was written, and only then when it changed
+
+**Decided.** The meta row carries the creation date as a fixed date - "17 May",
+with the year once it is not this year - and the edit only when it falls on a
+different day, as a relative time: "17 May · edited today".
+
+**They answer different questions.** When a note was written is a fact you cite:
+the 1-1 was on the 24th whatever happens to the note afterwards, so it gets an
+absolute date. When it last changed is only ever "how fresh is this", which is
+what a relative time is for.
+
+**Both on every card would be two ways of saying one thing** for anything written
+and finished the same afternoon, which is most notes. So the edit half appears
+only when it adds something.
+
+**The exact timestamps are in the tooltip**, for the rare moment the day is not
+precise enough.
+
 ## 2026-08-25 - The note list is dragged, not configured
 
 **Decided.** The width of the note list is set by dragging the edge between it and

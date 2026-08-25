@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { NibIndex, NoteKind, NoteMeta } from '@shared/types'
 import { tagsFor } from '@shared/tags'
+import { CardMenu } from './CardMenu'
 import { TagPicker } from './TagPicker'
-import { noteTrail, relativeTime } from '../lib/notes'
+import { dateStamp, noteReference, noteTrail, relativeTime, sameDay } from '../lib/notes'
 import type { Selection } from '../lib/selection'
 import { selectionColor, selectionShowsCrumb, selectionTarget, selectionTitle } from '../lib/selection'
 import type { DropSlot } from '../lib/dnd'
@@ -70,6 +71,11 @@ export function NoteList({
   const [draft, setDraft] = useState('')
   const [slot, setSlot] = useState<DropSlot>(null)
   /** Which card's tag panel is open, and the button rect to hang it off. */
+  /** The right-click menu: which card, and where the pointer was. */
+  const [menu, setMenu] = useState<{
+    note: NoteMeta
+    at: { left: number; top: number }
+  } | null>(null)
   const [picking, setPicking] = useState<{ noteId: string; anchor: DOMRect } | null>(null)
   const target = selectionTarget(selection)
   const showCrumb = selectionShowsCrumb(selection)
@@ -200,6 +206,10 @@ export function NoteList({
               }${note.kind === 'story' ? ' is-story' : ''}`}
               draggable
               onClick={() => onOpen(note.id)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setMenu({ note, at: { left: event.clientX, top: event.clientY } })
+              }}
               onDragStart={(event) =>
                 startDrag(event, { kind: 'note', noteId: note.id, categoryId: note.categoryId })
               }
@@ -380,7 +390,24 @@ export function NoteList({
                   </span>
                 ))}
                 {showCrumb && <span className="crumb">{noteTrail(index.categories, note)}</span>}
-                <span>{relativeTime(note.edited)}</span>
+                {/*
+                  Created as a fixed date, edited as a relative one - and the
+                  edit only when it is a different day.
+
+                  The two answer different questions. When a note was written is
+                  a fact you cite: the 1-1 was on the 24th whatever you do to the
+                  note afterwards. When it last changed is only ever "how fresh
+                  is this". Showing both on a note written and finished the same
+                  afternoon would be two ways of saying one thing.
+                */}
+                <span
+                  title={`Created ${new Date(note.created).toLocaleString('en-GB')}\nEdited ${new Date(note.edited).toLocaleString('en-GB')}`}
+                >
+                  {dateStamp(note.created)}
+                  {!sameDay(note.created, note.edited) && (
+                    <span className="card-edited"> · edited {relativeTime(note.edited)}</span>
+                  )}
+                </span>
                 {/* Only in a list that mixes the two. The Archive list needs no
                     marking: every card in it is archived. */}
                 {note.archived && selection.kind !== 'archive' && (
@@ -392,6 +419,15 @@ export function NoteList({
             </article>
           </div>
         ))}
+
+        {menu !== null && (
+          <CardMenu
+            at={menu.at}
+            noteId={menu.note.id}
+            reference={noteReference(menu.note.id, menu.note.title)}
+            onClose={() => setMenu(null)}
+          />
+        )}
 
         {picking !== null &&
           (() => {

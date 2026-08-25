@@ -2437,3 +2437,64 @@ body.is-resizing {
 body.is-resizing .splitter-grip {
   background: var(--accent);
 }
+
+/* ---------- the card's right-click menu ---------- */
+
+/*
+ * Lifted off the card, not flush with it.
+ *
+ * `--surface-hover` rather than `--surface`: a menu that opens on top of a card
+ * shares its background otherwise, and at these sizes the two read as one panel
+ * with the card's title sliced through it. The heavier shadow does the rest.
+ */
+.card-menu {
+  position: fixed;
+  z-index: 45;
+  min-width: 190px;
+  padding: 4px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.62);
+}
+
+.card-menu .card-menu-row:hover {
+  background: var(--surface-alt);
+}
+
+.card-menu-row {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.card-menu-row:hover {
+  background: var(--surface-hover);
+}
+
+/*
+ * The id, monospaced and selectable.
+ *
+ * Not a label for the row above it: it is the thing itself, and sometimes the
+ * answer is to read it out or select part of it rather than to paste it whole.
+ */
+.card-menu-id {
+  display: block;
+  padding: 4px 8px 2px;
+  color: var(--text-dim);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  user-select: text;
+  cursor: text;
+}
+
+/* The edit half of a card's date line, quieter than the creation date, which is
+   the fixed fact of the two. */
+.card-edited {
+  color: var(--text-dim);
+  opacity: 0.75;
+}
