@@ -59,7 +59,16 @@ export function AlertStrip({
               </span>
               {/* A whole note flagged as the action point has no line to quote,
                   so the chip is just its name. */}
-              {alert !== null && <span className="alert-chip-text">{alert.text}</span>}
+              {/*
+                A flag on a line with no words yet still has to be findable: the
+                chip is how you get back to it, and a blank one reads as a bug in
+                the strip rather than as an empty line in a note.
+              */}
+              {alert !== null && (
+                <span className="alert-chip-text">
+                  {alert.text.length > 0 ? alert.text : 'flagged line, no text'}
+                </span>
+              )}
             </button>
             {/* Ticking it off here marks the block done, or unflags the note,
                 without opening it and hunting for the line. */}

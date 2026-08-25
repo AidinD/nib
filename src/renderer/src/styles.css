@@ -906,6 +906,16 @@ input {
   /* The alert column. Every line's marker is drawn in here, so revealing one on
      hover never nudges the text. */
   padding-left: 26px;
+  /*
+   * And room on the right for the scrollbar, which otherwise sits against the
+   * last character of every line it passes.
+   *
+   * `scrollbar-gutter: stable` reserves the space whether or not the bar is
+   * there, so a note does not reflow by a few pixels the moment it grows past one
+   * screen - which is visible as a jump while you type.
+   */
+  padding-right: 14px;
+  scrollbar-gutter: stable;
   font-size: 14px;
   line-height: 1.7;
   outline: none;

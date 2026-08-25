@@ -39,7 +39,16 @@ const SAVE_DELAY = 600
  * and where a click on that marker lands. In the margin rather than inside the
  * line, so showing the marker on hover cannot shift the text sideways.
  */
-const ALERT_GUTTER = 26
+/*
+ * How far into the margin a click still means "flag this line".
+ *
+ * Narrower than the gutter itself, which is 26px: the flag is drawn between 2 and
+ * 18, and the six pixels immediately left of the text are where you click to put
+ * the caret at the start of a line. Those six used to toggle an action point, so
+ * a normal click in a normal place quietly flagged something - which is how this
+ * notebook came to have three or four nobody meant to set.
+ */
+const ALERT_GUTTER = 20
 
 /** The lines that can carry an alert - kept in step with ALERT_BLOCKS in notes.ts. */
 const ALERT_LINES = 'p, h1, h2, h3, h4, li, blockquote'
@@ -207,6 +216,24 @@ export function Editor({
       setWords(wordCount(html))
       setSaveState('saved')
       loadedEdited.current = doc?.edited ?? note.edited
+
+      /*
+       * The index's list of action points is corrected against the body.
+       *
+       * The body is the truth: the marker is an attribute on a line, and the
+       * index's copy is derived from it on save. They can drift - a note whose
+       * last flag was cleared and whose index write did not land keeps a row for
+       * an action point that no longer exists anywhere in the text. It then shows
+       * up under "Needs you" with nothing to find, which is the worst kind of
+       * reminder: one you cannot answer.
+       *
+       * Only the metadata is written, never the body, and only when they actually
+       * differ - so opening a note is not an edit and `edited` does not move.
+       */
+      const inBody = extractAlerts(html)
+      if (JSON.stringify(inBody) !== JSON.stringify(note.alerts)) {
+        onSaved(note.id, { alerts: inBody })
+      }
     })
 
     return () => {

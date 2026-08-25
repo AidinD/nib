@@ -29,6 +29,43 @@ Nib's current shape and asserts the mapping still resolves. Worth knowing it
 exists: the two apps ship separately, and that is exactly where agreement stops
 quietly.
 
+## 2026-08-25 - The body is the truth about action points
+
+**Decided.** Opening a note corrects the index's list of action points against
+what the body actually holds. Metadata only, never the body, and only when the
+two differ - so opening a note is not an edit and its `edited` stamp does not
+move.
+
+**The bug it fixes.** A note in this notebook listed an action point that no
+marker anywhere in its text claimed: `{ text: "", done: true }` in the index,
+zero `data-alert` attributes in the body. It put the note in "Needs you" with
+nothing to find - a reminder that cannot be answered, which is worse than no
+reminder. The marker is an attribute on a line and the index's copy is derived
+from it on save, so a save whose index write never landed leaves exactly this.
+
+**Rejected: a sweep of every note at startup.** It would have healed the whole
+notebook at once and it reads every file on disk to do it, every launch, for a
+problem that only matters on the note you are looking at. Opening the note is
+already the moment you ask the question.
+
+## 2026-08-25 - The flag column stops six pixels short of the text
+
+**Decided.** A click flags a line only within 20px of the body's left edge, not
+26.
+
+**Why.** The gutter is 26px and the flag is drawn between 2 and 18, so the six
+pixels immediately left of the first character were a hit target for something
+invisible - and clicking just left of a line is how anyone puts the caret at its
+start. Three or four action points in this notebook were set that way by someone
+who never meant to, and one of them survived as the phantom above.
+
+**A dead strip is the point.** The flag itself is unmoved and still one click; what
+is gone is the part of the target that overlapped an ordinary editing gesture.
+
+**And a flag on a line with no words now says so in the strip** - "flagged line,
+no text" rather than a blank chip. It has to stay findable, because getting back
+to it is how you clear it.
+
 ## 2026-08-25 - A card hands over its own id, not a new number
 
 **Decided.** Right-clicking a card offers "Copy reference", which puts
