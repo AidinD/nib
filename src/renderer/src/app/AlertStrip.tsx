@@ -46,6 +46,7 @@ export function AlertStrip({
       <div className="alert-chips">
         {shown.map(({ note, alert }) => {
           const title = note.title.length > 0 ? note.title : 'Untitled'
+          const trail = noteTrail(index.categories, note)
           return (
           <span key={`${note.id}-${alert?.id ?? 'note'}`} className="alert-chip">
             <button
@@ -66,8 +67,21 @@ export function AlertStrip({
                 the top - which also tells you which "1-1" you are looking at, and
                 the one-line version never could.
               */}
+              {/*
+                Two lines: the top is the PATH to the thing, the bottom is the
+                thing.
+
+                The path runs all the way down to whatever the line below is not.
+                For a whole note flagged, the thing is the note, so the path stops
+                at its folder. For a flagged line, the thing is the line, so the
+                path carries on through the note it is written in. Either way it
+                starts at the category - which the first version of this got wrong
+                by putting the note's title alone on top of an action point, so one
+                kind of chip showed a category and the other did not, and the two
+                sitting side by side read as a bug rather than as a rule.
+              */}
               <span className="alert-chip-where">
-                {alert === null ? noteTrail(index.categories, note) : title}
+                {alert === null ? trail : `${trail} › ${title}`}
               </span>
               {/*
                 A flag on a line with no words yet still has to be findable: the
