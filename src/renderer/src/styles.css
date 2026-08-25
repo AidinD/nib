@@ -1358,9 +1358,22 @@ body.is-sticky-window {
   padding: 5px 10px;
   /* A pill was right for one line of text and wrong for a two-line box. */
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  /*
+   * The chip carries the alert colour, not just the text inside it.
+   *
+   * Two lines fixed the reading and cost the row its pull: the old one-line chips
+   * were orange end to end and the eye went there without being asked, which is
+   * the entire reason a strip beats a list you have to open. A tinted box gets
+   * that back without putting orange on the sentence you actually have to read.
+   */
+  border: 1px solid color-mix(in srgb, var(--alert) 45%, var(--border));
+  background: color-mix(in srgb, var(--alert) 12%, var(--surface));
   text-align: left;
+}
+
+.alert-chip:hover {
+  border-color: var(--alert);
+  background: color-mix(in srgb, var(--alert) 20%, var(--surface));
 }
 
 .alert-chip-open {
@@ -1372,11 +1385,18 @@ body.is-sticky-window {
   text-align: left;
 }
 
-/* Where it is: the note for a flagged line, the folder trail for a flagged note. */
+/*
+ * Where it is: the note for a flagged line, the folder trail for a flagged note.
+ *
+ * In the alert colour rather than the dim grey, so the top line of every chip
+ * lines up as one orange band across the row - which is what the one-line version
+ * did by accident and what makes the strip register before you have read a word of
+ * it. The line below stays near-white, because that is the one being read.
+ */
 .alert-chip-where {
   max-width: 100%;
   overflow: hidden;
-  color: var(--text-dim);
+  color: var(--alert);
   font-size: 10px;
   line-height: 1.3;
   text-overflow: ellipsis;
