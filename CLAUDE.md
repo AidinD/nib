@@ -2,9 +2,10 @@
 
 Nib is a desktop note-taking app, a sibling to Jot (`D:\Repo\Tools\jot`) rather than a part of it.
 
-## The notebook is in Dropbox, and AppData holds a stale copy of it
+## The notebook is in a synced folder, and AppData holds a stale copy of it
 
-**`D:\Dropbox\nib`.** Set by the user environment variable `NIB_DATA_DIR`, which
+**Wherever `NIB_DATA_DIR` points** - a folder in the author's file-sync service, not
+the default. It is the user environment variable that decides, which
 is why `nibDataDir()` resolves correctly inside the app and why anything reaching
 for the default does not: **a tool process does not necessarily inherit a user
 environment variable.** Check before reading anything:
@@ -18,8 +19,8 @@ not obviously stale - it parses, it has categories, it looks like the real thing
 Measured on 2026-08-24:
 
 ```text
-D:\Dropbox\nib     version 2 | catalog 6 | notes 20 | tagged 14
-%APPDATA%\nib      version 1 | catalog 0 | notes  3 | tagged  0
+<NIB_DATA_DIR>    version 2 | a catalog, and most notes tagged
+%APPDATA%\nib     version 1 | no catalog, three notes, none tagged
 ```
 
 Reading the second one produced a confident wrong answer that survived several
@@ -28,8 +29,10 @@ premise for deferring a feature in Tend on the grounds that "the notebook is
 nearly empty", and for telling the author to close an app that did not need
 closing. Two sessions repeated it to each other before anyone checked.
 
-Assume every app in the suite has been pointed at Dropbox - Jot's board is at
-`D:\Dropbox\jot` on the same pattern - and verify rather than defaulting.
+Assume every app in the suite has been pointed at a synced folder - Jot's board
+follows the same pattern, via `JOT_DATA_DIR` - and verify rather than defaulting.
+The actual paths are in the author's own notes, deliberately not here: this file
+is public.
 
 **Never write into the index while Nib is running.** It holds the whole index in
 memory and writes it back on any mutation, so an external write can be clobbered
