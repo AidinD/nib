@@ -37,6 +37,11 @@ export const MAX_TAG_DESCRIPTION = 200
  * something you merely heard. Seeded rather than required: rename them, delete
  * them, add your own. Nothing in Nib breaks if the catalog is empty.
  *
+ * `Story` overlaps the `story` note KIND on purpose rather than by accident.
+ * The kind drives the template and the half-captured check; the tag is what
+ * makes them findable in the sidebar and filterable across every folder they
+ * are filed in - which is the whole point of not keeping them in one.
+ *
  * Fixed ids, because Tend's mapping points at ids. A seeded tag that got a
  * fresh id on every machine would map on one and not the other.
  */
@@ -76,6 +81,12 @@ export const DEFAULT_TAGS: Tag[] = [
     name: 'Sideways',
     color: '#ff6b6b',
     description: 'Contact with a peer lead rather than with your own team.'
+  },
+  {
+    id: 'tag-story',
+    name: 'Story',
+    color: '#b98cff',
+    description: 'A career story in STAR form, captured while it is still fresh.'
   },
   {
     id: 'tag-principle',
