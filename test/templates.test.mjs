@@ -56,6 +56,11 @@ describe('the seeded catalog', () => {
     }
   })
 
+  it('tags the story so it is findable across every folder a story is filed in', () => {
+    const story = DEFAULT_TEMPLATES.find((t) => t.id === 'tpl-story')
+    assert.deepEqual(story?.tags, ['tag-story'])
+  })
+
   it('tags the one-to-one, so the note counts as the conversation having happened', () => {
     // The half a title cannot do. Remembering to tag it afterwards is exactly
     // the step that gets skipped, which leaves the note written and the cadence
@@ -148,10 +153,29 @@ describe('reading the catalog defensively', () => {
     assert.equal(normalizeTemplates(raw).length, MAX_TEMPLATES)
   })
 
+  it('gives a seeded template the tags it was meant to have, for notebooks that predate them', () => {
+    // The catalog is written into the notebook the first time it is read, so a
+    // new default reaches nobody who has already opened the app. That is exactly
+    // how the one-to-one shipped without the tag that makes it count.
+    const stored = [{ id: 'tpl-one-to-one', name: '1-1', title: '{date} 1-1', body: 'x', description: '', tags: [] }]
+    assert.deepEqual(normalizeTemplates(stored)[0].tags, ['tag-one-to-one'])
+  })
+
+  it('leaves a template alone once it has tags of its own', () => {
+    const stored = [{ id: 'tpl-one-to-one', name: '1-1', title: '', body: 'x', description: '', tags: ['tag-casual'] }]
+    assert.deepEqual(normalizeTemplates(stored)[0].tags, ['tag-casual'])
+  })
+
+  it('backfills nothing onto a template it did not seed', () => {
+    const stored = [{ id: 'tpl-mine', name: 'Mine', title: '', body: 'x', description: '', tags: [] }]
+    assert.deepEqual(normalizeTemplates(stored)[0].tags, [])
+  })
+
   it('reads tags off a template, and copes with there being none', () => {
     assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A', tags: ['tag-x', ''] }])[0].tags, ['tag-x'])
     assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A' }])[0].tags, [])
     assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A', tags: 'tag-x' }])[0].tags, [])
+    assert.deepEqual(normalizeTemplates([{ id: 'tpl-story', name: 'Story' }])[0].tags, ['tag-story'])
   })
 
   it('ignores a kind it does not know', () => {

@@ -116,7 +116,11 @@ export const DEFAULT_TEMPLATES: Template[] = [
     title: '',
     description: 'A career story, in four questions. Fill it in while it is fresh.',
     body: STORY_BODY,
-    kind: 'story'
+    kind: 'story',
+    // The kind drives the card and the half-captured check; the tag is what makes
+    // stories findable across every folder they are filed in, which is the whole
+    // point of not keeping them in one. Both, or the second half never happens.
+    tags: ['tag-story']
   }
 ]
 
@@ -191,10 +195,33 @@ export function normalizeTemplates(raw: unknown): Template[] {
       continue
     }
     seen.add(template.id)
-    out.push(template)
+    out.push(withSeededTags(template))
     if (out.length >= MAX_TEMPLATES) {
       break
     }
   }
   return out
+}
+
+/**
+ * A seeded template that predates tags gets the tags it was meant to have.
+ *
+ * The catalog is written into the notebook the first time it is read, so a new
+ * default reaches nobody who has already opened the app - which is how the
+ * one-to-one shipped without the tag that makes it count as a conversation, for
+ * everybody who had it already.
+ *
+ * Only the seeded ids, and only when the list is empty, so nothing anybody chose
+ * is overwritten. It does mean deliberately clearing the tag on a seeded template
+ * would not stick, which is worth knowing and costs nothing today - there is no
+ * way to edit a template's tags yet, and when there is, this becomes a real
+ * migration instead.
+ */
+function withSeededTags(template: Template): Template {
+  if ((template.tags ?? []).length > 0) {
+    return template
+  }
+  const seeded = DEFAULT_TEMPLATES.find((d) => d.id === template.id)
+  const tags = seeded?.tags ?? []
+  return tags.length > 0 ? { ...template, tags: [...tags] } : template
 }
