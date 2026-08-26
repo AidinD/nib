@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { titleFrom } from '@shared/templates'
+import { TemplateModal } from './TemplateModal'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
@@ -103,6 +104,8 @@ export function App(): React.JSX.Element {
   // The deletion waiting to be confirmed. Deleting a category or a note cannot
   // be undone, and all three used to happen on one stray click.
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
+  /** The note being turned into a template, while the dialog is up. */
+  const [savingTemplate, setSavingTemplate] = useState<NoteMeta | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   const notes = useMemo(
@@ -436,7 +439,7 @@ export function App(): React.JSX.Element {
             // to remember the shape is an empty note, and typing the same title
             // format every week is the other half of why it never gets written.
             const named = template === undefined ? title : titleFrom(template, title)
-            const id = ops.addNote(target.categoryId, target.subId, named, template?.kind)
+            const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
             if (template !== undefined && template.body.length > 0) {
               void window.nib.writeNote({
                 id,
@@ -450,6 +453,13 @@ export function App(): React.JSX.Element {
             }
             setActiveNoteId(id)
           }}
+          onSaveTemplate={
+            activeNote === null
+              ? null
+              : () => {
+                  setSavingTemplate(activeNote)
+                }
+          }
           onDelete={(note) => setPendingDelete({ kind: 'note', note })}
           onArchive={(note) => void archiveNote(note)}
           archivedHits={archived}
@@ -524,6 +534,34 @@ export function App(): React.JSX.Element {
 
       {loaded && index.categories.length === 0 && (
         <p className="first-run">Add a category in the sidebar to start writing.</p>
+      )}
+
+      {savingTemplate !== null && (
+        <TemplateModal
+          suggestedName={savingTemplate.title}
+          tagCount={savingTemplate.tags.length}
+          onCancel={() => setSavingTemplate(null)}
+          onSave={(fields) => {
+            const note = savingTemplate
+            setSavingTemplate(null)
+            // The body lives in the note file rather than in the index, so it is
+            // read at the moment of saving. A template made from a note that
+            // cannot be read would be an empty template, which is worse than no
+            // template - so nothing is written when the read comes back empty.
+            void window.nib.readNote(note.id).then((doc) => {
+              if (doc === null) {
+                return
+              }
+              ops.addTemplate({
+                name: fields.name,
+                title: fields.title,
+                description: fields.description,
+                body: doc.html,
+                tags: [...note.tags]
+              })
+            })
+          }}
+        />
       )}
 
       {pendingDelete !== null && (

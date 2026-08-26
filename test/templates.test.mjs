@@ -56,6 +56,14 @@ describe('the seeded catalog', () => {
     }
   })
 
+  it('tags the one-to-one, so the note counts as the conversation having happened', () => {
+    // The half a title cannot do. Remembering to tag it afterwards is exactly
+    // the step that gets skipped, which leaves the note written and the cadence
+    // still reading as silence.
+    const oneToOne = DEFAULT_TEMPLATES.find((t) => t.id === 'tpl-one-to-one')
+    assert.deepEqual(oneToOne?.tags, ['tag-one-to-one'])
+  })
+
   it('writes both halves of the alternating one-to-one, since the app cannot know which week it is', () => {
     const oneToOne = DEFAULT_TEMPLATES.find((t) => t.id === 'tpl-one-to-one')
     assert.ok(oneToOne?.body.includes('Vecka 1'))
@@ -77,8 +85,11 @@ describe('the title a template produces', () => {
     assert.equal(titleFrom(dated, '', NOW), '2026-08-27 1-1')
   })
 
-  it('keeps the date when something was typed, since the typed part says which one this is', () => {
-    assert.equal(titleFrom(dated, 'Halvar', NOW), '2026-08-27 Halvar')
+  it('lets what was typed win outright, since the folder already says who', () => {
+    // The first version kept the date and appended the typed words, which named
+    // a note in somebody's folder after that person - the title repeating the
+    // location while saying nothing about what the note is.
+    assert.equal(titleFrom(dated, 'Retro follow-up', NOW), 'Retro follow-up')
   })
 
   it('uses what was typed when the template does not name the note', () => {
@@ -135,6 +146,12 @@ describe('reading the catalog defensively', () => {
   it('stops at the cap, so a corrupt index cannot draw a thousand choices', () => {
     const raw = Array.from({ length: MAX_TEMPLATES + 20 }, (_, i) => ({ id: `tpl-${i}`, name: `T${i}` }))
     assert.equal(normalizeTemplates(raw).length, MAX_TEMPLATES)
+  })
+
+  it('reads tags off a template, and copes with there being none', () => {
+    assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A', tags: ['tag-x', ''] }])[0].tags, ['tag-x'])
+    assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A' }])[0].tags, [])
+    assert.deepEqual(normalizeTemplates([{ id: 'tpl-a', name: 'A', tags: 'tag-x' }])[0].tags, [])
   })
 
   it('ignores a kind it does not know', () => {

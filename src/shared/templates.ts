@@ -104,7 +104,11 @@ export const DEFAULT_TEMPLATES: Template[] = [
     name: '1-1',
     title: '{date} 1-1',
     description: 'The questions you actually want to ask, already in the note.',
-    body: ONE_TO_ONE_BODY
+    body: ONE_TO_ONE_BODY,
+    // The seeded 1-1 tag, by its fixed id. Without it the note is written and
+    // the conversation still reads as never having happened anywhere that counts
+    // tagged notes.
+    tags: ['tag-one-to-one']
   },
   {
     id: 'tpl-story',
@@ -136,17 +140,15 @@ export function today(now: number = Date.now()): string {
  * cannot come back to.
  */
 export function titleFrom(template: Template, typed: string, now: number = Date.now()): string {
+  // Whatever was typed wins outright. The first version kept the date and
+  // appended the typed words, which produced "2026-08-27 Halvar" for a note
+  // already filed in Halvar's folder - the title repeating what the location
+  // already said, while saying nothing about what the note IS.
   const typedTitle = typed.trim()
-  const pattern = template.title.trim()
-  if (pattern.length === 0) {
-    return typedTitle.length > 0 ? typedTitle : template.name
-  }
-  const rendered = pattern.replace(/\{date\}/g, today(now)).trim()
-  // Anything typed wins over the pattern's fixed half, but keeps the date: a
-  // typed title is somebody saying what this particular one is about.
   if (typedTitle.length > 0) {
-    return `${today(now)} ${typedTitle}`
+    return typedTitle
   }
+  const rendered = template.title.trim().replace(/\{date\}/g, today(now)).trim()
   return rendered.length > 0 ? rendered : template.name
 }
 
@@ -159,6 +161,9 @@ function normalizeTemplate(raw: any): Template {
     title: String(raw?.title ?? '').slice(0, MAX_TEMPLATE_TITLE),
     body: String(raw?.body ?? '').slice(0, MAX_TEMPLATE_BODY),
     description: String(raw?.description ?? '').slice(0, MAX_TEMPLATE_NAME * 5),
+    tags: Array.isArray(raw?.tags)
+      ? raw.tags.map((t: unknown) => String(t)).filter((t: string) => t.length > 0)
+      : [],
     ...(kind === undefined ? {} : { kind })
   }
 }

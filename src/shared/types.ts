@@ -217,6 +217,15 @@ export interface Template {
   body: string
   description: string
   kind?: NoteKind
+  /**
+   * Tag ids put on the note as it is created.
+   *
+   * The half a title cannot do. A one-to-one note is only evidence that the
+   * conversation happened if it carries the tag that says so, and remembering to
+   * add it afterwards is exactly the step that gets skipped - which leaves the
+   * note written and the cadence still reading as silence.
+   */
+  tags?: string[]
 }
 
 /** The tools a stroke can be drawn with. */

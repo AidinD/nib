@@ -2615,3 +2615,40 @@ body.is-resizing .splitter-grip {
   color: var(--text-dim);
   line-height: 1.4;
 }
+
+/* Separates picking a template from making one. */
+.template-rule {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* The button matches the field beside it rather than floating in the middle. */
+.add-templates {
+  display: flex;
+}
+
+.template-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 420px;
+}
+
+.template-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.template-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* Shows what the pattern actually produces, so nobody has to guess at a token. */
+.template-hint {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}

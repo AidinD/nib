@@ -71,7 +71,13 @@ export interface NibOps {
   moveSubBefore: (categoryId: string, subId: string, beforeSubId: string | null) => void
   /** Move a sub, and every note filed in it, into another category. */
   moveSub: (fromCategoryId: string, subId: string, toCategoryId: string) => void
-  addNote: (categoryId: string, subId: string | null, title: string, kind?: NoteKind) => string
+  addNote: (
+    categoryId: string,
+    subId: string | null,
+    title: string,
+    kind?: NoteKind,
+    tags?: string[]
+  ) => string
   deleteNote: (noteId: string) => void
   togglePin: (noteId: string) => void
   /** Cycle the whole note's flag: none, needs you, dealt with. */
@@ -280,7 +286,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
         }
       }),
 
-    addNote: (categoryId, subId, title, kind = '') => {
+    addNote: (categoryId, subId, title, kind = '', tags = []) => {
       const id = newId('note')
       const now = Date.now()
       mutate((index) =>
@@ -301,7 +307,7 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
               links: [],
               flag: '',
               kind,
-              tags: [],
+              tags,
               archived: false,
               hasImage: false,
               hasDrawing: false

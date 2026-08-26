@@ -23,6 +23,8 @@ interface NoteListProps {
   activeNoteId: string | null
   onOpen: (noteId: string) => void
   onAdd: (title: string, template?: Template) => void
+  /** Turn the note that is open into a template. Absent when nothing is open. */
+  onSaveTemplate: (() => void) | null
   onDelete: (note: NoteMeta) => void
   onArchive: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
@@ -56,6 +58,7 @@ export function NoteList({
   activeNoteId,
   onOpen,
   onAdd,
+  onSaveTemplate,
   onDelete,
   onArchive,
   onTogglePin,
@@ -187,6 +190,29 @@ export function NoteList({
                     )}
                   </button>
                 ))}
+                {onSaveTemplate !== null && (
+                  <>
+                    <div className="template-rule" />
+                    {/*
+                      In the same menu rather than in a settings screen, because
+                      you find out a question is worded wrong while USING it. The
+                      real editor is where a template gets refined; this is only
+                      the moment you decide the shape is worth keeping.
+                    */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="template-choice"
+                      onClick={() => {
+                        onSaveTemplate()
+                        setPickingTemplate(false)
+                      }}
+                    >
+                      <span className="template-name">Save this note as a template</span>
+                      <span className="template-why">Its body and tags become the shape the next one starts with.</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
