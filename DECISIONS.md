@@ -3,6 +3,58 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-26 - What a note starts as is data, not code
+
+**Decided.** A template catalog on the index beside the tags, seeded with a
+one-to-one and the story. A template carries a name, a title pattern where
+`{date}` becomes today, a body in the same HTML the editor already stores, and a
+line saying when to reach for it. `src/shared/templates.ts` holds the behaviour,
+`Template` sits beside `Tag` in `types.ts`.
+
+**The cost being removed is the setup, not the writing.** A recurring note costs
+the same title format typed by hand every week and the same questions remembered
+or copied from the last one. Both are small, both fall due at the moment somebody
+is least willing to spend effort - just after the conversation - and together they
+are why the note does not get written at all.
+
+**The story stopped being special, and that is a simplification.** It was the only
+template and it was hard-coded. A second hard-coded one would have been two
+special cases and a third would have settled the shape by accident; the data
+version has fewer moving parts than the version with two buttons, not more.
+
+**What did NOT collapse into it: the note kind.** A story has its own card
+styling and its own half-captured check. A template only decides what a note
+starts with. So a template MAY set a kind and exactly one does, guarded by a
+test - collapsing the two would have made every template a note type, which is a
+far larger claim than "here is what to write".
+
+**One substitution, `{date}`, and nothing else.** A recurring note is almost
+always dated and almost never anything more elaborate. Every token added is one a
+reader has to know before they can predict what the button will do.
+
+**The title never comes out empty.** Pattern, then whatever was typed, then the
+template's own name. Anything typed keeps the date and replaces the fixed half,
+because a typed title is somebody saying which particular one this is. A note you
+cannot find again is the one failure a capture tool cannot afford.
+
+**A missing catalog gets the defaults; an empty one stays empty.** The
+distinction is the whole upgrade path: a notebook written before templates
+existed has no list, while an empty list is somebody having deleted them all.
+Restoring the defaults there would bring every deleted template back on the next
+launch, which reads as the app arguing with you.
+
+**The cost, stated rather than hidden: the story lost its single click.** The
+button was deliberately one click away, with a comment saying a control two
+clicks away is one used in March while trying to remember October. It is now one
+of two entries behind a menu. That is a real loss and the trade was made
+knowingly - what it buys is that the second template did not need a second button.
+
+**Not done yet, and deliberately not a tab.** Editing lives nowhere: the bodies
+can only be changed in code. The next step is "save this note as a template"
+rather than a template editor, because the real editor already exists and because
+iterating on a set of questions happens IN a real note - you find out the wording
+is wrong while using it, not while sitting in a settings screen.
+
 ## 2026-08-24 - Six tag ids are a contract with Tend
 
 **Recorded, not decided here.** Tend maps a Nib tag to the kind of contact a note

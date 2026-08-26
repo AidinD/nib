@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { NibIndex, NoteKind, NoteMeta } from '@shared/types'
+import type { NibIndex, NoteMeta, Template } from '@shared/types'
 import { tagsFor } from '@shared/tags'
 import { CardMenu } from './CardMenu'
 import { TagPicker } from './TagPicker'
@@ -22,7 +22,7 @@ interface NoteListProps {
   notes: NoteMeta[]
   activeNoteId: string | null
   onOpen: (noteId: string) => void
-  onAdd: (title: string, kind?: NoteKind) => void
+  onAdd: (title: string, template?: Template) => void
   onDelete: (note: NoteMeta) => void
   onArchive: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
@@ -69,6 +69,7 @@ export function NoteList({
   onIncludeArchived
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
+  const [pickingTemplate, setPickingTemplate] = useState(false)
   const [slot, setSlot] = useState<DropSlot>(null)
   /** Which card's tag panel is open, and the button rect to hang it off. */
   /** The right-click menu: which card, and where the pointer was. */
@@ -140,27 +141,56 @@ export function NoteList({
             if (event.key === 'Enter' && draft.trim().length > 0) {
               onAdd(draft.trim())
               setDraft('')
+              setPickingTemplate(false)
             }
           }}
         />
         {/*
-          A story is filed wherever the thing happened, so this sits beside the
-          note field rather than in a folder of its own. The point is capturing
-          it while it is fresh - a button two clicks away is a button used in
-          March, trying to remember October.
+          Templates sit beside the note field rather than in a menu of their own,
+          for the reason the story button was here first: a note worth a template
+          is a recurring one, written just after the thing happened, and a control
+          two clicks away is one used in March while trying to remember October.
+
+          It costs the story its single click, which was a deliberate choice
+          before and is worth naming as a loss rather than pretending otherwise.
+          What it buys is that the second template did not have to become a second
+          button, and the third would have settled the shape by accident.
         */}
-        <button
-          type="button"
-          className="add-story"
-          disabled={target === null}
-          title="A career story, in four questions. Fill it in while it is fresh."
-          onClick={() => {
-            onAdd(draft.trim().length > 0 ? draft.trim() : 'Untitled story', 'story')
-            setDraft('')
-          }}
-        >
-          Story
-        </button>
+        {index.templates.length > 0 && (
+          <div className="add-templates">
+            <button
+              type="button"
+              className="add-story"
+              disabled={target === null}
+              title="Start a note from a template"
+              onClick={() => setPickingTemplate((open) => !open)}
+            >
+              Template
+            </button>
+            {pickingTemplate && (
+              <div className="template-menu" role="menu">
+                {index.templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    role="menuitem"
+                    className="template-choice"
+                    onClick={() => {
+                      onAdd(draft.trim(), template)
+                      setDraft('')
+                      setPickingTemplate(false)
+                    }}
+                  >
+                    <span className="template-name">{template.name}</span>
+                    {template.description.length > 0 && (
+                      <span className="template-why">{template.description}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/*

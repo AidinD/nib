@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
-import { storyTemplate } from '@shared/story'
+import { titleFrom } from '@shared/templates'
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
@@ -422,7 +422,7 @@ export function App(): React.JSX.Element {
           notes={notes}
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
-          onAdd={(title, kind) => {
+          onAdd={(title, template) => {
             const target =
               selection.kind === 'category'
                 ? { categoryId: selection.categoryId, subId: null }
@@ -432,16 +432,18 @@ export function App(): React.JSX.Element {
             if (target === null) {
               return
             }
-            const id = ops.addNote(target.categoryId, target.subId, title, kind)
-            // A story opens with its four questions already in it. An empty note
-            // asking you to remember the STAR shape is an empty note.
-            if (kind === 'story') {
+            // A template names the note and fills it in. An empty note asking you
+            // to remember the shape is an empty note, and typing the same title
+            // format every week is the other half of why it never gets written.
+            const named = template === undefined ? title : titleFrom(template, title)
+            const id = ops.addNote(target.categoryId, target.subId, named, template?.kind)
+            if (template !== undefined && template.body.length > 0) {
               void window.nib.writeNote({
                 id,
                 categoryId: target.categoryId,
                 subId: target.subId,
-                title,
-                html: storyTemplate(),
+                title: named,
+                html: template.body,
                 created: Date.now(),
                 edited: Date.now()
               })

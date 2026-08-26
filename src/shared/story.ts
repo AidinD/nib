@@ -13,6 +13,11 @@
  * headings are questions rather than labels for exactly that reason - "Result"
  * invites a summary, "What changed, and how do you know?" invites a number.
  *
+ * The body itself is no longer here: it is one entry in the template catalog
+ * like any other, seeded from `templates.ts`. What stays is the wording of the
+ * prompts and the check that reads them back out of a written note, which is
+ * the half that has to agree with what was actually put on the page.
+ *
  * ## Three places it pays, not one
  *
  * Interviews are the obvious one. The other two are your own review, and writing
@@ -52,20 +57,6 @@ export const STORY_PROMPTS: readonly StoryPrompt[] = [
     hint: 'A number if there is one. If there is not, say what would be different now if you had not.'
   }
 ]
-
-/**
- * The body a new story starts with.
- *
- * Plain heading-and-paragraph HTML, because that is what Nib's editor already
- * stores and sanitises - a story is a note with a shape, not a new document
- * type. The hints go in as real paragraphs rather than placeholders so they
- * survive being edited around, and are visibly meant to be deleted.
- */
-export function storyTemplate(): string {
-  return STORY_PROMPTS.map(
-    (p) => `<h3>${p.heading}</h3><p><em>${p.hint}</em></p>`
-  ).join('')
-}
 
 /**
  * Which prompts still hold nothing but their hint.

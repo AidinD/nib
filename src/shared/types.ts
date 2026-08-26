@@ -156,6 +156,14 @@ export interface NibIndex {
    * shape Jot uses.
    */
   tags: Tag[]
+  /**
+   * Every template that exists: what a new note can start as.
+   *
+   * A catalog for the same reason the tags are one - a template has one name and
+   * one body everywhere, and rewriting the questions is one edit rather than a
+   * habit of copying the last note.
+   */
+  templates: Template[]
 }
 
 /**
@@ -189,6 +197,27 @@ export type NoteFlag = '' | 'open' | 'done'
  * and a count, rather than a new entity.
  */
 export type NoteKind = '' | 'story'
+
+/**
+ * What a note can start as: a title pattern and a body.
+ *
+ * Beside `Tag` because it is the same kind of thing - a catalog entry the whole
+ * app looks up by id - and the behaviour lives in `templates.ts` for the same
+ * reason the tag lookups live in `tags.ts`.
+ *
+ * `kind` is optional and exactly one template sets it. A template supplies what
+ * a note starts with; a kind changes how the app treats it everywhere after
+ * that, which is a much larger claim.
+ */
+export interface Template {
+  id: string
+  name: string
+  /** `{date}` is replaced by today. Empty means the template does not name the note. */
+  title: string
+  body: string
+  description: string
+  kind?: NoteKind
+}
 
 /** The tools a stroke can be drawn with. */
 export type StrokeTool = 'pen' | 'highlighter' | 'eraser'

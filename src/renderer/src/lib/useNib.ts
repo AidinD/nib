@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Category, NibIndex, NoteFlag, NoteKind, NoteMeta, Scope, SubCategory, Tag } from '@shared/types'
+import type { Category, NibIndex, NoteFlag, NoteKind, NoteMeta, Scope, SubCategory, Tag, Template } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { newId } from './notes'
 
-const EMPTY: NibIndex = { version: 1, categories: [], tags: [] }
+const EMPTY: NibIndex = { version: 1, categories: [], tags: [], templates: [] }
 
 /**
  * The index, in memory, with every mutation writing straight through to disk.
@@ -86,6 +86,9 @@ export interface NibOps {
   patchNoteMeta: (noteId: string, patch: Partial<NoteMeta>) => void
   /** Add a tag to the catalog and return its id. */
   addTag: (name: string, color: string, description: string) => string
+  addTemplate: (template: Omit<Template, 'id'>) => string
+  editTemplate: (templateId: string, patch: Partial<Omit<Template, 'id'>>) => void
+  deleteTemplate: (templateId: string) => void
   editTag: (tagId: string, patch: Partial<Omit<Tag, 'id'>>) => void
   /** Remove it from the catalog. Notes keep the id; it simply renders as nothing. */
   deleteTag: (tagId: string) => void
@@ -378,6 +381,31 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
 
     patchNoteMeta: (noteId, patch) =>
       mutate((index) => mapNote(index, noteId, (note) => ({ ...note, ...patch }))),
+
+    addTemplate: (template) => {
+      const id = newId('tpl')
+      mutate((index) => ({ ...index, templates: [...index.templates, { ...template, id }] }))
+      return id
+    },
+
+    editTemplate: (templateId, patch) =>
+      mutate((index) => ({
+        ...index,
+        templates: index.templates.map((t) => (t.id === templateId ? { ...t, ...patch } : t))
+      })),
+
+    /**
+     * Deleting a template takes it out of the catalog and touches no note.
+     *
+     * Unlike a tag there is nothing left behind to bring back: a template is
+     * only ever read at the moment a note is created, so the notes it produced
+     * are ordinary notes and stay exactly as they are.
+     */
+    deleteTemplate: (templateId) =>
+      mutate((index) => ({
+        ...index,
+        templates: index.templates.filter((t) => t.id !== templateId)
+      })),
 
     addTag: (name, color, description) => {
       const id = newId('tag')

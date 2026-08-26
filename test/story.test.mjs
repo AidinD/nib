@@ -13,7 +13,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { STORY_PROMPTS, storyTemplate, unanswered } from '../src/shared/story.ts'
+import { STORY_PROMPTS, unanswered } from '../src/shared/story.ts'
+import { STORY_BODY } from '../src/shared/templates.ts'
+
+/*
+ * The story's body moved into the template catalog, so these read it from there.
+ * That is the point of the pair: the prompts and the half-captured check live
+ * with the story, and what a new note starts with is one entry in a list of
+ * templates like any other. The tests below are what keeps the two agreeing -
+ * an edited template whose headings no longer match the prompts would make every
+ * story read as unanswered.
+ */
+const storyTemplate = () => STORY_BODY
 
 test('the template carries every prompt, as a heading', () => {
   const html = storyTemplate()
