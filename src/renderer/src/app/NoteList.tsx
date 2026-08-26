@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta, Template } from '@shared/types'
 import { tagsFor } from '@shared/tags'
 import { CardMenu } from './CardMenu'
@@ -76,6 +76,37 @@ export function NoteList({
   const [draft, setDraft] = useState('')
   const [pickingTemplate, setPickingTemplate] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
+  const templateHolder = useRef<HTMLDivElement | null>(null)
+
+  /*
+   * Click away to close, which is what every popover is expected to do and what
+   * the settings popover already does. Without it the only ways out were the
+   * button that opened it and picking something - so a menu opened by mistake
+   * had to be dealt with rather than ignored.
+   */
+  useEffect(() => {
+    if (!pickingTemplate) {
+      return
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      if (templateHolder.current !== null && !templateHolder.current.contains(event.target as Node)) {
+        setPickingTemplate(false)
+        setRemoving(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setPickingTemplate(false)
+        setRemoving(null)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [pickingTemplate])
   const [slot, setSlot] = useState<DropSlot>(null)
   /** Which card's tag panel is open, and the button rect to hang it off. */
   /** The right-click menu: which card, and where the pointer was. */
@@ -163,7 +194,7 @@ export function NoteList({
           button, and the third would have settled the shape by accident.
         */}
         {index.templates.length > 0 && (
-          <div className="add-templates">
+          <div className="add-templates" ref={templateHolder}>
             <button
               type="button"
               className="add-story"

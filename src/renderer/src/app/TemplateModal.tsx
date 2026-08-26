@@ -18,6 +18,7 @@ import { today } from '@shared/templates'
 export function TemplateModal({
   suggestedName,
   tagCount,
+  bodyPreview,
   onSave,
   onCancel
 }: {
@@ -25,6 +26,15 @@ export function TemplateModal({
   suggestedName: string
   /** How many tags come with it, said out loud so it is not a surprise later. */
   tagCount: number
+  /**
+   * The body being captured, as plain text.
+   *
+   * Shown because the one thing this dialog does not ask for is the one thing
+   * worth checking: it is saving a note you cannot see from here, and an empty
+   * body is indistinguishable from a full one until the next time you use it.
+   * Null while it is still being read.
+   */
+  bodyPreview: string | null
   onSave: (fields: { name: string; title: string; description: string }) => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -48,7 +58,9 @@ export function TemplateModal({
   }, [onCancel])
 
   const preview = title.trim().replace(/\{date\}/g, today()).trim()
-  const ready = name.trim().length > 0
+  // Nothing worth saving from an empty note, and saying so beats saving a
+  // template that quietly does nothing the first time it is used.
+  const ready = name.trim().length > 0 && bodyPreview !== null && bodyPreview.trim().length > 0
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -97,13 +109,28 @@ export function TemplateModal({
 
         <label className="template-field">
           <span className="template-label">When to reach for it, optional</span>
-          <input
-            className="add-note"
+          <textarea
+            className="add-note template-textarea"
+            rows={2}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="The questions you actually want to ask, already in the note."
           />
+          <span className="template-hint">One line under the name in the menu, saying when to pick it.</span>
         </label>
+
+        <div className="template-field">
+          <span className="template-label">What gets saved</span>
+          {bodyPreview === null ? (
+            <p className="template-preview is-waiting">Reading the note…</p>
+          ) : bodyPreview.trim().length === 0 ? (
+            <p className="template-preview is-empty">
+              This note is empty, so the template would be too. Write it first.
+            </p>
+          ) : (
+            <p className="template-preview">{bodyPreview}</p>
+          )}
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="modal-btn" onClick={onCancel}>

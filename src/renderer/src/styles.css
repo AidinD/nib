@@ -2725,3 +2725,43 @@ body.is-resizing .splitter-grip {
   border-color: var(--danger, #e06c6c);
   color: var(--danger, #e06c6c);
 }
+
+.template-modal {
+  min-width: 480px;
+  max-width: 560px;
+}
+
+.template-textarea {
+  resize: vertical;
+  min-height: 46px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/*
+ * What the template will actually keep.
+ *
+ * Capped and scrollable rather than truncated with an ellipsis: the question it
+ * answers is "is this the right note and is there anything in it", and a couple
+ * of lines answers that while a wall of text would push the buttons off screen.
+ */
+.template-preview {
+  margin: 0;
+  max-height: 84px;
+  overflow-y: auto;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.template-preview.is-waiting {
+  font-style: italic;
+}
+
+.template-preview.is-empty {
+  color: var(--danger, #e06c6c);
+}

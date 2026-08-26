@@ -3,6 +3,19 @@ import type { Category, NoteMeta } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { titleFrom } from '@shared/templates'
 import { TemplateModal } from './TemplateModal'
+
+/**
+ * A note body as readable text, for showing what a template is about to keep.
+ *
+ * Built with real DOM rather than a regex over the HTML: the renderer has one,
+ * and stripping tags by pattern is how a heading and the paragraph after it end
+ * up as one run-on word.
+ */
+function asPlainText(html: string): string {
+  const holder = document.createElement('div')
+  holder.innerHTML = html
+  return (holder.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
 import { AlertStrip } from './AlertStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
@@ -106,6 +119,8 @@ export function App(): React.JSX.Element {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   /** The note being turned into a template, while the dialog is up. */
   const [savingTemplate, setSavingTemplate] = useState<NoteMeta | null>(null)
+  /** Its body, read once the dialog opens. Null while the read is in flight. */
+  const [templateBody, setTemplateBody] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   const notes = useMemo(
@@ -426,6 +441,7 @@ export function App(): React.JSX.Element {
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
           onAdd={(title, template) => {
+            void (async () => {
             const target =
               selection.kind === 'category'
                 ? { categoryId: selection.categoryId, subId: null }
@@ -440,8 +456,12 @@ export function App(): React.JSX.Element {
             // format every week is the other half of why it never gets written.
             const named = template === undefined ? title : titleFrom(template, title)
             const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
+            // Awaited, and that is the whole fix. Opening the note while the body
+            // was still being written meant the editor read the file before it
+            // existed and drew an empty note - which came back only if you left
+            // and returned, so the template looked like it had done nothing.
             if (template !== undefined && template.body.length > 0) {
-              void window.nib.writeNote({
+              await window.nib.writeNote({
                 id,
                 categoryId: target.categoryId,
                 subId: target.subId,
@@ -452,12 +472,17 @@ export function App(): React.JSX.Element {
               })
             }
             setActiveNoteId(id)
+            })()
           }}
           onSaveTemplate={
             activeNote === null
               ? null
               : () => {
                   setSavingTemplate(activeNote)
+                  setTemplateBody(null)
+                  void window.nib.readNote(activeNote.id).then((doc) => {
+                    setTemplateBody(doc?.html ?? '')
+                  })
                 }
           }
           onDeleteTemplate={(templateId) => ops.deleteTemplate(templateId)}
@@ -541,25 +566,29 @@ export function App(): React.JSX.Element {
         <TemplateModal
           suggestedName={savingTemplate.title}
           tagCount={savingTemplate.tags.length}
-          onCancel={() => setSavingTemplate(null)}
+          bodyPreview={templateBody === null ? null : asPlainText(templateBody)}
+          onCancel={() => {
+            setSavingTemplate(null)
+            setTemplateBody(null)
+          }}
           onSave={(fields) => {
             const note = savingTemplate
+            const body = templateBody
             setSavingTemplate(null)
-            // The body lives in the note file rather than in the index, so it is
-            // read at the moment of saving. A template made from a note that
-            // cannot be read would be an empty template, which is worse than no
-            // template - so nothing is written when the read comes back empty.
-            void window.nib.readNote(note.id).then((doc) => {
-              if (doc === null) {
-                return
-              }
-              ops.addTemplate({
-                name: fields.name,
-                title: fields.title,
-                description: fields.description,
-                body: doc.html,
-                tags: [...note.tags]
-              })
+            setTemplateBody(null)
+            // Read when the dialog opened rather than now, so what was shown is
+            // exactly what gets saved. Reading again here would let a note edited
+            // in another window between opening and confirming produce a template
+            // nobody looked at.
+            if (body === null || body.trim().length === 0) {
+              return
+            }
+            ops.addTemplate({
+              name: fields.name,
+              title: fields.title,
+              description: fields.description,
+              body,
+              tags: [...note.tags]
             })
           }}
         />
