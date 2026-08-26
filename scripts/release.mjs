@@ -41,7 +41,7 @@ function run(command, args, env) {
 // than two hours as untouchable and skips `latest.yml` with a notice in the
 // middle of its output, then exits 0 - so the failure looks exactly like a
 // success and the updater keeps offering the old build.
-const failures = preflight(exec, { tag, checks: ['cleanTree', 'notAlreadyReleased'] })
+const failures = preflight(exec, { tag, checks: ['cleanTree', 'nothingUnpushed', 'notAlreadyReleased'] })
 if (failures.length > 0) {
   fail(failures.map((failure) => failure.message).join('\n\n'))
 }
