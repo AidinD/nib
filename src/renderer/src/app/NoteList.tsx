@@ -25,6 +25,7 @@ interface NoteListProps {
   onAdd: (title: string, template?: Template) => void
   /** Turn the note that is open into a template. Absent when nothing is open. */
   onSaveTemplate: (() => void) | null
+  onDeleteTemplate: (templateId: string) => void
   onDelete: (note: NoteMeta) => void
   onArchive: (note: NoteMeta) => void
   onTogglePin: (note: NoteMeta) => void
@@ -59,6 +60,7 @@ export function NoteList({
   onOpen,
   onAdd,
   onSaveTemplate,
+  onDeleteTemplate,
   onDelete,
   onArchive,
   onTogglePin,
@@ -73,6 +75,7 @@ export function NoteList({
 }: NoteListProps): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [pickingTemplate, setPickingTemplate] = useState(false)
+  const [removing, setRemoving] = useState<string | null>(null)
   const [slot, setSlot] = useState<DropSlot>(null)
   /** Which card's tag panel is open, and the button rect to hang it off. */
   /** The right-click menu: which card, and where the pointer was. */
@@ -166,30 +169,75 @@ export function NoteList({
               className="add-story"
               disabled={target === null}
               title="Start a note from a template"
-              onClick={() => setPickingTemplate((open) => !open)}
+              onClick={() => {
+                setPickingTemplate((open) => !open)
+                setRemoving(null)
+              }}
             >
               Template
             </button>
             {pickingTemplate && (
               <div className="template-menu" role="menu">
-                {index.templates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    role="menuitem"
-                    className="template-choice"
-                    onClick={() => {
-                      onAdd(draft.trim(), template)
-                      setDraft('')
-                      setPickingTemplate(false)
-                    }}
-                  >
-                    <span className="template-name">{template.name}</span>
-                    {template.description.length > 0 && (
-                      <span className="template-why">{template.description}</span>
-                    )}
-                  </button>
-                ))}
+                {index.templates.map((template) =>
+                  removing === template.id ? (
+                    /*
+                      Confirmed in place rather than through a modal. A template
+                      is not a note - deleting one changes nothing that was
+                      already written, so the weight of a dialog over the whole
+                      window would overstate what is happening. What it does need
+                      is a second click, because it cannot be undone.
+                    */
+                    <div key={template.id} className="template-confirm">
+                      <span className="template-why">Remove {template.name}? Notes made from it stay as they are.</span>
+                      <div className="template-confirm-row">
+                        <button
+                          type="button"
+                          className="template-mini"
+                          onClick={() => setRemoving(null)}
+                        >
+                          Keep it
+                        </button>
+                        <button
+                          type="button"
+                          className="template-mini is-danger"
+                          onClick={() => {
+                            onDeleteTemplate(template.id)
+                            setRemoving(null)
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={template.id} className="template-row">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="template-choice"
+                        onClick={() => {
+                          onAdd(draft.trim(), template)
+                          setDraft('')
+                          setPickingTemplate(false)
+                        }}
+                      >
+                        <span className="template-name">{template.name}</span>
+                        {template.description.length > 0 && (
+                          <span className="template-why">{template.description}</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="template-remove"
+                        title={`Remove ${template.name}`}
+                        aria-label={`Remove ${template.name}`}
+                        onClick={() => setRemoving(template.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                )}
                 {onSaveTemplate !== null && (
                   <>
                     <div className="template-rule" />

@@ -460,6 +460,7 @@ export function App(): React.JSX.Element {
                   setSavingTemplate(activeNote)
                 }
           }
+          onDeleteTemplate={(templateId) => ops.deleteTemplate(templateId)}
           onDelete={(note) => setPendingDelete({ kind: 'note', note })}
           onArchive={(note) => void archiveNote(note)}
           archivedHits={archived}
