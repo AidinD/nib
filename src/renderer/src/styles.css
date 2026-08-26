@@ -64,7 +64,16 @@ button.is-active {
   color: var(--text);
 }
 
-input {
+/*
+ * Both, not just inputs.
+ *
+ * The reset covered `input` alone, so the first textarea in the app arrived with
+ * the platform's own light box in the middle of a dark frameless window. Fixing
+ * it on that one field would have left the next textarea to find the same thing
+ * out again.
+ */
+input,
+textarea {
   font: inherit;
   color: var(--text);
   background: transparent;
