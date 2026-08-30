@@ -3071,3 +3071,44 @@ body.is-resizing .splitter-grip {
 .recording-block[data-state='transcribed'] {
   border-left-color: var(--border);
 }
+
+/* ---------- the summary ---------- */
+
+/*
+ * The summary sits at the top of the note and reads as part of it, not as a card
+ * bolted on. It IS the note now - what was said is folded away below it - so it
+ * gets no border, no background, nothing that says "generated".
+ *
+ * The one mark it carries is a rule under the last block, so the eye knows where
+ * the machine stopped writing and the meeting's own notes begin.
+ */
+.doc-body [data-summary] {
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-body [data-summary] > h2:first-child {
+  margin-top: 0;
+}
+
+.summary-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--alert);
+  border-radius: 6px;
+  color: var(--alert);
+  font-size: 12px;
+}
+
+/* The summary can always be asked for again - a day later, or after editing your
+   own notes - so its failure is a notice rather than a dead end. */
+.summary-error button {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}

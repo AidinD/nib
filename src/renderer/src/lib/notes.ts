@@ -164,7 +164,17 @@ export function normaliseBlocks(root: HTMLElement): void {
    */
   const wrappers = Array.from(root.querySelectorAll('div')).reverse()
   for (const wrapper of wrappers) {
-    if ((wrapper as HTMLElement).dataset.canvas !== undefined) {
+    /*
+     * A `div` this app put there is structure, not imported junk.
+     *
+     * The unwrapping exists for pasted layout - three levels of someone else's
+     * flexbox around a list - and it happily took Nib's own wrappers with it. The
+     * summary block lost its marker that way: the text survived, the
+     * `data-summary` did not, and the next summary would then have quietly fed on
+     * the last one. Anything carrying one of these attributes is ours.
+     */
+    const own = wrapper as HTMLElement
+    if (own.dataset.canvas !== undefined || own.dataset.summary !== undefined) {
       continue
     }
     const holdsBlocks = wrapper.querySelector(
@@ -674,4 +684,84 @@ export function transcriptHtml(
     (lines.length > 0 ? lines : '<p><em>Ingenting hördes.</em></p>') +
     `</details>`
   )
+}
+
+/**
+ * A meeting's summary, as blocks the editor already understands.
+ *
+ * Action points come back as FLAGGED lines - `data-alert` with an id - which is
+ * the same marker the alert gutter sets by hand. That is the whole reason this
+ * feature is in Nib rather than in a transcription app: a promise made out loud
+ * becomes a flagged line, the flagged line becomes an action point on the card,
+ * and Tend reads it as a promise with a clock on it. Nothing is retyped.
+ *
+ * An implied commitment is marked as such rather than silently promoted. "I can
+ * take a look at that" is a promise in effect, and the person reading it back
+ * deserves to know the model inferred it rather than heard it.
+ */
+export function summaryHtml(
+  value: {
+    summary: string
+    decisions: string[]
+    actions: { text: string; implied: boolean }[]
+    questions: string[]
+    people: string[]
+    lastTime?: string
+  },
+  newAlertId: () => string
+): string {
+  const escape = (text: string): string =>
+    text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
+  const parts: string[] = []
+
+  parts.push('<h2>Sammanfattning</h2>')
+  parts.push(`<p>${escape(value.summary)}</p>`)
+
+  if (value.lastTime !== undefined && value.lastTime.trim().length > 0) {
+    // First after the summary, deliberately: what was promised last time and is
+    // still open is the thing a 1-1 most often fails to notice.
+    parts.push('<h2>Sedan förra gången</h2>')
+    parts.push(`<p>${escape(value.lastTime)}</p>`)
+  }
+
+  if (value.decisions.length > 0) {
+    parts.push('<h2>Beslut</h2>')
+    parts.push(`<ul>${value.decisions.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>`)
+  }
+
+  if (value.actions.length > 0) {
+    parts.push('<h2>Åtgärdspunkter</h2>')
+    for (const action of value.actions) {
+      parts.push(
+        `<p data-alert="1" data-alert-id="${newAlertId()}">${escape(action.text)}` +
+          (action.implied ? ' <em>(underförstått)</em>' : '') +
+          '</p>'
+      )
+    }
+  }
+
+  if (value.questions.length > 0) {
+    parts.push('<h2>Frågor jag inte ställde</h2>')
+    parts.push(`<ul>${value.questions.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>`)
+  }
+
+  if (value.people.length > 0) {
+    parts.push(`<p><em>Nämnda: ${value.people.map(escape).join(', ')}</em></p>`)
+  }
+
+  return parts.join('')
+}
+
+/**
+ * Everything in the note that the person wrote themselves.
+ *
+ * The transcript and any previous summary are left out: feeding a summary back
+ * into the next one is how a note slowly becomes a summary of its own summaries.
+ */
+export function ownNotes(root: HTMLElement): string {
+  const copy = root.cloneNode(true) as HTMLElement
+  for (const generated of copy.querySelectorAll('[data-transcript], [data-recording], [data-summary]')) {
+    generated.remove()
+  }
+  return (copy.textContent ?? '').replace(/\s{3,}/g, '\n\n').trim()
 }

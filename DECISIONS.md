@@ -3,6 +3,58 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - A meeting is recorded into a note, not into an app
+
+**Decided.** Transcription lives in Nib, and the note is the container: Record
+sits in the toolbar beside Image and Canvas, the recording belongs to the note it
+was started from, and the summary lands at the top of that same note.
+
+**Rejected: a separate app.** It would have needed its own copy of the folder and
+person model and would then have had to write into Nib's index - which is exactly
+the coupling that took two days to untangle between Tend and Nib. And the output
+is a note either way.
+
+**Rejected: a Record button in the window header, filing afterwards.** Aidin's
+counter-proposal was better and it removed a whole step rather than moving it: if
+the note exists first, whatever you type during the meeting is already in the same
+document as the transcript, so there is nothing to merge. The panic path survives
+as Ctrl+Shift+R, which creates an untitled note in the current folder and starts.
+
+**The pre-flight is not ceremony.** The language is chosen at the click because
+the two whisper models are language-specific - measured, not assumed: the Swedish
+checkpoint transcribes English speech into Swedish words. And both meters must
+move before Start, because the expensive failure is forty-five minutes of silence
+from a device that was never listening, and the seconds beforehand are the only
+chance to catch it.
+
+**Both sides of the call, mixed to one channel.** The far end comes out of the
+speakers, so it is taken from the machine's own output. Keeping the two streams
+apart would allow speaker labels and was not done: it doubles the transcription,
+and the audio is deleted once the transcript exists, so there would be nothing
+left to go back to.
+
+**The money is last, and it is a button.** Recording and transcription are local
+and free - whisper runs on the GPU here, so a colleague's voice never leaves the
+machine and costs nothing. The summary is the only step that leaves, and it
+happens when asked rather than because you stopped talking. Everything before it
+is already saved, so a failed or unaffordable summary costs a note nothing and can
+be retried tomorrow.
+
+**It goes through Claude Code's own sign-in**, via keel, so there is no second
+credential to store and the spend is the one that already exists.
+
+**The transcript arrives folded.** Measured: typing in a note holding a
+45-minute transcript costs 23ms a keystroke against 0.7ms in a short one, because
+Chromium relays out several hundred blocks per character. Folded content is not
+laid out at all. Aidin chose one note over two, and this is what makes that choice
+cost nothing.
+
+**Action points come back as flagged lines**, the same marker the alert gutter
+sets by hand - so a promise made out loud becomes a flagged line, becomes a count
+on the card, becomes a promise with a clock on it in Tend. Nothing is retyped, and
+that chain is the reason this belongs in Nib rather than in a transcription tool.
+
+
 ## 2026-08-26 - What a note starts as is data, not code
 
 **Decided.** A template catalog on the index beside the tags, seeded with a

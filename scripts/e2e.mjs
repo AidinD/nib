@@ -321,8 +321,13 @@ function makePage(send) {
   const tab = async (shift = false) => key(9, 'Tab', 'Tab', shift ? 8 : 0)
 
   /** Wait until an expression returns something truthy. */
-  const waitFor = async (expression, label = expression) => {
-    for (let attempt = 0; attempt < 60; attempt++) {
+  const waitFor = async (expression, label = expression, seconds = 9) => {
+    /*
+     * Nine seconds by default, which is right for anything the app does on its
+     * own. A model call is not that - it can take minutes - so the budget is a
+     * parameter rather than a constant, and a test that waits for one says so.
+     */
+    for (let attempt = 0; attempt < Math.ceil((seconds * 1000) / 150); attempt++) {
       if (await evaluate(`return (${expression})`)) {
         return true
       }

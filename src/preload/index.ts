@@ -67,6 +67,30 @@ const api = {
   deleteRecording: (path: string): Promise<void> =>
     ipcRenderer.invoke('recording:delete', path),
 
+  /**
+   * Summarise a meeting. The only call in this app that leaves the machine, and
+   * the only one that spends anything.
+   */
+  summarise: (request: {
+    transcript: string
+    notes: string
+    previous?: string
+    language: 'sv' | 'en'
+    model: string
+  }): Promise<{
+    ok: boolean
+    reason?: string
+    costUsd?: number | null
+    value?: {
+      summary: string
+      decisions: string[]
+      actions: { text: string; implied: boolean }[]
+      questions: string[]
+      people: string[]
+      lastTime?: string
+    }
+  }> => ipcRenderer.invoke('summary:run', request),
+
   /** Whether transcription can run for a language, and if not, why not. */
   transcribeStatus: (
     language: 'sv' | 'en'

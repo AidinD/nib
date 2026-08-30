@@ -13,6 +13,8 @@ import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import { appendSamples, deleteRecording, isRecording, startRecording, stopRecording } from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
+import { summarise } from './summary'
+import type { SummaryRequest } from './summary'
 import { NoteStorage } from './storage'
 import {
   allWindows,
@@ -245,6 +247,14 @@ function registerIpc(): void {
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
 
   /*
+   * The summary: the one step that leaves the machine.
+   *
+   * Through keel, which borrows Claude Code's own sign-in - so there is no second
+   * credential to store and the spend is the one the user already has.
+   */
+  ipcMain.handle('summary:run', (_event, request: SummaryRequest) => summarise(request))
+
+  /*
    * Turning a recording into text.
    *
    * The work happens in a child process that keel spawns, so a crash in the
@@ -253,8 +263,21 @@ function registerIpc(): void {
    * position - a 45-minute meeting is a few minutes of waiting, and a spinner
    * that cannot say how far along it is turns that into an unknown.
    */
+  /*
+   * Where THIS app would keep the engine, on top of what keel knows.
+   *
+   * keel cannot work these out - it has no idea which app is asking - so the two
+   * places that belong to Nib are passed in: beside the notebook, for someone who
+   * keeps everything in one synced folder, and in the app's own userData, which is
+   * where an installed copy would put something it downloaded.
+   */
+  const whisperRoots = (): string[] => [
+    join(resolveDataDir(), 'whisper'),
+    join(app.getPath('userData'), 'whisper')
+  ]
+
   ipcMain.handle('transcribe:status', (_event, language: 'sv' | 'en') =>
-    whisperStatus(language)
+    whisperStatus(language, { roots: whisperRoots() })
   )
   ipcMain.handle(
     'transcribe:run',
@@ -266,6 +289,7 @@ function registerIpc(): void {
         file: path,
         language,
         seconds,
+        roots: whisperRoots(),
         onProgress: (fraction) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send('transcribe:progress', fraction)

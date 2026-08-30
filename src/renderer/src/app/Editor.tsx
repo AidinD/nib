@@ -14,6 +14,9 @@ import {
   applyCanvasBlocks,
   applyRecordingBlocks,
   transcriptHtml,
+  summaryHtml,
+  ownNotes,
+  htmlToText,
   applyImageWidths,
   applyNoteLinks,
   noteLinkHtml,
@@ -56,6 +59,17 @@ const SAVE_DELAY = 600
 const ALERT_GUTTER = 20
 
 /** The lines that can carry an alert - kept in step with ALERT_BLOCKS in notes.ts. */
+/*
+ * Which model writes the summary.
+ *
+ * Haiku, because compressing a transcript into a fixed structure is extraction
+ * rather than reasoning, and the difference between tiers barely shows. Where a
+ * larger model earns its cost is reading between the lines - an implied promise,
+ * what a disagreement was actually about - so this is the one line to change when
+ * a meeting is worth more than the default.
+ */
+const SUMMARY_MODEL = 'claude-haiku-4-5'
+
 const ALERT_LINES = 'p, h1, h2, h3, h4, li, blockquote'
 
 interface EditorProps {
@@ -126,6 +140,12 @@ export function Editor({
    * a meeting away.
    */
   const [panel, setPanel] = useState(false)
+  const [summarising, setSummarising] = useState(false)
+  /* Whether this note holds a transcript. Read from the document rather than
+     from state, because a transcript can arrive from a load as well as from a
+     recording - and the button has to be right in both cases. */
+  const [hasTranscript, setHasTranscript] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
     null
   )
@@ -216,6 +236,7 @@ export function Editor({
     setSlash(null)
     setPicker(null)
     setLinker(null)
+    setSummaryError(null)
 
     void window.nib.readNote(note.id).then((doc) => {
       if (cancelled || bodyRef.current === null) {
@@ -229,6 +250,7 @@ export function Editor({
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
+      setHasTranscript(bodyRef.current.querySelector('[data-transcript]') !== null)
       const loadedTitle = doc?.title ?? note.title
       titleRef.current = loadedTitle
       setTitle(loadedTitle)
@@ -293,6 +315,7 @@ export function Editor({
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
+      setHasTranscript(bodyRef.current.querySelector('[data-transcript]') !== null)
       titleRef.current = doc.title
       setTitle(doc.title)
       setWords(wordCount(html))
@@ -523,6 +546,9 @@ export function Editor({
     // Typing means the calendar is not what is wanted after all; a stale one
     // hanging by the caret is worse than no calendar.
     setPicker(null)
+    if (element !== null) {
+      setHasTranscript(element.querySelector('[data-transcript]') !== null)
+    }
     setSlash((current) => {
       if (current === null) {
         return null
@@ -772,6 +798,82 @@ export function Editor({
     },
     [onBodyInput]
   )
+
+  /**
+   * Ask for the summary. The one thing here that costs anything.
+   *
+   * Everything it needs is already in the note: the transcript, and whatever was
+   * typed during the meeting. The previous meeting with the same person is
+   * fetched too when there is one - that is where the most useful line in the
+   * answer comes from, and no transcription service can produce it, because it
+   * has never seen your other notes.
+   *
+   * The result goes at the TOP. A summary under nine thousand words of transcript
+   * is a summary nobody reads.
+   */
+  const summarise = useCallback(async () => {
+    const root = bodyRef.current
+    if (root === null || note === null || summarising) {
+      return
+    }
+    const transcript = root.querySelector<HTMLElement>('[data-transcript]')
+    if (transcript === null) {
+      return
+    }
+
+    setSummarising(true)
+    try {
+      /*
+       * The last note about the same person, before this one.
+       *
+       * Same folder, older, and not this note - which is as close to "the
+       * previous 1-1" as the notebook can answer without guessing. Its body is
+       * read rather than its preview: the preview is two lines and the question
+       * is what was promised.
+       */
+      const siblings = index.categories
+        .find((category) => category.id === note.categoryId)
+        ?.notes.filter(
+          (candidate) =>
+            candidate.subId === note.subId &&
+            candidate.id !== note.id &&
+            candidate.created < note.created
+        )
+        .sort((a, b) => b.created - a.created)
+      const earlier = siblings?.[0]
+      const previous =
+        earlier === undefined ? undefined : (await window.nib.readNote(earlier.id))?.html
+
+      const result = await window.nib.summarise({
+        transcript: transcript.textContent ?? '',
+        notes: ownNotes(root),
+        previous: previous === undefined ? undefined : htmlToText(previous).slice(0, 8000),
+        language: root.querySelector<HTMLElement>('[data-recording]')?.dataset.language === 'en' ? 'en' : 'sv',
+        model: SUMMARY_MODEL
+      })
+
+      if (!result.ok || result.value === undefined) {
+        setSummaryError(result.reason ?? 'The summary did not come back.')
+        return
+      }
+
+      const holder = document.createElement('div')
+      holder.innerHTML = summaryHtml(result.value, () => newId('alert'))
+      const section = document.createElement('div')
+      section.dataset.summary = '1'
+      while (holder.firstChild !== null) {
+        section.appendChild(holder.firstChild)
+      }
+      root.insertBefore(section, root.firstChild)
+      normaliseBlocks(root)
+      setSummaryError(null)
+      onBodyInput()
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSummarising(false)
+    }
+  }, [index, note, onBodyInput, summarising])
 
   const insertCanvas = useCallback(() => {
     const root = bodyRef.current
@@ -1391,6 +1493,25 @@ export function Editor({
           >
             Record
           </button>
+          {/*
+            Summarising is a separate press, on purpose. Recording and
+            transcribing are local and free; this is the one step that leaves the
+            machine and the only one that spends anything, so it happens when you
+            ask rather than because you stopped talking. It is also why it can be
+            pressed again - a day later, or after editing your own notes.
+          */}
+          <button
+            type="button"
+            onClick={() => void summarise()}
+            disabled={!hasTranscript || summarising}
+            title={
+              hasTranscript
+                ? 'Summarise the meeting with Claude'
+                : 'Record and transcribe a meeting first'
+            }
+          >
+            {summarising ? 'Summarising…' : 'Summarise'}
+          </button>
         </div>
         </div>
 
@@ -1459,6 +1580,15 @@ export function Editor({
             onPick={insertNoteLink}
             onClose={() => setLinker(null)}
           />
+        )}
+
+        {summaryError !== null && (
+          <p className="summary-error">
+            {summaryError}
+            <button type="button" onClick={() => setSummaryError(null)}>
+              Dismiss
+            </button>
+          </p>
         )}
 
         {panel && recording === null && (
