@@ -1912,20 +1912,33 @@ body.is-sticky-window {
   background: var(--alert);
 }
 
-/* Dealt with: still marked, still a flag, but grey and out of the way - the line
-   needed attention and got it, which is worth being able to see. */
+/*
+ * Dealt with: a green tick, not a grey flag.
+ *
+ * It was the same glyph in a quieter colour, which made the two states differ
+ * only in contrast - and the whole point of keeping a finished action point in
+ * the note is that you can see it was finished. A grey flag beside grey text at
+ * three quarters opacity is a flag you have to look for.
+ *
+ * A different SHAPE rather than a different shade: it survives being glanced at,
+ * and it reads the same way to somebody who cannot tell the two colours apart.
+ * Green because it is the only token in this palette that means "done" - amber is
+ * the sticky note, violet is a drawing, and the accent is selection.
+ */
 .doc-body [data-alert='done'] {
   color: var(--text-dim);
 }
 
 .doc-body [data-alert='done']::before,
 .doc-body:hover [data-alert='done']::before {
-  color: var(--text-dim);
-  opacity: 0.75;
+  content: '✓';
+  color: var(--green);
+  opacity: 1;
 }
 
 .doc-body [data-alert='done']::after {
-  background: var(--border);
+  background: var(--green);
+  opacity: 0.45;
 }
 
 /* A sticky window shows the same marks, without the click target. */
@@ -1955,9 +1968,11 @@ body.is-sticky-window {
   opacity: 1;
 }
 
+/* The same tick on a card, for the same reason: two states that differ only in
+   opacity are one state with a rendering bug. */
 .card-flag.is-done {
-  color: var(--text-dim);
-  opacity: 0.8;
+  color: var(--green);
+  opacity: 1;
 }
 
 /* Marked on the edge rather than by a fill: colour means active state, and a
@@ -1986,12 +2001,17 @@ body.is-sticky-window {
 }
 
 .alert-flag.is-done {
-  color: var(--text-dim);
-  opacity: 0.7;
+  color: var(--green);
+  opacity: 1;
 }
 
 .card-alerts li.is-done span {
   color: var(--text-dim);
+}
+
+/* The bullet in a card's action-point list, ticked. */
+.card-alerts li.is-done::marker {
+  color: var(--green);
 }
 
 /* The two scopes read as a pair: neither is the default, so neither is silent. */

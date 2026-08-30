@@ -411,7 +411,7 @@ export function NoteList({
                     onCycleFlag(note)
                   }}
                 >
-                  ⚑
+                  {note.flag === 'done' ? '✓' : '⚑'}
                 </button>
                 {/*
                   An affordance, so it hides until the card is hovered - the
@@ -493,7 +493,10 @@ export function NoteList({
                           onTickAlert(note, alert.id, !alert.done)
                         }}
                       >
-                        ⚑
+                        {/* A tick once it is dealt with, not the same flag in a
+                            quieter grey - two states that differ only in opacity
+                            read as one state and a rendering fault. */}
+                        {alert.done ? '✓' : '⚑'}
                       </button>
                       <span>{alert.text}</span>
                     </li>
