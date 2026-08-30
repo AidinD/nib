@@ -116,6 +116,28 @@ export function applyRecordingBlocks(root: HTMLElement): void {
   }
 }
 
+/**
+ * Put the delete control back on every transcript.
+ *
+ * Done on load rather than only at insertion, because transcripts written before
+ * the control existed have none - and a feature that only reaches notes made
+ * after it shipped is a feature half the notebook does not have. It is also how
+ * the control survives someone editing the summary line by hand.
+ */
+export function applyTranscriptBlocks(root: HTMLElement): void {
+  for (const block of root.querySelectorAll<HTMLElement>('[data-transcript]')) {
+    const line = block.querySelector('summary')
+    if (line === null || line.querySelector('[data-drop]') !== null) {
+      continue
+    }
+    const drop = document.createElement('span')
+    drop.dataset.drop = 'transcript'
+    drop.title = 'Ta bort transkriptet'
+    drop.textContent = '×'
+    line.appendChild(drop)
+  }
+}
+
 export function applyCanvasBlocks(root: HTMLElement): void {
   for (const block of root.querySelectorAll('[data-canvas]')) {
     ;(block as HTMLElement).contentEditable = 'false'
@@ -148,6 +170,15 @@ export function applyCanvasBlocks(root: HTMLElement): void {
  *
  * A canvas block is a div too, and stays one - it is not a line of text.
  */
+/**
+ * The data attributes that make a `div` one of this app's own blocks.
+ *
+ * Add a block type, add it here. Forgetting to is not a cosmetic bug: the wrapper
+ * is unwrapped on the next load, the marker is gone, and whatever the block was
+ * for silently stops working.
+ */
+const OWN_BLOCKS = ['canvas', 'summary', 'recording', 'transcript']
+
 export function normaliseBlocks(root: HTMLElement): void {
   /*
    * Wrappers from somewhere else are taken apart.
@@ -168,13 +199,17 @@ export function normaliseBlocks(root: HTMLElement): void {
      * A `div` this app put there is structure, not imported junk.
      *
      * The unwrapping exists for pasted layout - three levels of someone else's
-     * flexbox around a list - and it happily took Nib's own wrappers with it. The
-     * summary block lost its marker that way: the text survived, the
-     * `data-summary` did not, and the next summary would then have quietly fed on
-     * the last one. Anything carrying one of these attributes is ours.
+     * flexbox around a list - and it happily took Nib's own wrappers with it.
+     *
+     * It cost the same bug twice. The summary block lost its marker, so the next
+     * summary would have fed on the last one. Then a recording block lost its
+     * marker on the first reload, which turned a meeting waiting to be
+     * transcribed into a line of ordinary text and left the audio on disk with
+     * nothing pointing at it. Both times the fix was one more name in a list,
+     * which is why there is now a list rather than a condition: anything this app
+     * marks with one of these attributes is a block, and blocks are not unwrapped.
      */
-    const own = wrapper as HTMLElement
-    if (own.dataset.canvas !== undefined || own.dataset.summary !== undefined) {
+    if (OWN_BLOCKS.some((attribute) => attribute in (wrapper as HTMLElement).dataset)) {
       continue
     }
     const holdsBlocks = wrapper.querySelector(
@@ -680,7 +715,12 @@ export function transcriptHtml(
     .join('')
   return (
     `<details data-transcript="1">` +
-    `<summary>Transkript · ${minutes} min · ${segments.length} avsnitt</summary>` +
+    // The delete control lives in the summary line, which is the one part of a
+    // folded block that is always on screen. `data-drop` rather than a class,
+    // because a class does not survive the sanitiser and this has to still be
+    // there after a reload.
+    `<summary>Transkript · ${minutes} min · ${segments.length} avsnitt` +
+    `<span data-drop="transcript" title="Ta bort transkriptet">×</span></summary>` +
     (lines.length > 0 ? lines : '<p><em>Ingenting hördes.</em></p>') +
     `</details>`
   )
@@ -700,6 +740,7 @@ export function transcriptHtml(
  * deserves to know the model inferred it rather than heard it.
  */
 export function summaryHtml(
+  provenance: { model: string; costUsd: number | null },
   value: {
     summary: string
     decisions: string[]
@@ -748,6 +789,23 @@ export function summaryHtml(
   if (value.people.length > 0) {
     parts.push(`<p><em>Nämnda: ${value.people.map(escape).join(', ')}</em></p>`)
   }
+
+  /*
+   * Who wrote this, and what it cost.
+   *
+   * A summary that does not say which model produced it reads as if the note
+   * wrote itself. It matters most when the answer is disappointing: the first
+   * question is which tier ran, and without this the only way to find out is to
+   * remember what the setting was at the time. The cost is there for the same
+   * reason - it is the one part of this feature that spends anything.
+   */
+  const cost =
+    provenance.costUsd === null || provenance.costUsd === undefined
+      ? ''
+      : ` · $${provenance.costUsd.toFixed(3)}`
+  parts.push(
+    `<p data-provenance="1"><em>Sammanfattad med ${escape(provenance.model)}${cost}</em></p>`
+  )
 
   return parts.join('')
 }

@@ -3112,3 +3112,36 @@ body.is-resizing .splitter-grip {
   font-size: 11px;
   white-space: nowrap;
 }
+
+/*
+ * The cross that removes a transcript.
+ *
+ * On the summary line, which is the only part of a folded block that is always
+ * visible, and only on hover - a permanent delete control beside something
+ * irreversible is an invitation.
+ */
+.doc-body details[data-transcript] > summary [data-drop] {
+  float: right;
+  padding: 0 4px;
+  color: var(--text-dim);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.doc-body details[data-transcript]:hover > summary [data-drop] {
+  opacity: 0.6;
+}
+
+.doc-body details[data-transcript] > summary [data-drop]:hover {
+  color: var(--alert);
+  opacity: 1;
+}
+
+/* Who wrote the summary, and what it cost. Quiet - it is a footnote about the
+   note, not part of what the note says. */
+.doc-body [data-provenance] {
+  margin-top: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}

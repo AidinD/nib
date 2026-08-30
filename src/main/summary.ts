@@ -80,6 +80,8 @@ export interface SummaryRequest {
 export interface SummaryResult {
   ok: boolean
   reason?: string
+  /** Which model actually answered - not necessarily the one that was asked for. */
+  model?: string
   value?: {
     summary: string
     decisions: string[]
@@ -141,5 +143,5 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
   if (!result.ok) {
     return { ok: false, reason: result.reason }
   }
-  return { ok: true, value: result.value, costUsd: result.costUsd }
+  return { ok: true, value: result.value, model: result.model, costUsd: result.costUsd }
 }

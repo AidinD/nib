@@ -60,14 +60,13 @@ export function isRecording(): boolean {
  * by a crash says which meeting it was and when - a folder of `rec-1.wav` tells
  * you nothing when you find it a week later.
  */
-export async function startRecording(dataDir: string, noteId: string): Promise<string> {
+export async function startRecording(recordingsDir: string, noteId: string): Promise<string> {
   if (current !== null) {
     throw new Error('Already recording')
   }
-  const dir = join(dataDir, 'recordings')
-  await fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(recordingsDir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const path = join(dir, `${noteId}-${stamp}.wav`)
+  const path = join(recordingsDir, `${noteId}-${stamp}.wav`)
 
   const stream = createWriteStream(path)
   stream.write(header(0))
@@ -112,6 +111,58 @@ export async function stopRecording(): Promise<{ path: string; seconds: number; 
     bytes: recording.bytes,
     seconds: Math.round(recording.bytes / ((SAMPLE_RATE * CHANNELS * BITS) / 8))
   }
+}
+
+/**
+ * Remove recordings whose note is gone.
+ *
+ * A recording is temporary by design - deleted the moment its words are in the
+ * note - but the two ways that does not happen are ordinary: the transcription
+ * was never asked for, or the note was thrown away with the audio still attached.
+ * The second leaves a file nothing can ever point at again, and 1.9MB a minute
+ * adds up quietly in a folder nobody opens.
+ *
+ * Only orphans. A recording whose note still exists might be transcribed
+ * tomorrow, and deleting somebody's meeting because they have not got round to it
+ * is not a housekeeping decision an app gets to make.
+ *
+ * @param recordingsDir Where the files are.
+ * @param liveNoteIds   Every note id the index still knows about.
+ */
+export async function sweepRecordings(
+  recordingsDir: string,
+  liveNoteIds: Set<string>
+): Promise<{ removed: number; bytes: number }> {
+  let removed = 0
+  let bytes = 0
+  let names: string[]
+  try {
+    names = await fs.readdir(recordingsDir)
+  } catch {
+    return { removed, bytes }
+  }
+
+  for (const name of names) {
+    if (!name.endsWith('.wav')) {
+      continue
+    }
+    // `<noteId>-<timestamp>.wav`, and a note id has its own hyphens - so the
+    // timestamp is peeled off the end rather than the id split off the front.
+    const noteId = name.replace(/-\d{4}-\d{2}-\d{2}T[\d-]+\.wav$/, '')
+    if (noteId === name || liveNoteIds.has(noteId)) {
+      continue
+    }
+    const path = join(recordingsDir, name)
+    try {
+      const stats = await fs.stat(path)
+      await fs.rm(path, { force: true })
+      removed += 1
+      bytes += stats.size
+    } catch {
+      // A file that cannot be removed is not worth failing a launch over.
+    }
+  }
+  return { removed, bytes }
 }
 
 /** Delete a recording once its transcript exists - the whole point of keeping it. */

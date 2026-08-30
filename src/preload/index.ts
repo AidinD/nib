@@ -80,6 +80,7 @@ const api = {
   }): Promise<{
     ok: boolean
     reason?: string
+    model?: string
     costUsd?: number | null
     value?: {
       summary: string

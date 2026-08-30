@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
+import { ConfirmModal } from './ConfirmModal'
 import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { NotePicker, listNotes } from './NotePicker'
@@ -13,6 +14,7 @@ import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyRecordingBlocks,
+  applyTranscriptBlocks,
   transcriptHtml,
   summaryHtml,
   ownNotes,
@@ -145,6 +147,20 @@ export function Editor({
      from state, because a transcript can arrive from a load as well as from a
      recording - and the button has to be right in both cases. */
   const [hasTranscript, setHasTranscript] = useState(false)
+  /** The transcript waiting on a yes - held by element, since it is about to go. */
+  const [pendingDrop, setPendingDrop] = useState<HTMLElement | null>(null)
+  /*
+   * The last transcript removed, and where it was.
+   *
+   * A ref rather than state: putting it back is a DOM operation and nothing on
+   * screen renders from it. Cleared by the next edit, so this can never be the
+   * answer to a Ctrl+Z that meant something else.
+   */
+  const undone = useRef<{
+    node: HTMLElement
+    parent: HTMLElement | null
+    before: ChildNode | null
+  } | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
     null
@@ -247,6 +263,7 @@ export function Editor({
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
+      applyTranscriptBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -312,6 +329,7 @@ export function Editor({
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
+      applyTranscriptBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -499,6 +517,9 @@ export function Editor({
     }
     const onBeforeInput = (event: Event): void => {
       const input = event as InputEvent
+      // A real edit means the browser's undo stack now holds something newer
+      // than our removed transcript, so the key belongs to it again.
+      undone.current = null
       const line = blockAtSelection(root)
       let handled = false
 
@@ -784,6 +805,7 @@ export function Editor({
         }
         block.dataset.state = 'transcribed'
         applyRecordingBlocks(root)
+        applyTranscriptBlocks(root)
         onBodyInput()
 
         // Only once the words are safely in the note.
@@ -858,7 +880,11 @@ export function Editor({
       }
 
       const holder = document.createElement('div')
-      holder.innerHTML = summaryHtml(result.value, () => newId('alert'))
+      holder.innerHTML = summaryHtml(
+        { model: result.model ?? SUMMARY_MODEL, costUsd: result.costUsd ?? null },
+        result.value,
+        () => newId('alert')
+      )
       const section = document.createElement('div')
       section.dataset.summary = '1'
       while (holder.firstChild !== null) {
@@ -874,6 +900,37 @@ export function Editor({
       setSummarising(false)
     }
   }, [index, note, onBodyInput, summarising])
+
+  /**
+   * Remove a transcript, and keep one step of undo for it.
+   *
+   * The first attempt went through `execCommand` so the browser's own undo stack
+   * would carry it, which is how every other structural edit in this editor stays
+   * undoable. Chromium will not do it: `delete`, `forwardDelete`, `cut`,
+   * `insertHTML` and `insertText` over a selection spanning a `details` element
+   * all report success and leave it exactly where it was. Measured, all five.
+   *
+   * So the node is taken out by hand and remembered, and Ctrl+Z puts it back -
+   * once, and only while nothing else has been typed since. That last condition
+   * is what keeps this from hijacking undo: the moment there is a real edit to
+   * undo, the browser's stack is the right answer again and this steps aside.
+   *
+   * A confirmation as well. Undo is for the second after; the dialog is for the
+   * second before, and once the audio is gone a transcript exists nowhere else.
+   */
+  const dropTranscript = useCallback(
+    (block: HTMLElement) => {
+      const root = bodyRef.current
+      if (root === null) {
+        return
+      }
+      undone.current = { node: block, parent: block.parentElement, before: block.nextSibling }
+      block.remove()
+      setHasTranscript(root.querySelector('[data-transcript]') !== null)
+      onBodyInput()
+    },
+    [onBodyInput]
+  )
 
   const insertCanvas = useCallback(() => {
     const root = bodyRef.current
@@ -1394,6 +1451,24 @@ export function Editor({
         }
       }
 
+      /*
+       * Ctrl+Z restores a transcript this app removed, when that is the most
+       * recent thing that happened. Anything typed since hands the key back to
+       * the browser, whose stack is then the one holding the answer.
+       */
+      if (event.ctrlKey && !event.shiftKey && event.key === 'z' && undone.current !== null) {
+        const { node, parent, before } = undone.current
+        undone.current = null
+        if (parent !== null && parent.isConnected) {
+          event.preventDefault()
+          parent.insertBefore(node, before)
+          applyTranscriptBlocks(parent)
+          setHasTranscript(true)
+          onBodyInput()
+          return
+        }
+      }
+
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault()
         void save()
@@ -1582,6 +1657,22 @@ export function Editor({
           />
         )}
 
+        {pendingDrop !== null && (
+          <ConfirmModal
+            title="Ta bort transkriptet?"
+            message={
+              'Orden försvinner ur noteringen. Ljudet är redan borta, så det går inte ' +
+              'att skapa igen - men Ctrl+Z ångrar det direkt efteråt.'
+            }
+            confirmLabel="Ta bort"
+            onConfirm={() => {
+              dropTranscript(pendingDrop)
+              setPendingDrop(null)
+            }}
+            onCancel={() => setPendingDrop(null)}
+          />
+        )}
+
         {summaryError !== null && (
           <p className="summary-error">
             {summaryError}
@@ -1696,6 +1787,19 @@ export function Editor({
               const linkedId = link.dataset.note
               if (linkedId !== undefined && link.dataset.gone === undefined) {
                 onOpenNote(linkedId)
+              }
+              return
+            }
+
+            // The cross on a transcript's summary line. Caught before the
+            // details element sees the click, so asking to delete does not also
+            // fold or unfold the thing being deleted.
+            const drop = target.closest<HTMLElement>('[data-drop="transcript"]')
+            if (drop !== null) {
+              event.preventDefault()
+              const block = drop.closest<HTMLElement>('[data-transcript]')
+              if (block !== null) {
+                setPendingDrop(block)
               }
               return
             }

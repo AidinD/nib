@@ -11,7 +11,14 @@ import electronUpdater from 'electron-updater'
 const { autoUpdater } = electronUpdater
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
-import { appendSamples, deleteRecording, isRecording, startRecording, stopRecording } from './recordings'
+import {
+  appendSamples,
+  deleteRecording,
+  isRecording,
+  startRecording,
+  stopRecording,
+  sweepRecordings
+} from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
 import { summarise } from './summary'
 import type { SummaryRequest } from './summary'
@@ -199,6 +206,18 @@ function checkForUpdates(): void {
   })
 }
 
+/*
+ * Recordings live with the app, not with the notes.
+ *
+ * The notebook is in a synced folder, and a 45-minute meeting is about 86MB -
+ * so writing them there means uploading a temporary file the whole time it is
+ * being written, on every machine, for something that is deleted as soon as it
+ * has been transcribed. They are scratch, they are local, and they belong in
+ * userData.
+ */
+const recordingsDir = (): string => join(app.getPath('userData'), 'recordings')
+
+
 function registerIpc(): void {
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
@@ -240,7 +259,7 @@ function registerIpc(): void {
    * for each one buys nothing when there is no answer to wait for.
    */
   ipcMain.handle('recording:start', (_event, noteId: string) =>
-    startRecording(resolveDataDir(), noteId)
+    startRecording(recordingsDir(), noteId)
   )
   ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
   ipcMain.handle('recording:stop', () => stopRecording())
@@ -386,6 +405,30 @@ void app.whenReady().then(() => {
       }
     })
     .catch((error) => console.error('[nib] link backfill failed', error))
+
+  /*
+   * Recordings whose note is gone, cleared at startup.
+   *
+   * The audio is deleted when it becomes a transcript, so this only ever finds
+   * the two cases where that never happened: a note thrown away with a recording
+   * still attached, and a transcription never asked for on a note since deleted.
+   * Both leave a file nothing can point at, and 1.9MB a minute is quiet until it
+   * is not.
+   */
+  void store()
+    .loadIndex()
+    .then((index) =>
+      sweepRecordings(
+        recordingsDir(),
+        new Set(index.categories.flatMap((category) => category.notes.map((note) => note.id)))
+      )
+    )
+    .then(({ removed, bytes }) => {
+      if (removed > 0) {
+        console.log(`[nib] removed ${removed} orphaned recording(s), ${Math.round(bytes / 1024 / 1024)}MB`)
+      }
+    })
+    .catch((error) => console.error('[nib] recording sweep failed', error))
 
   // A sweep at startup catches anything orphaned by a crash, or by a note
   // deleted on another machine and synced down while this one was closed.
