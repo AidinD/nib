@@ -269,6 +269,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -335,6 +336,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -791,6 +793,82 @@ export function Editor({
    * most sensitive thing this app would ever hold, and the words are what the note
    * is for.
    */
+  /*
+   * Nothing deletes a transcript without asking.
+   *
+   * `beforeinput` is the only place the browser says which range an edit is about
+   * to remove - `getTargetRanges()` - so it catches Backspace, Delete, cut and a
+   * drag alike, where guessing from the caret's siblings caught none of them: an
+   * empty paragraph sits between the block and the text below it, so the sibling
+   * check looked at the wrong element and the transcript went anyway.
+   *
+   * A transcript cannot be typed again and its audio is deleted the moment the
+   * words are in the note, so this is the one block in the editor that gets a
+   * confirmation. Answering it removes the block, and Ctrl+Z brings it back.
+   */
+  useEffect(() => {
+    const body = bodyRef.current
+    if (body === null) {
+      return
+    }
+    const onBeforeInput = (event: InputEvent): void => {
+      if (!event.inputType.startsWith('delete')) {
+        return
+      }
+      const targets = event.getTargetRanges()
+      if (targets.length === 0) {
+        return
+      }
+      const range = document.createRange()
+      range.setStart(targets[0].startContainer, targets[0].startOffset)
+      range.setEnd(targets[0].endContainer, targets[0].endOffset)
+      const hit = Array.from(body.querySelectorAll<HTMLElement>('[data-transcript]')).find(
+        (block) => range.intersectsNode(block)
+      )
+      if (hit !== undefined) {
+        event.preventDefault()
+        setPendingDrop(hit)
+      }
+    }
+    body.addEventListener('beforeinput', onBeforeInput)
+    return () => body.removeEventListener('beforeinput', onBeforeInput)
+    // Re-attached when the note changes: on the first mount there is no note
+    // open, `bodyRef` is still null, and an effect that only ran then would have
+    // attached nothing at all - which is exactly how this was missed the first
+    // time it was written.
+  }, [note])
+
+  /*
+   * Say which recordings have lost their audio, before anything is clicked.
+   *
+   * A recording is deleted the moment its words are in the note, and the startup
+   * sweep clears the ones whose note is gone - so a block restored from a saved
+   * note can outlive its file. Left alone it still reads "click to transcribe",
+   * and clicking it reached whisper, which answers a missing file by printing its
+   * entire usage text into the note. One question per block on load is cheaper
+   * than that, and honest.
+   */
+  const markLostRecordings = useCallback(async (root: HTMLElement): Promise<void> => {
+    const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-recording]')).filter(
+      (block) => {
+        const state = block.dataset.state ?? 'recorded'
+        return state === 'recorded' || state === 'failed'
+      }
+    )
+    let lost = false
+    for (const block of blocks) {
+      const path = block.dataset.recording
+      if (path === undefined || (await window.nib.recordingExists(path))) {
+        continue
+      }
+      block.dataset.state = 'lost'
+      lost = true
+    }
+    if (lost) {
+      applyRecordingBlocks(root)
+    }
+  }, [])
+
   const transcribeBlock = useCallback(
     async (block: HTMLElement) => {
       const root = bodyRef.current
@@ -833,10 +911,16 @@ export function Editor({
         await window.nib.deleteRecording(path)
       } catch (error) {
         stopListening()
+        const why = error instanceof Error ? error.message : String(error)
+        // A missing file is not a failure to retry - the audio is not coming
+        // back, and a block that keeps saying "click to transcribe" is a lie.
+        if (why.includes('the audio file is gone')) {
+          block.dataset.state = 'lost'
+          applyRecordingBlocks(root)
+          return
+        }
         block.dataset.state = 'failed'
-        block.textContent = `Recording · transcription failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        block.textContent = `Recording · transcription failed: ${why}`
       }
     },
     [onBodyInput]

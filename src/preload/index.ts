@@ -66,6 +66,11 @@ const api = {
     ipcRenderer.invoke('recording:stop'),
   deleteRecording: (path: string): Promise<void> =>
     ipcRenderer.invoke('recording:delete', path),
+  // Whether the audio a block points at is still on disk. A recording is deleted
+  // the moment its words are in the note, so a block restored from a saved note
+  // can outlive its file - and clicking it would otherwise fail in whisper.
+  recordingExists: (path: string): Promise<boolean> =>
+    ipcRenderer.invoke('recording:exists', path),
 
   /**
    * Summarise a meeting. The only call in this app that leaves the machine, and

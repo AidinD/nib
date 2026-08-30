@@ -97,6 +97,14 @@ renderer over the Chrome DevTools Protocol and reads the DOM back. Steps files
 default-export `async (page) => {}` and get `eval`, `click`, `type`, `key`,
 `waitFor`.
 
+**Run `npm run build` first.** It launches `electron .`, which loads `out/` - so
+without a build it exercises the previous one and reports that your change did
+nothing. Two rounds were spent on that on 2026-08-30, chasing a fix that was
+never in the bundle being tested.
+
+`eval` wraps its argument in an async function, so a step must `return` its
+value; `waitFor` takes a bare expression and must not.
+
 Do **not** verify by moving the pointer and clicking. It fights whoever is using
 the machine, steals focus into their other windows, and every coordinate is a
 guess that goes stale the moment a toolbar wraps - all three happened here on

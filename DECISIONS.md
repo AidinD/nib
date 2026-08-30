@@ -3,6 +3,51 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - A transcript is a block, not text you can edit
+
+**Decided.** Transcript blocks are `contentEditable = 'false'`, and every deletion
+that touches one goes through the confirmation the cross already had.
+
+**What happened.** A Backspace with the caret below a transcript emptied the
+block instead of removing it. Chromium will not delete a `details` element, so it
+deleted the inside: the summary line survived, still saying "1 min - 8 avsnitt",
+over nothing. The next save wrote that to disk, and the words were gone - the
+audio with them, because a recording is deleted the moment its words are in the
+note. Found on a test note about SC Alert, which is the only reason it cost
+nothing.
+
+**Non-editable was the first half.** It stops the gutting, but Chromium answers
+Backspace at the edge of an atomic block by removing the whole thing - silently,
+past the confirmation that exists precisely because a transcript cannot be typed
+again.
+
+**`beforeinput` is the second, and it is the part that works.** It is the only
+place the browser says which range an edit is about to remove, so it catches
+Backspace, Delete, cut and drag alike. Guessing from the caret's siblings caught
+none of them: the editor puts an empty paragraph between a block and the text
+below it, so the sibling check looked at that paragraph and let the deletion
+through. Measured, not reasoned about - the first version of the guard was
+verified as working and was not.
+
+**And the listener is attached per note, not once on mount.** On the first mount
+no note is open, `bodyRef` is null, and an effect with an empty dependency array
+attached nothing at all. That version passed a review of the code and failed the
+first run of the app, which is the argument for running it.
+
+## 2026-08-30 - A recording block says when its audio is gone
+
+**Decided.** On load, every recording block whose file is missing is marked
+`lost` and reads "the audio is no longer on disk". Clicking it does nothing.
+
+**Why it can happen at all.** By design: the WAV is deleted once its words are in
+the note, and the startup sweep clears recordings whose note was thrown away. A
+block restored from a saved note can outlive its file, and it kept saying "click
+to transcribe".
+
+**What clicking it used to produce.** whisper-cli answers a file it cannot open by
+printing its whole usage text and exiting 2, so the note filled with help about
+VAD padding. Guarded in `keel/whisper` now, which fixes Helm at the same time.
+
 ## 2026-08-30 - Summarise asks what it is about to do, rather than going grey
 
 **Decided.** The button is never disabled. It opens a small panel: what to

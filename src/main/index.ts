@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { promises as fs } from 'fs'
+import { existsSync, promises as fs } from 'fs'
 import { join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { app, BrowserWindow, clipboard, ipcMain, net, protocol } from 'electron'
@@ -264,6 +264,7 @@ function registerIpc(): void {
   ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
   ipcMain.handle('recording:stop', () => stopRecording())
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
+  ipcMain.handle('recording:exists', (_event, path: string) => existsSync(path))
 
   /*
    * The summary: the one step that leaves the machine.

@@ -112,7 +112,12 @@ export function applyRecordingBlocks(root: HTMLElement): void {
         ? `Recording · ${length} · transcribing…`
         : state === 'transcribed'
           ? `Recording · ${length} · transcribed`
-          : `Recording · ${length} · ${language} · click to transcribe`
+          : state === 'lost'
+            ? // The audio was deleted - after transcription, or with its note. The
+              // block stays because it marks where the meeting was, but it no
+              // longer offers something it cannot do.
+              `Recording · ${length} · the audio is no longer on disk`
+            : `Recording · ${length} · ${language} · click to transcribe`
   }
 }
 
@@ -126,8 +131,31 @@ export function applyRecordingBlocks(root: HTMLElement): void {
  */
 export function applyTranscriptBlocks(root: HTMLElement): void {
   for (const block of root.querySelectorAll<HTMLElement>('[data-transcript]')) {
+    /*
+     * The transcript is not editable text, and saying so is what keeps it.
+     *
+     * It was left editable, so an ordinary Backspace with the caret at the edge
+     * of it emptied the block instead of removing it - leaving the summary line
+     * still claiming "8 avsnitt" over nothing, and the words gone from disk at
+     * the next save. Chromium will not delete a `details` element (see the drop
+     * handler), so it deletes the inside, which is the worst of the two.
+     *
+     * Non-editable matches the drawing and recording blocks, still selects and
+     * copies, still folds, and leaves the cross as the one way to remove it.
+     */
+    block.contentEditable = 'false'
     const line = block.querySelector('summary')
-    if (line === null || line.querySelector('[data-drop]') !== null) {
+    if (line === null) {
+      continue
+    }
+    const already = line.querySelector<HTMLElement>('[data-drop]')
+    if (already !== null) {
+      // An earlier edit could empty the cross without removing the span - the
+      // browser leaves a `<br>` behind. Put the character back rather than
+      // leaving a control that is there but invisible.
+      if ((already.textContent ?? '').trim().length === 0) {
+        already.textContent = '×'
+      }
       continue
     }
     const drop = document.createElement('span')
