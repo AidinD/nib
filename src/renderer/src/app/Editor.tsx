@@ -1906,6 +1906,23 @@ export function Editor({
               const candidates = Array.from(
                 body.querySelectorAll<HTMLElement>(ALERT_LINES)
               ).filter((candidate) => {
+                /*
+                 * Not a line of a transcript, and not the signature.
+                 *
+                 * A transcript's paragraphs match `p` like any other, so the
+                 * gutter beside one could be clicked - and it set `data-alert` on
+                 * a line whose flag has nowhere to be drawn. The result is the
+                 * phantom the empty-line guard was written for: no mark in the
+                 * note, a chip in the strip pointing back at it. What is said in
+                 * a meeting is a record, not a thing you flag; the action points
+                 * the summary lifts OUT of it are.
+                 */
+                if (candidate.closest('[data-transcript], [data-recording]') !== null) {
+                  return false
+                }
+                if (candidate.dataset.provenance !== undefined) {
+                  return false
+                }
                 const box = candidate.getBoundingClientRect()
                 return event.clientY >= box.top && event.clientY <= box.bottom
               })

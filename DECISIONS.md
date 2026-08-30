@@ -3,6 +3,28 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - An action point in a summary looks like an action point
+
+**Decided.** Lines inside the summary block get the same gutter as lines of the
+note: the flag, the margin bar, the green tick when dealt with.
+
+**What was wrong.** The summary's action points were real alerts everywhere it
+counted - in the note's index, on the card, in Tend's promises - and looked like
+ordinary prose in the one place you read them. The flag hangs off
+`.doc-body > p`, direct children, because that is what a line of the document is;
+an action point is a paragraph INSIDE the summary block, so it matched nothing.
+
+**Written out for the summary rather than loosening the selector to
+`.doc-body p`.** That would hand a flag to every paragraph of every transcript
+too, and what somebody said in a meeting is a record, not a thing you tick off.
+
+**Which turned out to be more than cosmetic.** The gutter's click target searched
+`p, h1, h2, h3, h4, li, blockquote` anywhere in the document, so a click beside a
+transcript line already set `data-alert` on it - a flag with nowhere to be drawn,
+invisible in the note and present as a chip in the strip. The same phantom the
+empty-line guard was written for, reached by a different door. Transcript and
+recording blocks are out of the click target now, and so is the model signature.
+
 ## 2026-08-30 - A transcript is a block, not text you can edit
 
 **Decided.** Transcript blocks are `contentEditable = 'false'`, and every deletion

@@ -3112,6 +3112,73 @@ body.is-resizing .splitter-grip {
   margin-top: 0;
 }
 
+/*
+ * A line inside the summary gets the same gutter as a line of the note.
+ *
+ * The flag and the margin bar hang off `.doc-body > p` - direct children -
+ * because that is what a line of the document is. A summary's action points are
+ * paragraphs INSIDE the summary block, so they were real alerts everywhere it
+ * counts - in the index, in the card, in Tend - with nothing on screen to say so.
+ * The one place they looked like ordinary prose was the note you read them in.
+ *
+ * Written out for the summary rather than by loosening the selector to
+ * `.doc-body p`: that would hand a flag to every paragraph of every transcript
+ * too, and a transcript line is not something you can flag.
+ *
+ * Order matters below. The reveal-on-hover rules are one step more specific than
+ * a bare alert rule, so the flagged state is stated last - the same trap the
+ * top-level flags already hit once.
+ */
+.doc-body [data-summary] p {
+  position: relative;
+}
+
+.doc-body [data-summary] p::before {
+  content: '⚑';
+  position: absolute;
+  left: -24px;
+  top: 0;
+  width: 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: inherit;
+  text-align: center;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 100ms ease;
+}
+
+/* The provenance line is not a line you flag - it is the signature. */
+.doc-body [data-summary] p[data-provenance]::before {
+  display: none;
+}
+
+.doc-body:hover [data-summary] p::before {
+  opacity: 0.25;
+}
+
+.doc-body [data-summary] p:hover::before {
+  opacity: 0.6;
+}
+
+.doc-body [data-summary] p[data-alert]::before,
+.doc-body:hover [data-summary] p[data-alert]::before {
+  opacity: 1;
+  color: var(--alert);
+}
+
+.doc-body [data-summary] p[data-alert='done']::before,
+.doc-body:hover [data-summary] p[data-alert='done']::before {
+  /* The same tick as anywhere else - a different shape, not a paler flag. */
+  content: '✓';
+  color: var(--green);
+  opacity: 1;
+}
+
+.doc-body [data-summary] p[data-alert='done'] {
+  color: var(--text-dim);
+}
+
 .summary-error {
   display: flex;
   align-items: center;
