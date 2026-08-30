@@ -178,6 +178,39 @@ export function applyTranscriptBlocks(root: HTMLElement): void {
  * loses the control rather than keeping a button that acts on nothing.
  */
 export function applySummaryBlocks(root: HTMLElement): void {
+  /*
+   * A wrapper with no summary left in it is not a summary.
+   *
+   * The block is ordinary editable text - you must be able to fix a sentence the
+   * model got wrong - so its contents can be deleted, and deleting them leaves
+   * the `div` behind. It draws a rule under itself to mark where the machine
+   * stopped writing, so an empty one is a line across the note that cannot be
+   * removed: it is a border, not a character, and there is nothing to put the
+   * caret on. Worse, Chromium answers a deletion that empties a block by pulling
+   * the NEXT block into it, so the note's own first heading ended up inside a
+   * wrapper it had nothing to do with.
+   *
+   * Recognised by the signature and the action lines, both of which every
+   * generated summary has and neither of which anyone types by hand. Unwrapped
+   * rather than removed: whatever is in there is the note's now.
+   */
+  for (const section of Array.from(root.querySelectorAll<HTMLElement>('[data-summary]'))) {
+    if (
+      section.querySelector('[data-provenance]') !== null ||
+      section.querySelector('p[data-action]') !== null
+    ) {
+      continue
+    }
+    const parent = section.parentNode
+    if (parent === null) {
+      continue
+    }
+    while (section.firstChild !== null) {
+      parent.insertBefore(section.firstChild, section)
+    }
+    section.remove()
+  }
+
   for (const control of root.querySelectorAll<HTMLElement>('[data-flag-all]')) {
     const section = control.closest<HTMLElement>('[data-summary]')
     const lines =

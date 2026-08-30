@@ -3,6 +3,32 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - An empty summary wrapper is not a summary
+
+**Decided.** On load, a `[data-summary]` block holding neither the model
+signature nor any action line is unwrapped - its contents move up into the note
+and the wrapper goes.
+
+**The bug.** The summary block is ordinary editable text, deliberately: you have
+to be able to fix a sentence the model got wrong. So its contents can be deleted,
+and deleting them leaves the `div`. It draws a rule under itself to mark where
+the machine stopped writing, so an empty one is a line across the note that
+cannot be removed - it is a border, not a character, and there is nothing to put
+the caret on.
+
+**And it takes a hostage.** Chromium answers a deletion that empties a block by
+pulling the next block into it, so the note's own first heading ended up inside a
+wrapper it had nothing to do with. On the note this was found in, the whole note
+below the rule was outside the wrapper and the heading above it was inside.
+
+**Recognised by the signature and the action lines**, both of which every
+generated summary has and neither of which anyone types by hand. Unwrapped rather
+than removed - whatever ended up in there is the note's now, and deleting a
+heading to tidy up a border is not a trade worth making.
+
+**Not made atomic like a transcript.** A transcript is a record and editing it is
+meaningless; a summary is a draft about you, and correcting one is the point.
+
 ## 2026-08-30 - One click for all of them, in the summary, not in a dialog
 
 **Decided.** A note's summary ends its action list with a control:
