@@ -660,6 +660,22 @@ export function Editor({
     (block: HTMLElement) => {
       const state = block.dataset.alert
       if (state === undefined) {
+        /*
+         * A line with no words cannot be flagged.
+         *
+         * It could, and the result was a ghost: the marker is hidden on an empty
+         * line - a flag beside nothing is clutter - so the flag was invisible in
+         * the note and visible only as a chip in the strip, saying "flagged line,
+         * no text" and leading back to a line with nothing on it. Two of those
+         * were created here by accident before this line existed.
+         *
+         * Clearing an existing flag is still allowed on an empty line, since a
+         * line can be emptied after it was flagged and that one must stay
+         * reachable.
+         */
+        if ((block.textContent ?? '').trim().length === 0) {
+          return
+        }
         block.dataset.alert = '1'
         if (block.dataset.alertId === undefined || block.dataset.alertId.length === 0) {
           block.dataset.alertId = newId('alert')
