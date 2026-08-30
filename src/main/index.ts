@@ -12,6 +12,7 @@ const { autoUpdater } = electronUpdater
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import { appendSamples, deleteRecording, isRecording, startRecording, stopRecording } from './recordings'
+import { transcribe, whisperStatus } from 'keel/whisper'
 import { NoteStorage } from './storage'
 import {
   allWindows,
@@ -242,6 +243,38 @@ function registerIpc(): void {
   ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
   ipcMain.handle('recording:stop', () => stopRecording())
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
+
+  /*
+   * Turning a recording into text.
+   *
+   * The work happens in a child process that keel spawns, so a crash in the
+   * transcriber cannot take the window with it, and a long meeting does not block
+   * anything here. Progress is pushed to the renderer as whisper reports its
+   * position - a 45-minute meeting is a few minutes of waiting, and a spinner
+   * that cannot say how far along it is turns that into an unknown.
+   */
+  ipcMain.handle('transcribe:status', (_event, language: 'sv' | 'en') =>
+    whisperStatus(language)
+  )
+  ipcMain.handle(
+    'transcribe:run',
+    async (
+      event,
+      { path, language, seconds }: { path: string; language: 'sv' | 'en'; seconds: number }
+    ) => {
+      const result = await transcribe({
+        file: path,
+        language,
+        seconds,
+        onProgress: (fraction) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('transcribe:progress', fraction)
+          }
+        }
+      })
+      return result
+    }
+  )
 
   ipcMain.handle('sticky:open', (_event, noteId: string) => {
     openStickyWindow(noteId)

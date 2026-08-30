@@ -67,6 +67,28 @@ const api = {
   deleteRecording: (path: string): Promise<void> =>
     ipcRenderer.invoke('recording:delete', path),
 
+  /** Whether transcription can run for a language, and if not, why not. */
+  transcribeStatus: (
+    language: 'sv' | 'en'
+  ): Promise<{ ready: boolean; why?: string; root: string }> =>
+    ipcRenderer.invoke('transcribe:status', language),
+
+  transcribe: (args: {
+    path: string
+    language: 'sv' | 'en'
+    seconds: number
+  }): Promise<{ segments: { start: string; end: string; text: string }[]; text: string }> =>
+    ipcRenderer.invoke('transcribe:run', args),
+
+  /** How far along it is, pushed as whisper works through the file. */
+  onTranscribeProgress: (handler: (fraction: number) => void): (() => void) => {
+    const listener = (_event: unknown, fraction: number): void => handler(fraction)
+    ipcRenderer.on('transcribe:progress', listener)
+    return () => {
+      ipcRenderer.removeListener('transcribe:progress', listener)
+    }
+  },
+
   onIndexChanged: (handler: () => void): (() => void) => {
     const listener = (): void => handler()
     ipcRenderer.on('index:changed', listener)

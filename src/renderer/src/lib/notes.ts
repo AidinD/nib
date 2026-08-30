@@ -26,6 +26,10 @@ const PURIFY_CONFIG = {
     'h1', 'h2', 'h3', 'h4',
     'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'code', 'pre', 'mark',
     'ul', 'ol', 'li', 'blockquote', 'hr',
+    // A transcript is folded away by default - a 9000-word wall above the
+    // summary is a note you stop opening. `details` does it natively, with a
+    // keyboard and a screen reader, which a div and a click handler do not.
+    'details', 'summary',
     'a', 'img',
     'table', 'thead', 'tbody', 'tr', 'th', 'td'
   ],
@@ -38,7 +42,7 @@ const PURIFY_CONFIG = {
    * carrying `mat-mdc-menu-trigger` and `ng-star-inserted` - which style nothing
    * here and are pure weight in the file.
    */
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt'],
+  ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'open'],
   // The custom scheme is how a stored image is referenced; data: is what a paste
   // arrives as before it has been written to the assets folder.
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/|nib-asset:)/i
@@ -96,14 +100,19 @@ export function applyRecordingBlocks(root: HTMLElement): void {
     const seconds = Number(block.dataset.seconds ?? 0)
     const minutes = Math.floor(seconds / 60)
     const state = block.dataset.state ?? 'recorded'
+    if (state === 'failed') {
+      // Its text is the reason it failed, written when it happened. Rebuilding it
+      // here would replace the one useful thing on the block with a label.
+      continue
+    }
     const length = `${minutes}:${String(seconds % 60).padStart(2, '0')}`
     const language = block.dataset.language === 'en' ? 'English' : 'Svenska'
     block.textContent =
-      state === 'transcribed'
-        ? `Recording · ${length} · transcribed`
-        : state === 'working'
-          ? `Recording · ${length} · transcribing…`
-          : `Recording · ${length} · ${language} · not transcribed yet`
+      state === 'working'
+        ? `Recording · ${length} · transcribing…`
+        : state === 'transcribed'
+          ? `Recording · ${length} · transcribed`
+          : `Recording · ${length} · ${language} · click to transcribe`
   }
 }
 
@@ -633,4 +642,36 @@ export function noteTitles(index: NibIndex): Map<string, string> {
     }
   }
   return titles
+}
+
+/**
+ * A transcript, folded, as the document stores it.
+ *
+ * Timestamps are kept because they are what makes a transcript navigable - "he
+ * said that around eleven minutes" is how anybody actually refers to a recording -
+ * and because the summary pass uses them to point at moments.
+ *
+ * One paragraph per segment rather than one wall of text: the editor works on
+ * blocks, so a flat blob could not be flagged, quoted or split, and a transcript
+ * you cannot mark up is a transcript you can only read.
+ */
+export function transcriptHtml(
+  segments: { start: string; end: string; text: string }[],
+  minutes: number
+): string {
+  const escape = (text: string): string =>
+    text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
+  const lines = segments
+    .filter((segment) => segment.text.length > 0)
+    .map(
+      (segment) =>
+        `<p><em>${segment.start.replace(/^00:/, '')}</em> ${escape(segment.text)}</p>`
+    )
+    .join('')
+  return (
+    `<details data-transcript="1">` +
+    `<summary>Transkript · ${minutes} min · ${segments.length} avsnitt</summary>` +
+    (lines.length > 0 ? lines : '<p><em>Ingenting hördes.</em></p>') +
+    `</details>`
+  )
 }

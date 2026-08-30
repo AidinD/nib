@@ -13,6 +13,7 @@ import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyRecordingBlocks,
+  transcriptHtml,
   applyImageWidths,
   applyNoteLinks,
   noteLinkHtml,
@@ -706,6 +707,68 @@ export function Editor({
       root.appendChild(after)
       applyRecordingBlocks(root)
       onBodyInput()
+    },
+    [onBodyInput]
+  )
+
+  /**
+   * Turn a recording into text, in place.
+   *
+   * The block reports its own progress rather than a dialog appearing: the work
+   * belongs to that recording, and a modal over the whole note would stop you
+   * writing for the several minutes this takes.
+   *
+   * The audio is deleted the moment the transcript is in the note. That is the
+   * policy the feature was designed around - an hour of a colleague's voice is the
+   * most sensitive thing this app would ever hold, and the words are what the note
+   * is for.
+   */
+  const transcribeBlock = useCallback(
+    async (block: HTMLElement) => {
+      const root = bodyRef.current
+      const path = block.dataset.recording
+      if (root === null || path === undefined || block.dataset.state === 'working') {
+        return
+      }
+      const language = block.dataset.language === 'en' ? 'en' : 'sv'
+      const seconds = Number(block.dataset.seconds ?? 0)
+
+      const status = await window.nib.transcribeStatus(language)
+      if (!status.ready) {
+        block.dataset.state = 'failed'
+        block.textContent = `Recording · could not transcribe: ${status.why ?? 'the engine is not installed'}`
+        return
+      }
+
+      block.dataset.state = 'working'
+      applyRecordingBlocks(root)
+      const stopListening = window.nib.onTranscribeProgress((fraction) => {
+        block.textContent = `Recording · transcribing… ${Math.round(fraction * 100)}%`
+      })
+
+      try {
+        const result = await window.nib.transcribe({ path, language, seconds })
+        stopListening()
+
+        const holder = document.createElement('div')
+        holder.innerHTML = transcriptHtml(result.segments, Math.max(1, Math.round(seconds / 60)))
+        const transcript = holder.firstElementChild
+        if (transcript !== null) {
+          block.after(transcript)
+        }
+        block.dataset.state = 'transcribed'
+        applyRecordingBlocks(root)
+        onBodyInput()
+
+        // Only once the words are safely in the note.
+        await window.nib.deleteRecording(path)
+      } catch (error) {
+        stopListening()
+        block.dataset.state = 'failed'
+        block.textContent = `Recording · transcription failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      }
     },
     [onBodyInput]
   )
@@ -1503,6 +1566,18 @@ export function Editor({
               const linkedId = link.dataset.note
               if (linkedId !== undefined && link.dataset.gone === undefined) {
                 onOpenNote(linkedId)
+              }
+              return
+            }
+
+            // A recording that has not been turned into text yet: clicking it
+            // is how you ask for that. A block that has been transcribed is
+            // inert - the words are already below it.
+            const recording = target.closest<HTMLElement>('[data-recording]')
+            if (recording !== null) {
+              const state = recording.dataset.state ?? 'recorded'
+              if (state === 'recorded' || state === 'failed') {
+                void transcribeBlock(recording)
               }
               return
             }

@@ -3002,3 +3002,72 @@ body.is-resizing .splitter-grip {
   font-size: 12px;
   user-select: none;
 }
+
+/* ---------- the transcript ---------- */
+
+/*
+ * Folded by default.
+ *
+ * A 45-minute meeting is nine thousand words. Left open it buries the summary
+ * that sits above it, and - measured - typing anywhere in a note that long costs
+ * 23ms a keystroke against 0.7ms in a short one, because Chromium relays out a
+ * document with several hundred blocks. Hidden content is not laid out, so folded
+ * away it costs nothing until you ask for it.
+ */
+.doc-body details[data-transcript] {
+  margin: 14px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.doc-body details[data-transcript] > summary {
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.doc-body details[data-transcript][open] > summary {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The timestamp on each line, quiet enough to read past and there when wanted. */
+.doc-body details[data-transcript] p em {
+  margin-right: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-body details[data-transcript] p {
+  margin: 0 0 4px;
+}
+
+/* A recording waiting to be turned into text is a button, and says so. */
+.recording-block[data-state='recorded'],
+.recording-block[data-state='failed'] {
+  cursor: pointer;
+}
+
+.recording-block[data-state='recorded']:hover {
+  border-color: var(--alert);
+  color: var(--text);
+}
+
+.recording-block[data-state='working'] {
+  color: var(--accent);
+}
+
+.recording-block[data-state='failed'] {
+  border-left-color: var(--alert);
+  color: var(--alert);
+}
+
+.recording-block[data-state='transcribed'] {
+  border-left-color: var(--border);
+}
