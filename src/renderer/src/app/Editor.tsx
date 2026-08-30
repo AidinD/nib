@@ -4,11 +4,15 @@ import { CanvasEditor } from './CanvasEditor'
 import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { NotePicker, listNotes } from './NotePicker'
+import { RecordPanel, RecordingBar } from './RecordPanel'
+import type { Language } from './RecordPanel'
+import type { Recorder } from '../lib/recorder'
 import type { NoteChoice } from './NotePicker'
 import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
+  applyRecordingBlocks,
   applyImageWidths,
   applyNoteLinks,
   noteLinkHtml,
@@ -113,6 +117,19 @@ export function Editor({
     cursor: Date
   } | null>(null)
   /*
+   * Recording a meeting into this note.
+   *
+   * `panel` is the pre-flight - language and levels - and `recording` is the run
+   * itself. They are separate because the first can be cancelled and the second
+   * cannot: once audio is being captured, closing a panel must not quietly throw
+   * a meeting away.
+   */
+  const [panel, setPanel] = useState(false)
+  const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
+    null
+  )
+
+  /*
    * The note picker, when `/link` is up.
    *
    * `spaced` is decided when the picker OPENS, while the caret is still in the
@@ -207,6 +224,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      applyRecordingBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -270,6 +288,7 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      applyRecordingBlocks(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
@@ -662,6 +681,35 @@ export function Editor({
    * kind of note. The id in `data-canvas` is what ties the block to its stroke
    * file, and it is minted here so the block and the file agree from the start.
    */
+  /**
+   * Put the finished recording into the note, as a block.
+   *
+   * Built with DOM calls and placed at the END of the document rather than at the
+   * caret: a meeting was just recorded, so the caret is wherever you were typing
+   * during it, and dropping a block into the middle of the sentence you were
+   * writing is not what "stop" should mean.
+   */
+  const insertRecordingBlock = useCallback(
+    (path: string, seconds: number, language: Language) => {
+      const root = bodyRef.current
+      if (root === null) {
+        return
+      }
+      const block = document.createElement('div')
+      block.dataset.recording = path
+      block.dataset.seconds = String(seconds)
+      block.dataset.language = language
+      block.dataset.state = 'recorded'
+      const after = document.createElement('p')
+      after.appendChild(document.createElement('br'))
+      root.appendChild(block)
+      root.appendChild(after)
+      applyRecordingBlocks(root)
+      onBodyInput()
+    },
+    [onBodyInput]
+  )
+
   const insertCanvas = useCallback(() => {
     const root = bodyRef.current
     if (root === null) {
@@ -1269,6 +1317,17 @@ export function Editor({
         <div className="toolbar-group">
           <button type="button" onClick={pickImage}>Image</button>
           <button type="button" onClick={insertCanvas}>Canvas</button>
+          {/* Recording belongs with the things you put INTO a note, not in the
+              window's header: the note is the container, and its folder and tag
+              are the answer to "where does this meeting go". */}
+          <button
+            type="button"
+            className={recording !== null ? 'is-recording' : ''}
+            onClick={() => setPanel((open) => !open)}
+            disabled={note === null}
+          >
+            Record
+          </button>
         </div>
         </div>
 
@@ -1336,6 +1395,32 @@ export function Editor({
             choices={listNotes(index, note?.id ?? null)}
             onPick={insertNoteLink}
             onClose={() => setLinker(null)}
+          />
+        )}
+
+        {panel && recording === null && (
+          <RecordPanel
+            noteId={note?.id ?? 'untitled'}
+            onClose={() => setPanel(false)}
+            onStarted={(recorder, language) => {
+              setPanel(false)
+              setRecording({ recorder, language })
+            }}
+          />
+        )}
+
+        {recording !== null && (
+          <RecordingBar
+            recorder={recording.recorder}
+            onStop={() => {
+              const { recorder, language } = recording
+              setRecording(null)
+              void recorder.stop().then((done) => {
+                if (done !== null) {
+                  insertRecordingBlock(done.path, done.seconds, language)
+                }
+              })
+            }}
           />
         )}
 

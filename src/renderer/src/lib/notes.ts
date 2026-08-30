@@ -78,6 +78,35 @@ export function applyImageWidths(root: HTMLElement): void {
  * a paste should not be able to smuggle in - so, like an image's width, it is
  * re-applied after every load instead of being stored.
  */
+/**
+ * A recording's block in the document.
+ *
+ * The same shape as a drawing block: identified by a data attribute, not by a
+ * class, so what it IS survives the sanitiser and how it LOOKS is put back on
+ * load. `data-recording` holds the file path, `data-seconds` its length, and
+ * `data-state` where it is in the journey from audio to transcript.
+ *
+ * Not editable, because it is a control rather than prose - and its text is
+ * rebuilt here on every load, so a half-deleted label cannot survive in a note.
+ */
+export function applyRecordingBlocks(root: HTMLElement): void {
+  for (const block of root.querySelectorAll<HTMLElement>('[data-recording]')) {
+    block.contentEditable = 'false'
+    block.classList.add('recording-block')
+    const seconds = Number(block.dataset.seconds ?? 0)
+    const minutes = Math.floor(seconds / 60)
+    const state = block.dataset.state ?? 'recorded'
+    const length = `${minutes}:${String(seconds % 60).padStart(2, '0')}`
+    const language = block.dataset.language === 'en' ? 'English' : 'Svenska'
+    block.textContent =
+      state === 'transcribed'
+        ? `Recording · ${length} · transcribed`
+        : state === 'working'
+          ? `Recording · ${length} · transcribing…`
+          : `Recording · ${length} · ${language} · not transcribed yet`
+  }
+}
+
 export function applyCanvasBlocks(root: HTMLElement): void {
   for (const block of root.querySelectorAll('[data-canvas]')) {
     ;(block as HTMLElement).contentEditable = 'false'
