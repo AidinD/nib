@@ -72,6 +72,7 @@ const api = {
    * the only one that spends anything.
    */
   summarise: (request: {
+    kind?: 'meeting' | 'note'
     transcript: string
     notes: string
     previous?: string

@@ -6,6 +6,8 @@ import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDi
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { NotePicker, listNotes } from './NotePicker'
 import { RecordPanel, RecordingBar } from './RecordPanel'
+import { SummaryPanel, SUMMARY_MODELS } from './SummaryPanel'
+import type { SummarySource } from './SummaryPanel'
 import type { Language } from './RecordPanel'
 import type { Recorder } from '../lib/recorder'
 import type { NoteChoice } from './NotePicker'
@@ -143,12 +145,15 @@ export function Editor({
    */
   const [panel, setPanel] = useState(false)
   const [summarising, setSummarising] = useState(false)
-  /* Whether this note holds a transcript. Read from the document rather than
-     from state, because a transcript can arrive from a load as well as from a
-     recording - and the button has to be right in both cases. */
-  const [hasTranscript, setHasTranscript] = useState(false)
+
   /** The transcript waiting on a yes - held by element, since it is about to go. */
   const [pendingDrop, setPendingDrop] = useState<HTMLElement | null>(null)
+  const [summaryPanel, setSummaryPanel] = useState(false)
+  /** Which tier to use. Per note rather than a setting: it is a judgement about
+   *  this meeting, not a preference about all of them. */
+  const [summaryModel, setSummaryModel] = useState<string>(SUMMARY_MODELS[0].id)
+  /** How many transcripts the note holds - what the panel offers depends on it. */
+  const [transcriptCount, setTranscriptCount] = useState(0)
   /*
    * The last transcript removed, and where it was.
    *
@@ -267,7 +272,7 @@ export function Editor({
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
-      setHasTranscript(bodyRef.current.querySelector('[data-transcript]') !== null)
+      setTranscriptCount(bodyRef.current.querySelectorAll('[data-transcript]').length)
       const loadedTitle = doc?.title ?? note.title
       titleRef.current = loadedTitle
       setTitle(loadedTitle)
@@ -333,7 +338,7 @@ export function Editor({
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
-      setHasTranscript(bodyRef.current.querySelector('[data-transcript]') !== null)
+      setTranscriptCount(bodyRef.current.querySelectorAll('[data-transcript]').length)
       titleRef.current = doc.title
       setTitle(doc.title)
       setWords(wordCount(html))
@@ -568,7 +573,7 @@ export function Editor({
     // hanging by the caret is worse than no calendar.
     setPicker(null)
     if (element !== null) {
-      setHasTranscript(element.querySelector('[data-transcript]') !== null)
+      setTranscriptCount(element.querySelectorAll('[data-transcript]').length)
     }
     setSlash((current) => {
       if (current === null) {
@@ -833,13 +838,22 @@ export function Editor({
    * The result goes at the TOP. A summary under nine thousand words of transcript
    * is a summary nobody reads.
    */
-  const summarise = useCallback(async () => {
+  const summarise = useCallback(
+    async (source: SummarySource, model: string) => {
     const root = bodyRef.current
     if (root === null || note === null || summarising) {
       return
     }
-    const transcript = root.querySelector<HTMLElement>('[data-transcript]')
-    if (transcript === null) {
+    /*
+     * Every transcript, not the first.
+     *
+     * `querySelector` returns one element, and the first version used it - so a
+     * note holding two recordings, which is a meeting stopped and restarted or
+     * two calls in an afternoon, was summarised from half its own contents with
+     * nothing to say so.
+     */
+    const transcripts = Array.from(root.querySelectorAll<HTMLElement>('[data-transcript]'))
+    if (source === 'transcripts' && transcripts.length === 0) {
       return
     }
 
@@ -867,11 +881,17 @@ export function Editor({
         earlier === undefined ? undefined : (await window.nib.readNote(earlier.id))?.html
 
       const result = await window.nib.summarise({
-        transcript: transcript.textContent ?? '',
-        notes: ownNotes(root),
+        kind: source === 'transcripts' ? 'meeting' : 'note',
+        // Several transcripts are one conversation as far as the summary is
+        // concerned, in the order they were recorded.
+        transcript: transcripts.map((block) => block.textContent ?? '').join('\n\n'),
+        notes: source === 'transcripts' ? ownNotes(root) : (root.textContent ?? ''),
         previous: previous === undefined ? undefined : htmlToText(previous).slice(0, 8000),
-        language: root.querySelector<HTMLElement>('[data-recording]')?.dataset.language === 'en' ? 'en' : 'sv',
-        model: SUMMARY_MODEL
+        language:
+          root.querySelector<HTMLElement>('[data-recording]')?.dataset.language === 'en'
+            ? 'en'
+            : 'sv',
+        model
       })
 
       if (!result.ok || result.value === undefined) {
@@ -881,7 +901,7 @@ export function Editor({
 
       const holder = document.createElement('div')
       holder.innerHTML = summaryHtml(
-        { model: result.model ?? SUMMARY_MODEL, costUsd: result.costUsd ?? null },
+        { model: result.model ?? model, costUsd: result.costUsd ?? null },
         result.value,
         () => newId('alert')
       )
@@ -899,7 +919,9 @@ export function Editor({
     } finally {
       setSummarising(false)
     }
-  }, [index, note, onBodyInput, summarising])
+    },
+    [index, note, onBodyInput, summarising]
+  )
 
   /**
    * Remove a transcript, and keep one step of undo for it.
@@ -926,7 +948,7 @@ export function Editor({
       }
       undone.current = { node: block, parent: block.parentElement, before: block.nextSibling }
       block.remove()
-      setHasTranscript(root.querySelector('[data-transcript]') !== null)
+      setTranscriptCount(root.querySelectorAll('[data-transcript]').length)
       onBodyInput()
     },
     [onBodyInput]
@@ -1463,7 +1485,7 @@ export function Editor({
           event.preventDefault()
           parent.insertBefore(node, before)
           applyTranscriptBlocks(parent)
-          setHasTranscript(true)
+          setTranscriptCount((count) => count + 1)
           onBodyInput()
           return
         }
@@ -1575,17 +1597,18 @@ export function Editor({
             ask rather than because you stopped talking. It is also why it can be
             pressed again - a day later, or after editing your own notes.
           */}
+          {/*
+            Never disabled. It used to grey out until the note held a transcript,
+            which explains nothing from the outside - a control that is grey for
+            reasons it will not say teaches you only not to press it. It opens a
+            panel that says what it is about to summarise and with which model.
+          */}
           <button
             type="button"
-            onClick={() => void summarise()}
-            disabled={!hasTranscript || summarising}
-            title={
-              hasTranscript
-                ? 'Summarise the meeting with Claude'
-                : 'Record and transcribe a meeting first'
-            }
+            onClick={() => setSummaryPanel((open) => !open)}
+            disabled={note === null || summarising}
           >
-            {summarising ? 'Summarising…' : 'Summarise'}
+            {summarising ? 'Sammanfattar…' : 'Summarise'}
           </button>
         </div>
         </div>
@@ -1670,6 +1693,19 @@ export function Editor({
               setPendingDrop(null)
             }}
             onCancel={() => setPendingDrop(null)}
+          />
+        )}
+
+        {summaryPanel && !summarising && (
+          <SummaryPanel
+            transcripts={transcriptCount}
+            model={summaryModel}
+            onModel={setSummaryModel}
+            onClose={() => setSummaryPanel(false)}
+            onRun={(source) => {
+              setSummaryPanel(false)
+              void summarise(source, summaryModel)
+            }}
           />
         )}
 

@@ -66,7 +66,12 @@ const SCHEMA = {
   }
 } as const
 
+/** What is being summarised, which decides both the schema and the instruction. */
+export type SummaryKind = 'meeting' | 'note'
+
 export interface SummaryRequest {
+  /** A meeting has decisions and promises; a page of notes has neither. */
+  kind?: SummaryKind
   /** The words, with their timestamps. */
   transcript: string
   /** What the user typed themselves during the meeting - weighted above the transcript. */
@@ -105,6 +110,26 @@ export interface SummaryResult {
  */
 function instruction(request: SummaryRequest): string {
   const language = request.language === 'sv' ? 'Swedish' : 'English'
+
+  /*
+   * A note that is not a meeting gets a different question.
+   *
+   * Asking "what did you commit to" of a page of book notes produces invented
+   * promises - the shape of the answer teaches the model what to look for, and a
+   * meeting-shaped schema over anything else is a request to hallucinate one.
+   */
+  if (request.kind === 'note') {
+    return [
+      `You are reading one note from somebody's notebook. Answer in ${language}, in their voice - plain, specific, no filler.`,
+      '',
+      'Summarise what it says. Pull out the points that would be worth remembering in a month, anything left open, and any action the writer clearly took on.',
+      'Leave a list empty rather than filling it. Most notes contain no decisions and no promises, and inventing them is worse than an empty section.',
+      '',
+      '--- THE NOTE ---',
+      request.notes
+    ].join('\n')
+  }
+
   return [
     `You are reading a transcript of a meeting the user was in. Answer in ${language}, in their voice - plain, specific, no filler.`,
     '',

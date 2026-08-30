@@ -3,6 +3,33 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - Summarise asks what it is about to do, rather than going grey
+
+**Decided.** The button is never disabled. It opens a small panel: what to
+summarise, and with which model.
+
+**What was wrong with the disabled button.** It greyed out until the note held a
+transcript, and said so only in a tooltip. A control that is grey for reasons it
+will not give teaches one thing - do not press it - and the reason it was grey was
+a rule nobody outside the code could infer.
+
+**A note can always be summarised.** Which removes the disabled state honestly
+rather than by hiding it: with a transcript, the meeting shape - decisions,
+promises, questions not asked. Without one, an ordinary note gets an ordinary
+summary, and the schema changes with it, because asking "what did you commit to"
+of a page of book notes is a request to invent a promise.
+
+**The model is chosen per meeting, not in Settings.** It is a judgement about this
+conversation - whether anything here needs reading between the lines - and that is
+not a preference that holds across all of them. Priced in words rather than
+dollars in the panel: "reads between the lines" is what is actually being chosen.
+
+**And it summarises every transcript, not the first.** `querySelector` returns one
+element and the first version used it, so a note holding two recordings - a
+meeting stopped and restarted, two calls in an afternoon - was summarised from
+half its own contents with nothing to say so.
+
+
 ## 2026-08-30 - A meeting is recorded into a note, not into an app
 
 **Decided.** Transcription lives in Nib, and the note is the container: Record
