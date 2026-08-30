@@ -122,7 +122,8 @@ function instruction(request: SummaryRequest): string {
     return [
       `You are reading one note from somebody's notebook. Answer in ${language}, in their voice - plain, specific, no filler.`,
       '',
-      'Summarise what it says. Pull out the points that would be worth remembering in a month, anything left open, and any action the writer clearly took on.',
+      'Summarise what it says. Pull out the points that would be worth remembering in a month, and anything left open.',
+      'An action is something the writer still has to DO - a task ahead of them, in the future. It is not something they did. A note written in the past tense about something that already happened contains no actions at all, however many verbs it has: "I presented three arguments" is what happened, not a thing to do. If nothing is waiting to be done, return an empty list.',
       'Leave a list empty rather than filling it. Most notes contain no decisions and no promises, and inventing them is worse than an empty section.',
       '',
       '--- THE NOTE ---',

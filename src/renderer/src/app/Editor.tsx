@@ -1003,7 +1003,8 @@ export function Editor({
       holder.innerHTML = summaryHtml(
         { model: result.model ?? model, costUsd: result.costUsd ?? null },
         result.value,
-        () => newId('alert')
+        () => newId('alert'),
+        source === 'transcripts' ? 'meeting' : 'note'
       )
       const section = document.createElement('div')
       section.dataset.summary = '1'

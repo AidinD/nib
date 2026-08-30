@@ -777,7 +777,18 @@ export function summaryHtml(
     people: string[]
     lastTime?: string
   },
-  newAlertId: () => string
+  newAlertId: () => string,
+  /*
+   * Whether these action points flag themselves.
+   *
+   * A meeting's do: you said out loud that you would do something, and a promise
+   * that only exists in a summary nobody reopens is not a promise. A note's do
+   * not. Summarising a story about a conversation in 2019 produced two flagged
+   * lines - "presented three arguments", "held the position" - which are the past
+   * tense, not a task, and they became open promises in Tend. Listing them is
+   * useful; committing you to them is not something the summary gets to decide.
+   */
+  kind: 'meeting' | 'note' = 'meeting'
 ): string {
   const escape = (text: string): string =>
     text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
@@ -801,8 +812,9 @@ export function summaryHtml(
   if (value.actions.length > 0) {
     parts.push('<h2>Åtgärdspunkter</h2>')
     for (const action of value.actions) {
+      const flagged = kind === 'meeting' ? ` data-alert="1" data-alert-id="${newAlertId()}"` : ''
       parts.push(
-        `<p data-alert="1" data-alert-id="${newAlertId()}">${escape(action.text)}` +
+        `<p${flagged}>${escape(action.text)}` +
           (action.implied ? ' <em>(underförstått)</em>' : '') +
           '</p>'
       )

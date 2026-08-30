@@ -3,6 +3,34 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - A note's action points are listed, a meeting's are flagged
+
+**Decided.** `summaryHtml` takes the kind. A meeting's action points carry
+`data-alert`; a note's are written as plain lines.
+
+**What went wrong.** Summarising a note about something that had already happened
+produced two flagged lines describing what the writer did - the past tense, not
+tasks. Flagged means promised, and a flagged line reaches Tend as an open
+promise, so a note about a finished conversation created two commitments nobody
+made.
+
+**Two faults met there.** The instruction for a note asked for "any action the
+writer clearly took on", meaning committed to - and the model read it as
+performed. In a note written in the past tense about something you did, every
+sentence is an action you performed, so it answered correctly and the question
+was wrong. It now says an action is a task still ahead, gives the failing example,
+and says a past-tense note contains none however many verbs it has.
+
+**And nothing but a meeting flags itself.** A promise you made out loud in a
+conversation belongs in Tend without being asked twice; a line a model lifted out
+of your prose does not. The lines are still there to read, and one click on the
+gutter turns one into a real action point - which is the right amount of work for
+a decision about what you owe somebody.
+
+**Implied commitments in a MEETING still flag themselves**, unchanged: "I can
+take a look at that" is a promise in effect, marked "(underforstatt)" so the
+reader knows it was inferred rather than heard.
+
 ## 2026-08-30 - An action point in a summary looks like an action point
 
 **Decided.** Lines inside the summary block get the same gutter as lines of the
