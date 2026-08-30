@@ -11,6 +11,7 @@ import electronUpdater from 'electron-updater'
 const { autoUpdater } = electronUpdater
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
+import { appendSamples, deleteRecording, isRecording, startRecording, stopRecording } from './recordings'
 import { NoteStorage } from './storage'
 import {
   allWindows,
@@ -227,6 +228,21 @@ function registerIpc(): void {
 
   ipcMain.handle('asset:write', (_event, dataUrl: string) => writeAsset(dataUrl))
 
+  /*
+   * Recording a meeting.
+   *
+   * The samples arrive here as they are captured rather than in one piece at the
+   * end - see recordings.ts. `recording:chunk` is `on`, not `handle`: it fires
+   * every few hundred milliseconds for the length of a meeting, and a round trip
+   * for each one buys nothing when there is no answer to wait for.
+   */
+  ipcMain.handle('recording:start', (_event, noteId: string) =>
+    startRecording(resolveDataDir(), noteId)
+  )
+  ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
+  ipcMain.handle('recording:stop', () => stopRecording())
+  ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
+
   ipcMain.handle('sticky:open', (_event, noteId: string) => {
     openStickyWindow(noteId)
   })
@@ -368,8 +384,21 @@ void app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   quitting = true
+
+  /*
+   * Close the WAV before the process goes.
+   *
+   * Its header carries two lengths that are only known when recording stops, and
+   * a file left with zeroes in them plays as empty and transcribes as silence.
+   * Quitting mid-meeting is exactly when someone would most want the recording,
+   * so the quit waits for the patch - once, and only while a recording is open.
+   */
+  if (isRecording()) {
+    event.preventDefault()
+    void stopRecording().finally(() => app.quit())
+  }
 })
 
 app.on('window-all-closed', () => {

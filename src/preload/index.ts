@@ -52,6 +52,21 @@ const api = {
    * Fires when the data on disk changed - another window of ours, or an external
    * writer such as Dropbox syncing the folder down. Returns its own unsubscribe.
    */
+  /*
+   * Recording a meeting to disk.
+   *
+   * `sendChunk` is fire-and-forget: it runs every few hundred milliseconds for
+   * the length of a meeting, and waiting for an answer that carries no
+   * information would put an IPC round trip in the capture path.
+   */
+  startRecording: (noteId: string): Promise<string> =>
+    ipcRenderer.invoke('recording:start', noteId),
+  sendChunk: (chunk: Uint8Array): void => ipcRenderer.send('recording:chunk', chunk),
+  stopRecording: (): Promise<{ path: string; seconds: number; bytes: number } | null> =>
+    ipcRenderer.invoke('recording:stop'),
+  deleteRecording: (path: string): Promise<void> =>
+    ipcRenderer.invoke('recording:delete', path),
+
   onIndexChanged: (handler: () => void): (() => void) => {
     const listener = (): void => handler()
     ipcRenderer.on('index:changed', listener)

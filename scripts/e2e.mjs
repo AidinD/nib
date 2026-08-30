@@ -113,7 +113,15 @@ function makePage(send) {
   /** Evaluate an expression in the renderer and return its value. */
   const evaluate = async (expression) => {
     const result = await send('Runtime.evaluate', {
-      expression: `(() => { ${expression} })()`,
+      /*
+       * An ASYNC wrapper, so a step can `await` inside it.
+       *
+       * It used to be a plain arrow, and anything with an await in it failed with
+       * "await is only valid in async functions" - which reads like a mistake in
+       * the step file rather than a limit of the harness. `awaitPromise` below
+       * already unwraps whatever this returns, so nothing else changes.
+       */
+      expression: `(async () => { ${expression} })()`,
       returnByValue: true,
       awaitPromise: true
     })

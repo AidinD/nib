@@ -43,6 +43,28 @@ function setDictionaries(window: BrowserWindow): void {
   }
 }
 
+/**
+ * Let the window capture the machine's own audio output.
+ *
+ * The far end of a meeting comes out of the speakers, not the microphone, so a
+ * recording that only takes the mic gets half a conversation. Windows can hand
+ * back a loopback of what is being played, and Electron exposes it here - in the
+ * main process, because `getDisplayMedia` in the renderer cannot choose a source
+ * on its own.
+ *
+ * `useSystemPicker: false` and no video source: this is not screen sharing and
+ * must never look like it. Nothing is captured but audio, and the renderer's
+ * request is answered without a picker appearing.
+ */
+function allowLoopbackAudio(window: BrowserWindow): void {
+  window.webContents.session.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      callback({ audio: 'loopback' })
+    },
+    { useSystemPicker: false }
+  )
+}
+
 function openLinksExternally(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -88,6 +110,8 @@ export function createMainWindow(): BrowserWindow {
   })
   openLinksExternally(window)
   setDictionaries(window)
+  // Only the main window: a sticky note is not where a meeting is recorded.
+  allowLoopbackAudio(window)
   loadRenderer(window)
   return window
 }
