@@ -64,6 +64,28 @@ test('the model that wrote it is named, whatever the kind', () => {
   }
 })
 
+test('a note gets the flag-all control, a meeting does not', () => {
+  counter = 0
+  assert.equal(summaryHtml(PROVENANCE, VALUE, ids, 'note').includes('data-flag-all'), true)
+  counter = 0
+  assert.equal(summaryHtml(PROVENANCE, VALUE, ids, 'meeting').includes('data-flag-all'), false)
+})
+
+test('every action line is marked as one, flagged or not', () => {
+  for (const kind of ['meeting', 'note']) {
+    counter = 0
+    const html = summaryHtml(PROVENANCE, VALUE, ids, kind)
+    assert.equal((html.match(/data-action="1"/g) ?? []).length, 2, kind)
+  }
+})
+
+test('a summary with no actions gets no control', () => {
+  counter = 0
+  const html = summaryHtml(PROVENANCE, { ...VALUE, actions: [] }, ids, 'note')
+  assert.equal(html.includes('data-flag-all'), false)
+  assert.equal(html.includes('Atgardspunkter'), false)
+})
+
 test('meeting is the default, so an old caller keeps flagging', () => {
   counter = 0
   const html = summaryHtml(PROVENANCE, VALUE, ids)

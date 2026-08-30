@@ -16,6 +16,7 @@ import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
   applyRecordingBlocks,
+  applySummaryBlocks,
   applyTranscriptBlocks,
   transcriptHtml,
   summaryHtml,
@@ -269,6 +270,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      applySummaryBlocks(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
@@ -336,6 +338,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      applySummaryBlocks(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
@@ -1013,6 +1016,7 @@ export function Editor({
       }
       root.insertBefore(section, root.firstChild)
       normaliseBlocks(root)
+      applySummaryBlocks(root)
       setSummaryError(null)
       onBodyInput()
     } catch (error) {
@@ -1921,7 +1925,10 @@ export function Editor({
                 if (candidate.closest('[data-transcript], [data-recording]') !== null) {
                   return false
                 }
-                if (candidate.dataset.provenance !== undefined) {
+                if (
+                  candidate.dataset.provenance !== undefined ||
+                  candidate.dataset.flagAll !== undefined
+                ) {
                   return false
                 }
                 const box = candidate.getBoundingClientRect()
@@ -1955,6 +1962,39 @@ export function Editor({
               if (block !== null) {
                 setPendingDrop(block)
               }
+              return
+            }
+
+            /*
+             * Flag every action point the summary listed, or take them all off.
+             *
+             * The lines it acts on are the ones the summary wrote - `data-action`
+             * - not whatever sits under the heading, so a line typed in among
+             * them afterwards is left alone in both directions.
+             */
+            const flagAll = target.closest<HTMLElement>('[data-flag-all]')
+            if (flagAll !== null) {
+              const section = flagAll.closest<HTMLElement>('[data-summary]')
+              const lines =
+                section === null
+                  ? []
+                  : Array.from(section.querySelectorAll<HTMLElement>('p[data-action]'))
+              const flagging = lines.some((line) => line.dataset.alert === undefined)
+              for (const line of lines) {
+                if (flagging) {
+                  if (line.dataset.alert === undefined) {
+                    line.dataset.alert = '1'
+                    line.dataset.alertId = newId('alert')
+                  }
+                } else {
+                  delete line.dataset.alert
+                  delete line.dataset.alertId
+                }
+              }
+              if (section !== null) {
+                applySummaryBlocks(section)
+              }
+              onBodyInput()
               return
             }
 

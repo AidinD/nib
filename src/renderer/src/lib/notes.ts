@@ -166,6 +166,38 @@ export function applyTranscriptBlocks(root: HTMLElement): void {
   }
 }
 
+/**
+ * Write the label on the summary's flag-all control, and keep it honest.
+ *
+ * It says what the next click will do, which depends on the lines above it: with
+ * anything unflagged it offers to flag them, and once they all carry a flag it
+ * offers to take them off again. Recomputed on load and after every click, so a
+ * note reopened tomorrow does not offer to flag what is already flagged.
+ *
+ * A summary with no action lines left - they can be deleted like any other line -
+ * loses the control rather than keeping a button that acts on nothing.
+ */
+export function applySummaryBlocks(root: HTMLElement): void {
+  for (const control of root.querySelectorAll<HTMLElement>('[data-flag-all]')) {
+    const section = control.closest<HTMLElement>('[data-summary]')
+    const lines =
+      section === null ? [] : Array.from(section.querySelectorAll<HTMLElement>('p[data-action]'))
+    if (lines.length === 0) {
+      control.remove()
+      continue
+    }
+    control.contentEditable = 'false'
+    const unflagged = lines.filter((line) => line.dataset.alert === undefined)
+    control.dataset.flagAll = unflagged.length > 0 ? '1' : 'undo'
+    control.textContent =
+      unflagged.length === 0
+        ? 'Ta bort flaggorna'
+        : unflagged.length === 1 && lines.length === 1
+          ? 'Flagga som åtgärdspunkt'
+          : `Flagga alla ${unflagged.length} som åtgärdspunkter`
+  }
+}
+
 export function applyCanvasBlocks(root: HTMLElement): void {
   for (const block of root.querySelectorAll('[data-canvas]')) {
     ;(block as HTMLElement).contentEditable = 'false'
@@ -813,11 +845,29 @@ export function summaryHtml(
     parts.push('<h2>Åtgärdspunkter</h2>')
     for (const action of value.actions) {
       const flagged = kind === 'meeting' ? ` data-alert="1" data-alert-id="${newAlertId()}"` : ''
+      // `data-action` marks the line as one of these, whatever its flag state -
+      // which is what lets the control below find exactly the lines it wrote,
+      // rather than guessing from position under a heading.
       parts.push(
-        `<p${flagged}>${escape(action.text)}` +
+        `<p data-action="1"${flagged}>${escape(action.text)}` +
           (action.implied ? ' <em>(underförstått)</em>' : '') +
           '</p>'
       )
+    }
+    if (kind === 'note') {
+      /*
+       * One click for all of them, where you are already reading them.
+       *
+       * A note's action points do not flag themselves - see DECISIONS - and
+       * promoting them one gutter click at a time is the right price for one and
+       * the wrong price for four. A modal after the summary was the alternative
+       * and would arrive before the summary had been read, showing the lines out
+       * of the context that decides whether they are promises at all.
+       *
+       * Its label is written by `applySummaryBlocks`, so it says the right thing
+       * after a reload too.
+       */
+      parts.push('<p data-flag-all="1"></p>')
     }
   }
 

@@ -3,6 +3,29 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-30 - One click for all of them, in the summary, not in a dialog
+
+**Decided.** A note's summary ends its action list with a control:
+"Flagga alla N som atgardspunkter". Clicking it flags every line the summary
+wrote; once they are flagged it reads "Ta bort flaggorna" and takes them off
+again. Meetings are unchanged - they still flag themselves.
+
+**The alternative was a modal after every summary**, listing the action points
+with checkboxes. Three reasons it is worse. It arrives before the summary has
+been read, and whether a line is a promise is a judgement about the paragraph
+above it - shown alone in a dialog, that context is gone. It arrives after a wait,
+so the first thing back from a slow operation is a form rather than the answer.
+And it would almost always be answered the same way, which makes it a thing you
+click through - and a dialog clicked through looks like consent without being it.
+
+**What was actually missing was the price of the plural.** One gutter click is
+right for one line and wrong for four. A control where the lines already are
+fixes that without putting anything between the summary and reading it.
+
+**The lines it acts on are marked, not inferred.** `data-action` is written on
+each one, so a line typed in among them later is left alone in both directions -
+position under a heading would have been a guess.
+
 ## 2026-08-30 - A note's action points are listed, a meeting's are flagged
 
 **Decided.** `summaryHtml` takes the kind. A meeting's action points carry

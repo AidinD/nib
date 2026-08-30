@@ -3153,6 +3153,43 @@ body.is-resizing .splitter-grip {
   display: none;
 }
 
+/*
+ * The flag-all control: a control, not a sentence.
+ *
+ * Small, dim, and clearly clickable, so it reads as something to press rather
+ * than as the last line of the summary. It carries no gutter marker for the same
+ * reason the signature does not - it is not a line of the note.
+ */
+.doc-body [data-summary] p[data-flag-all] {
+  display: inline-block;
+  margin: 2px 0 0;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 100ms ease,
+    border-color 100ms ease;
+}
+
+.doc-body [data-summary] p[data-flag-all]:hover {
+  color: var(--alert);
+  border-color: var(--alert);
+}
+
+/* Taking them off again is not the alert-coloured action. */
+.doc-body [data-summary] p[data-flag-all='undo']:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.doc-body [data-summary] p[data-flag-all]::before {
+  display: none;
+}
+
 .doc-body:hover [data-summary] p::before {
   opacity: 0.25;
 }
