@@ -160,11 +160,6 @@ faded out when the pointer entered the document.
 
 ## Open questions
 
-- **Should the second copy of the whisper payload exist?** `%LOCALAPPDATA%\whisper`
-  is 1.5GB that `WHISPER_DIR` means nothing ever reads - and since the swap it
-  holds the *small* Swedish model under the name the large one now has, so a
-  process that misses the environment variable silently transcribes worse. Delete
-  it or swap it; leaving it as it is is the one option with a trap in it.
 - **Does anything move between Jot and Nib?** Settled for now: nothing automatic. A manual `Add to Jot` button on a flagged line is the shape it would take, and it is not scheduled - see DECISIONS 2026-08-23. Alerts stay in Nib meanwhile, overlap and all.
 
 Settled: the name, the separate-app question, the storage format and location, the

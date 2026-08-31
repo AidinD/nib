@@ -3,6 +3,31 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-31 - The second copy of the whisper payload is gone
+
+**Decided.** `%LOCALAPPDATA%\whisper` is deleted. 1.47GB, 47 files, nothing in it
+unique: `D:\whisper` holds the large Swedish model under the active name, the
+English model, `small` kept beside it as `ggml-small-q5_0.bin` for comparing
+against, and the binary.
+
+**Why it had to go rather than be re-synced.** Since the model swap it held
+*small* under the name `ggml-model-q5_0.bin` - the name the large one now uses.
+`WHISPER_DIR` is authoritative, so nothing that inherits it ever looked there;
+anything that did NOT inherit it fell through to a copy that transcribes
+measurably worse, with nothing in the app saying which one ran. Keeping it in
+step was the other option and is the one with a trap in it: it only stays correct
+until the next swap that somebody forgets to mirror.
+
+**What a process without `WHISPER_DIR` gets now**, which is the point:
+
+```text
+whisper-cli.exe is not in D:\Repo\Tools\.whisper.
+Set WHISPER_DIR to the folder holding Release/ and the models.
+```
+
+A complaint naming a path, rather than a quiet fallback to worse output. Both
+languages verified ready through `whisperStatus` afterwards.
+
 ## 2026-08-31 - Who spoke comes from the wiring, not from the voice
 
 **Decided.** A meeting is recorded as **two channels** rather than one: the
