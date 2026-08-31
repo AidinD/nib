@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
-import { writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -388,11 +389,36 @@ if (await portTaken()) {
 }
 
 const electron = join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
-const child = spawn(electron, ['.', `--remote-debugging-port=${PORT}`], {
-  cwd: root,
-  stdio: ['ignore', 'pipe', 'pipe'],
-  env: process.env
-})
+
+/*
+ * A scratch userData folder as well as a scratch NIB_DATA_DIR.
+ *
+ * NIB_DATA_DIR is not enough on its own, and finding that out cost a real file.
+ * Recordings live in userData rather than in the data directory - see
+ * `recordingsDir` in the main process - and the startup sweep deletes every
+ * recording whose note the CURRENT index does not know about. Pointed at a
+ * scratch notebook, that is all of them: a test run reaches into the real
+ * recordings folder and empties it.
+ *
+ * `--user-data-dir` is Chromium's own switch and Electron resolves
+ * `app.getPath('userData')` from it, so the sweep, the window state and
+ * everything else the app keeps beside its data land in here instead. It is left
+ * behind rather than deleted: it is a few kilobytes, and a run that failed is
+ * exactly when you want to look at what it wrote.
+ */
+const userData = join(tmpdir(), `nib-e2e-${process.pid}`)
+mkdirSync(userData, { recursive: true })
+console.log(`[e2e] userData: ${userData}`)
+
+const child = spawn(
+  electron,
+  ['.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`],
+  {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: process.env
+  }
+)
 child.stdout.on('data', (chunk) => process.stdout.write(`[app] ${chunk}`))
 child.stderr.on('data', (chunk) => {
   const text = String(chunk)
