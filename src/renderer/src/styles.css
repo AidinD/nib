@@ -3121,6 +3121,29 @@ body.is-resizing .splitter-grip {
   border-left-color: var(--border);
 }
 
+/*
+ * The two offers on a transcribed recording.
+ *
+ * Underlined text rather than buttons: the block is a quiet line about something
+ * that already happened, and a pair of buttons on it would read as the loudest
+ * thing in the note. Both are always visible, unlike the cross on a transcript -
+ * that one is hidden until hover because it deletes on the spot, and these ask
+ * first or do nothing destructive at all.
+ */
+.recording-block [data-retranscribe],
+.recording-block [data-discard] {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.recording-block [data-retranscribe]:hover {
+  color: var(--text);
+}
+
+.recording-block [data-discard]:hover {
+  color: var(--alert);
+}
+
 /* ---------- the summary ---------- */
 
 /*

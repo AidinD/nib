@@ -3,6 +3,51 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-31 - The audio outlives the transcript
+
+**Decided.** A recording is no longer deleted when its words land in the note. It
+stays on disk until it is discarded from the block on purpose, and a transcribed
+block offers both things worth doing with it: transcribe again, or discard the
+audio. Discarding asks first.
+
+**What happened.** The first real meeting went through it. The transcript came
+back about nine tenths right, with some things heard as entirely different words -
+and the audio was already gone, so there was no second run to be had: not with a
+better model, not with a better prompt, not at all. The old behaviour read as
+tidy. What it actually did was make every mistake permanent at the moment it was
+least understood, which is the second the transcript appears and before anyone has
+read it.
+
+**Nine tenths is fine for a summary and not fine for a record.** The summary pass
+reads over a misheard word. A person reading the note back in a month does not, and
+the words most likely to come out wrong are names - the ones a meeting note is
+least able to be wrong about.
+
+**`transcribed` stopped meaning "the audio is gone", so `lost` had to start.** The
+two were the same state before because they always coincided. Now a block can be
+transcribed with its file still there, and the load-time check that marks a
+recording `lost` covers transcribed blocks too - which is also what quietly
+migrates every note made before this: their audio really is gone, so they load as
+`lost` and stop offering a second run that could never happen.
+
+**A second run replaces the transcript rather than stacking under it.** Found in
+document order, stopping at the next recording. The first version walked siblings
+and looked wrong in a way only the app could show: a transcript comes back from
+disk wrapped in a paragraph, so the block's next sibling is a `p`, not the
+`details` inside it, and the check quietly matched nothing. Two transcripts, no
+error. `node scripts/e2e.mjs` caught it on the first run.
+
+**And the confirmation on deleting a transcript had to be rewritten**, because it
+said the audio was already gone and offered that as the reason to be careful. It
+is not necessarily gone any more, and where it is not, the words can be made
+again.
+
+**What this costs is disk.** 1.9MB a minute, so a 45-minute meeting is about 86MB
+sitting in `userData/recordings` until it is thrown away. The startup sweep still
+clears recordings whose note is gone. Kept audio whose note is alive is the user's
+to discard, which is the whole point of the change - an app that quietly tidied
+these away would be back where it started.
+
 ## 2026-08-31 - The mentions footnote folds, and the fold is a reading preference
 
 **Decided.** The "Mentioned in N notes" heading is now the control that folds the

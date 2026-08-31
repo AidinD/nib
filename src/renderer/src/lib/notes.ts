@@ -88,7 +88,8 @@ export function applyImageWidths(root: HTMLElement): void {
  * The same shape as a drawing block: identified by a data attribute, not by a
  * class, so what it IS survives the sanitiser and how it LOOKS is put back on
  * load. `data-recording` holds the file path, `data-seconds` its length, and
- * `data-state` where it is in the journey from audio to transcript.
+ * `data-state` where it is in the journey from audio to transcript - where
+ * `transcribed` no longer means the audio is gone. `lost` is what says that.
  *
  * Not editable, because it is a control rather than prose - and its text is
  * rebuilt here on every load, so a half-deleted label cannot survive in a note.
@@ -107,17 +108,39 @@ export function applyRecordingBlocks(root: HTMLElement): void {
     }
     const length = `${minutes}:${String(seconds % 60).padStart(2, '0')}`
     const language = block.dataset.language === 'en' ? 'English' : 'Svenska'
+
+    /*
+     * A transcribed recording keeps its audio, so the block is not a receipt for
+     * something finished - it is the two things still worth doing.
+     *
+     * The audio used to be deleted the moment the words landed in the note. That
+     * read as tidy and meant a wrong word was permanent: the first real meeting
+     * came back about nine tenths right, with names mangled, and there was
+     * nothing left to run again. So the file stays until it is thrown away on
+     * purpose, and both offers sit on the block rather than behind a menu.
+     */
+    if (state === 'transcribed') {
+      block.textContent = `Recording · ${length} · ${language} · transcribed · the audio is still here · `
+      const again = document.createElement('span')
+      again.dataset.retranscribe = '1'
+      again.textContent = 'transcribe again'
+      const discard = document.createElement('span')
+      discard.dataset.discard = '1'
+      discard.textContent = 'discard the audio'
+      block.append(again, document.createTextNode(' · '), discard)
+      continue
+    }
+
     block.textContent =
       state === 'working'
         ? `Recording · ${length} · transcribing…`
-        : state === 'transcribed'
-          ? `Recording · ${length} · transcribed`
-          : state === 'lost'
-            ? // The audio was deleted - after transcription, or with its note. The
-              // block stays because it marks where the meeting was, but it no
-              // longer offers something it cannot do.
-              `Recording · ${length} · the audio is no longer on disk`
-            : `Recording · ${length} · ${language} · click to transcribe`
+        : state === 'lost'
+          ? // The audio is gone: discarded on purpose, thrown away with its note,
+            // or transcribed back when transcribing deleted it. The block stays
+            // because it marks where the meeting was, but it no longer offers
+            // something it cannot do.
+            `Recording · ${length} · the audio is no longer on disk`
+          : `Recording · ${length} · ${language} · click to transcribe`
   }
 }
 

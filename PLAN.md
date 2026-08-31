@@ -93,7 +93,22 @@ Every requirement on the original list is now built. What is left is smaller:
    folds from its own heading and the fold is remembered as a view preference.
    What is still not built is any view of the graph itself, which only becomes
    worth it if the linking gets much denser than it is.
-6. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
+6. **Transcription is the open thread, after the first real meeting.** It came
+   back about nine tenths right, with some words heard as entirely different
+   ones. The audio is kept now rather than deleted the moment the transcript
+   appears, so a run can be done again - that part is built and verified. What is
+   not settled is the engine: it runs KBLab's `small` model, and `large` is
+   downloaded and timed on this machine but not adopted. Measured on the 3070,
+   same clip both ways: encode 70ms a window against 180ms, batched decode 2.7ms
+   a token against 5.3ms - so large is roughly twice the wait, from a base of
+   about 13x real time. The accuracy difference on real meeting audio has NOT
+   been measured; KBLab's own read-speech numbers are 6.4-7.3 WER for small
+   against 4.1-5.4 for large, which is a quarter fewer errors and says nothing
+   about names. Two things that would bear more directly on names than the model
+   does, neither built: `--prompt` with a word list (nothing is passed today),
+   and `--vad`, which is off, and which is what fills silence with sentences
+   nobody said.
+7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
 sidebar, the editor, persistence, inline images, sticky windows, drag and drop,
@@ -118,6 +133,11 @@ faded out when the pointer entered the document.
 
 ## Open questions
 
+- **Which whisper model should Nib run, and should the language pick it?** The
+  Swedish and English models are separate files by necessity - the Swedish
+  checkpoint transcribes English speech into Swedish words - and `small` is what
+  is installed for both. Waiting on a real recording to compare against, which
+  the kept audio now makes possible.
 - **Does anything move between Jot and Nib?** Settled for now: nothing automatic. A manual `Add to Jot` button on a flagged line is the shape it would take, and it is not scheduled - see DECISIONS 2026-08-23. Alerts stay in Nib meanwhile, overlap and all.
 
 Settled: the name, the separate-app question, the storage format and location, the

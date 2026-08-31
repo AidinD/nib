@@ -155,6 +155,9 @@ export function Editor({
 
   /** The transcript waiting on a yes - held by element, since it is about to go. */
   const [pendingDrop, setPendingDrop] = useState<HTMLElement | null>(null)
+  /** The recording whose audio is waiting on a yes. Held the same way, and for a
+   *  worse reason: the file is about to leave the disk, where undo cannot reach. */
+  const [pendingAudioDrop, setPendingAudioDrop] = useState<HTMLElement | null>(null)
   const [summaryPanel, setSummaryPanel] = useState(false)
   /** Which tier to use. Per note rather than a setting: it is a judgement about
    *  this meeting, not a preference about all of them. */
@@ -850,18 +853,23 @@ export function Editor({
   /*
    * Say which recordings have lost their audio, before anything is clicked.
    *
-   * A recording is deleted the moment its words are in the note, and the startup
-   * sweep clears the ones whose note is gone - so a block restored from a saved
-   * note can outlive its file. Left alone it still reads "click to transcribe",
+   * The audio is kept until it is discarded on purpose, but a block can still
+   * outlive its file: discarded here, cleared by the startup sweep because its
+   * note was thrown away, or - for every note made before this - deleted the
+   * moment it was transcribed. Left alone the block still offers to transcribe,
    * and clicking it reached whisper, which answers a missing file by printing its
    * entire usage text into the note. One question per block on load is cheaper
    * than that, and honest.
+   *
+   * `transcribed` is checked too, and that is what migrates the old notes: their
+   * audio is long gone, so they load as `lost` rather than claiming it is still
+   * here and offering a second run that could never happen.
    */
   const markLostRecordings = useCallback(async (root: HTMLElement): Promise<void> => {
     const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-recording]')).filter(
       (block) => {
         const state = block.dataset.state ?? 'recorded'
-        return state === 'recorded' || state === 'failed'
+        return state === 'recorded' || state === 'failed' || state === 'transcribed'
       }
     )
     let lost = false
@@ -909,6 +917,33 @@ export function Editor({
         holder.innerHTML = transcriptHtml(result.segments, Math.max(1, Math.round(seconds / 60)))
         const transcript = holder.firstElementChild
         if (transcript !== null) {
+          /*
+           * A second run replaces this block's transcript rather than stacking a
+           * new one under it.
+           *
+           * Found in document order rather than by walking siblings, which is what
+           * the first version did and what the test caught: a transcript comes back
+           * from disk wrapped in a paragraph, so the block's next sibling is a `p`
+           * and not the `details` inside it. Stopping at the next recording is what
+           * keeps a second meeting's transcript out of it.
+           */
+          const inOrder = Array.from(
+            root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
+          )
+          const following = inOrder[inOrder.indexOf(block) + 1]
+          const previous =
+            following !== undefined && following.hasAttribute('data-transcript')
+              ? following
+              : null
+          if (previous !== null) {
+            // The paragraph it was wrapped in is left behind empty otherwise, and
+            // an empty paragraph is a blank line in the note.
+            const holder = previous.parentElement
+            previous.remove()
+            if (holder !== null && holder !== root && holder.childNodes.length === 0) {
+              holder.remove()
+            }
+          }
           block.after(transcript)
         }
         block.dataset.state = 'transcribed'
@@ -916,8 +951,16 @@ export function Editor({
         applyTranscriptBlocks(root)
         onBodyInput()
 
-        // Only once the words are safely in the note.
-        await window.nib.deleteRecording(path)
+        /*
+         * The audio stays on disk.
+         *
+         * It used to be deleted right here, the moment the words were in the note.
+         * That read as tidy and made every mistake permanent: the first real
+         * meeting came back about nine tenths right, names mangled, and the file
+         * was already gone - so there was no way to run it again with a better
+         * model, or at all. It is discarded from the block instead, once the
+         * transcript has been read and believed.
+         */
       } catch (error) {
         stopListening()
         const why = error instanceof Error ? error.message : String(error)
@@ -931,6 +974,30 @@ export function Editor({
         block.dataset.state = 'failed'
         block.textContent = `Recording · transcription failed: ${why}`
       }
+    },
+    [onBodyInput]
+  )
+
+  /**
+   * Throw the audio away, on purpose.
+   *
+   * The block stays and becomes `lost`, which is exactly what a note from before
+   * the audio was kept looks like: it still marks where the meeting was and no
+   * longer offers what it cannot do. Ctrl+Z does not bring this back - the file
+   * leaves the disk, not the document - which is why it is the one control here
+   * that asks first.
+   */
+  const discardAudio = useCallback(
+    async (block: HTMLElement): Promise<void> => {
+      const root = bodyRef.current
+      const path = block.dataset.recording
+      if (root === null || path === undefined) {
+        return
+      }
+      await window.nib.deleteRecording(path)
+      block.dataset.state = 'lost'
+      applyRecordingBlocks(root)
+      onBodyInput()
     },
     [onBodyInput]
   )
@@ -1049,7 +1116,8 @@ export function Editor({
    * undo, the browser's stack is the right answer again and this steps aside.
    *
    * A confirmation as well. Undo is for the second after; the dialog is for the
-   * second before, and once the audio is gone a transcript exists nowhere else.
+   * second before - and where the audio has been discarded, a transcript exists
+   * nowhere else.
    */
   const dropTranscript = useCallback(
     (block: HTMLElement) => {
@@ -1795,8 +1863,8 @@ export function Editor({
           <ConfirmModal
             title="Ta bort transkriptet?"
             message={
-              'Orden försvinner ur noteringen. Ljudet är redan borta, så det går inte ' +
-              'att skapa igen - men Ctrl+Z ångrar det direkt efteråt.'
+              'Orden försvinner ur noteringen. Ctrl+Z ångrar det direkt efteråt - och ' +
+              'ligger inspelningen kvar går det att transkribera om den.'
             }
             confirmLabel="Ta bort"
             onConfirm={() => {
@@ -1804,6 +1872,23 @@ export function Editor({
               setPendingDrop(null)
             }}
             onCancel={() => setPendingDrop(null)}
+          />
+        )}
+
+        {pendingAudioDrop !== null && (
+          <ConfirmModal
+            title="Släng ljudet?"
+            message={
+              'Transkriptet blir kvar, men inspelningen försvinner från disken och ' +
+              'går inte att ångra - och då går den inte att transkribera om. Läs ' +
+              'igenom transkriptet först: det är hela poängen med att ljudet ligger kvar.'
+            }
+            confirmLabel="Släng ljudet"
+            onConfirm={() => {
+              void discardAudio(pendingAudioDrop)
+              setPendingAudioDrop(null)
+            }}
+            onCancel={() => setPendingAudioDrop(null)}
           />
         )}
 
@@ -2004,9 +2089,35 @@ export function Editor({
               return
             }
 
+            /*
+             * The two offers on a transcribed recording, caught before the block
+             * itself so that clicking a word on it does not also mean "transcribe".
+             *
+             * Running it again is not destructive - it replaces the transcript
+             * with a fresh one from the same audio, which is the whole reason the
+             * audio is still here. Discarding is, so it goes through the dialog.
+             */
+            const again = target.closest<HTMLElement>('[data-retranscribe]')
+            if (again !== null) {
+              const block = again.closest<HTMLElement>('[data-recording]')
+              if (block !== null) {
+                void transcribeBlock(block)
+              }
+              return
+            }
+            const discard = target.closest<HTMLElement>('[data-discard]')
+            if (discard !== null) {
+              const block = discard.closest<HTMLElement>('[data-recording]')
+              if (block !== null) {
+                setPendingAudioDrop(block)
+              }
+              return
+            }
+
             // A recording that has not been turned into text yet: clicking it
-            // is how you ask for that. A block that has been transcribed is
-            // inert - the words are already below it.
+            // is how you ask for that. A transcribed block answers on its two
+            // controls above rather than anywhere on itself, and a lost one has
+            // nothing left to offer.
             const recording = target.closest<HTMLElement>('[data-recording]')
             if (recording !== null) {
               const state = recording.dataset.state ?? 'recorded'
