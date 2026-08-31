@@ -3,6 +3,42 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-31 - The mentions footnote folds, and the fold is a reading preference
+
+**Decided.** The "Mentioned in N notes" heading is now the control that folds the
+list away, the chip titles are capped so several fit a row, and the rows are
+bounded at 16vh with their own scroll. The open/folded choice lives in view
+preferences, so it holds for every note.
+
+**The case that broke it was a hub note** - one note that lists a dozen others,
+each of which links back to it. The panel sits below the scrolling body on
+purpose, so every row it takes is a row the note loses. Measured on a fixture of
+twelve mentions: 411px of a 714px editor, 58%, with the note being read squeezed
+into what was left and no way to say otherwise. Each chip was 370px of a 640px
+column, because the title was never truncated, so twelve mentions meant twelve
+rows.
+
+**On a hub note the panel is also a second copy of the note.** The body lists the
+twelve, and the footnote lists the same twelve back. That is not a reason to drop
+backlinks on notes that link out - the general case is still worth having - but
+it is why the panel had to become something you can put away.
+
+**The heading is the control, rather than a separate chevron button.** It already
+carries the count, so a folded panel still says twelve notes point here. Hiding
+the rows without hiding the fact is the only version of folding a footnote that
+does not lose information.
+
+**Remembered globally, not per note.** Whether backlinks are worth screen space
+is a fact about how someone reads, not about which note is open: navigating by
+backlinks means wanting them everywhere, and ignoring them means wanting them
+gone everywhere. Per-note state would also have meant putting view state into
+note data, which the notebook does not do.
+
+**Defaults to open.** Folded-by-default would leave a first-time reader with a
+grey line and no reason to press it. The height cap is what makes open safe, and
+it binds on the rows alone - the rule, the label and the margin above are fixed
+cost and do not grow with the notebook.
+
 ## 2026-08-30 - An empty summary wrapper is not a summary
 
 **Decided.** On load, a `[data-summary]` block holding neither the model

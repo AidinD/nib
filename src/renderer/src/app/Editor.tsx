@@ -82,6 +82,10 @@ interface EditorProps {
   note: NoteMeta | null
   /** Measure - the editor column width, adjustable per the design spec. */
   measure: number
+  /** Whether the "mentioned in" list under the note is expanded. */
+  mentionsOpen: boolean
+  /** Flip that, for every note - it is a reading preference, not a note's state. */
+  onToggleMentions: () => void
   /** An alert to scroll to and flash once the note is loaded. */
   focusAlertId: string | null
   onAlertFocused: () => void
@@ -98,6 +102,8 @@ export function Editor({
   index,
   note,
   measure,
+  mentionsOpen,
+  onToggleMentions,
   focusAlertId,
   onAlertFocused,
   onSaved,
@@ -2035,24 +2041,45 @@ export function Editor({
         */}
         {mentions.length > 0 && (
           <div className="backlinks">
-            <span className="backlinks-label">
+            {/*
+              The heading is the control. It already carries the count, so
+              collapsing hides the rows without hiding the fact that they exist -
+              which is the whole reason a footnote may be folded away at all.
+
+              A hub note is mentioned by every note it lists, so the panel there
+              was a second copy of the note's own body, several rows deep, with
+              no way to put it away.
+            */}
+            <button
+              type="button"
+              className="backlinks-label"
+              aria-expanded={mentionsOpen}
+              onClick={onToggleMentions}
+              title={mentionsOpen ? 'Hide what points here' : 'Show what points here'}
+            >
+              <span className={`backlinks-caret${mentionsOpen ? ' is-open' : ''}`} aria-hidden>
+                &#9656;
+              </span>
               Mentioned in {mentions.length === 1 ? '1 note' : `${mentions.length} notes`}
-            </span>
-            <div className="backlinks-rows">
-              {mentions.map((mention) => (
-                <button
-                  key={mention.note.id}
-                  type="button"
-                  className="backlink"
-                  onClick={() => onOpenNote(mention.note.id)}
-                >
-                  <span className="backlink-title">
-                    {mention.note.title.length > 0 ? mention.note.title : 'Untitled'}
-                  </span>
-                  <span className="backlink-trail">{mention.trail}</span>
-                </button>
-              ))}
-            </div>
+            </button>
+            {mentionsOpen && (
+              <div className="backlinks-rows">
+                {mentions.map((mention) => (
+                  <button
+                    key={mention.note.id}
+                    type="button"
+                    className="backlink"
+                    onClick={() => onOpenNote(mention.note.id)}
+                    title={`${mention.note.title.length > 0 ? mention.note.title : 'Untitled'} - ${mention.trail}`}
+                  >
+                    <span className="backlink-title">
+                      {mention.note.title.length > 0 ? mention.note.title : 'Untitled'}
+                    </span>
+                    <span className="backlink-trail">{mention.trail}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

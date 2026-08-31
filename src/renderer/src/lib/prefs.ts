@@ -43,6 +43,16 @@ export interface Prefs {
   measure: number
   /** The note list column width in pixels, set by dragging its edge. */
   listWidth: number
+  /**
+   * Whether the "mentioned in" list under a note is expanded.
+   *
+   * Remembered rather than reset per note, because it answers a question about
+   * the reader, not about the note: someone who navigates by backlinks wants
+   * them open everywhere, and someone who does not wants them out of the way
+   * everywhere. Defaults to open, which is what a note with one or two mentions
+   * should do - the case that made it feel heavy is a hub note with a dozen.
+   */
+  mentionsOpen: boolean
 }
 
 const KEY = 'nib.prefs'
@@ -52,7 +62,8 @@ export function readPrefs(): Prefs {
     accent: 'blue',
     serif: false,
     measure: MEASURE_DEFAULT,
-    listWidth: LIST_DEFAULT
+    listWidth: LIST_DEFAULT,
+    mentionsOpen: true
   }
   try {
     const raw = window.localStorage.getItem(KEY)
@@ -77,7 +88,8 @@ export function readPrefs(): Prefs {
         parsed.listWidth >= LIST_MIN &&
         parsed.listWidth <= LIST_MAX
           ? parsed.listWidth
-          : LIST_DEFAULT
+          : LIST_DEFAULT,
+      mentionsOpen: parsed.mentionsOpen !== false
     }
   } catch {
     // A corrupt preferences blob is not worth failing a window over.

@@ -2430,7 +2430,9 @@ body.is-sticky-window {
 }
 
 .backlinks-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   margin-bottom: 6px;
   color: var(--text-dim);
   font-size: 10.5px;
@@ -2438,10 +2440,29 @@ body.is-sticky-window {
   text-transform: uppercase;
 }
 
+.backlinks-caret {
+  display: inline-block;
+  font-size: 8px;
+  transition: transform 120ms ease;
+}
+
+.backlinks-caret.is-open {
+  transform: rotate(90deg);
+}
+
+/*
+ * Bounded, then scrolled.
+ *
+ * The panel sits below the body rather than inside it, so every row it takes is
+ * a row the note loses. Left to grow it took half the editor on a note a dozen
+ * others point at, and the note being read was the part that got squeezed.
+ */
 .backlinks-rows {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 16vh;
+  overflow-y: auto;
 }
 
 .backlink {
@@ -2460,8 +2481,16 @@ body.is-sticky-window {
   border-color: var(--accent);
 }
 
+/*
+ * Capped so more than one chip fits a row.
+ *
+ * Untruncated titles made every chip nearly the full width of the column, so a
+ * dozen mentions wrapped to a dozen rows. The full title is on the chip's
+ * tooltip, and the trail beside it says which folder it came from.
+ */
 .backlink-title {
   overflow: hidden;
+  max-width: 210px;
   color: var(--text);
   font-size: 12px;
   text-overflow: ellipsis;

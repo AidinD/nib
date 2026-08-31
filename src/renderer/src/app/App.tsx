@@ -540,6 +540,10 @@ export function App(): React.JSX.Element {
           index={index}
           note={activeNote}
           measure={prefs.measure}
+          mentionsOpen={prefs.mentionsOpen}
+          onToggleMentions={() =>
+            setPrefs((current) => ({ ...current, mentionsOpen: !current.mentionsOpen }))
+          }
           focusAlertId={focusAlertId}
           onAlertFocused={() => setFocusAlertId(null)}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
