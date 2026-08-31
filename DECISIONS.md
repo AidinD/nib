@@ -3,6 +3,47 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-31 - The Swedish model is large, and the fallback copy is now a trap
+
+**Decided.** `D:\whisper\ggml-model-q5_0.bin` is KBLab's **large** checkpoint. The
+small one it replaced is kept beside it as `ggml-small-q5_0.bin`, for comparing
+against. No code changed: the filename is what keel maps `sv` to, so the swap is
+a rename.
+
+**Measured on a 50-second clip of the author alternating with a YouTube video,
+which is the mixed case a meeting actually is.** Same file, same flags, both
+models:
+
+```text
+small   10.5x real time   "guidat till Mandina Svenska YouTubers"
+large    6.3x real time   "guidad hur man blir en svensk YouTuber"
+small                     "senskriveringsprogrammet kladde av"
+large                     "transkriberingsprogrammet klarar av"
+```
+
+Everything else in the clip was the same in substance. So the difference is not
+in the ordinary sentences - it is that small answers a phrase it cannot hear by
+**building a plausible one**, complete with an invented proper noun. A dropped
+word is visible. "Mandina" reads like something that was said. That is the
+failure the first real meeting hit, and the reason this was worth an hour.
+
+**A 45-minute meeting goes from 4.3 minutes of waiting to 7.1.** On an RTX 3070,
+1.03GB of weights against 8GB of VRAM. Not a consideration.
+
+**What is worse: large quantises its timestamps to whole two-second blocks**,
+where small reports 3.32 and 7.42. Two seconds is precise enough to jump to a
+moment in a transcript and for a summary to point at one, so this was not worth
+keeping small over - but it is visible in the note.
+
+**The trap this creates.** `WHISPER_DIR` points at `D:\whisper` and, per
+`keel/whisper`, an explicit setting is the answer right or wrong - so the second
+copy of the payload at `%LOCALAPPDATA%\whisper` is never consulted while that
+variable is set. It still holds **small** under the name
+`ggml-model-q5_0.bin`. Any process that does not inherit the user environment
+variable - the failure this project already has a warning about - now falls back
+to a copy that transcribes measurably worse, and nothing in the app says which one
+ran. The copy is 1.5GB on C: and either wants deleting or wants the same swap.
+
 ## 2026-08-31 - The audio outlives the transcript
 
 **Decided.** A recording is no longer deleted when its words land in the note. It

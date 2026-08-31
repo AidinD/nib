@@ -410,11 +410,18 @@ void app.whenReady().then(() => {
   /*
    * Recordings whose note is gone, cleared at startup.
    *
-   * The audio is deleted when it becomes a transcript, so this only ever finds
-   * the two cases where that never happened: a note thrown away with a recording
-   * still attached, and a transcription never asked for on a note since deleted.
-   * Both leave a file nothing can point at, and 1.9MB a minute is quiet until it
-   * is not.
+   * This matters more than it used to. Audio is kept until it is discarded on
+   * purpose now, so the ordinary case - a transcribed recording on a note still
+   * in the notebook - is a file that stays for as long as its note does. What
+   * this finds is the one case where nobody can ever discard it: the note was
+   * thrown away with the audio still attached, so the block that offered the
+   * control went with it. That leaves a file nothing can point at, and 1.9MB a
+   * minute is quiet until it is not.
+   *
+   * At startup rather than at the moment of deletion, which means the file
+   * outlives the note until the next launch. That is deliberate: a note deleted
+   * by mistake is the case where the audio is worth most, and a sweep that ran
+   * on the click would take it before the mistake was noticed.
    */
   void store()
     .loadIndex()

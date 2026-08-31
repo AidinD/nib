@@ -116,11 +116,11 @@ export async function stopRecording(): Promise<{ path: string; seconds: number; 
 /**
  * Remove recordings whose note is gone.
  *
- * A recording is temporary by design - deleted the moment its words are in the
- * note - but the two ways that does not happen are ordinary: the transcription
- * was never asked for, or the note was thrown away with the audio still attached.
- * The second leaves a file nothing can ever point at again, and 1.9MB a minute
- * adds up quietly in a folder nobody opens.
+ * A recording outlives its transcript by design - it is discarded from the block
+ * on purpose, once the words have been read - so the file nothing can ever point
+ * at again is the one whose note was deleted with the audio still attached. The
+ * control that would have thrown it away went with the note. 1.9MB a minute adds
+ * up quietly in a folder nobody opens.
  *
  * Only orphans. A recording whose note still exists might be transcribed
  * tomorrow, and deleting somebody's meeting because they have not got round to it
