@@ -13,8 +13,8 @@ import { ask } from 'keel/claude'
  * already has rather than a separate bill they would have to set up.
  *
  * It is the ONLY part of this feature that leaves the machine, which is why it is
- * a button rather than a step: the audio is deleted after transcription, the
- * transcript never travels, and this sends text the user can read first.
+ * a button rather than a step: the audio never leaves it at all - it is recorded,
+ * transcribed and deleted here - and this sends text the user can read first.
  */
 
 /** What the model must answer with. A schema, so the reply is data rather than prose to parse. */
