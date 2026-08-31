@@ -5,23 +5,32 @@ import { join } from 'path'
 /*
  * Writing a meeting to disk, while it is still happening.
  *
- * The renderer sends 16-bit mono samples as they are captured and this appends
- * them to a WAV file straight away. Nothing is buffered until the end: a meeting
- * is forty-five minutes of work that cannot be repeated, and a crash at minute
+ * The renderer sends 16-bit samples as they are captured and this appends them
+ * to a WAV file straight away. Nothing is buffered until the end: a meeting is
+ * forty-five minutes of work that cannot be repeated, and a crash at minute
  * forty must cost the last second rather than the whole thing.
  *
  * WAV rather than a compressed format because whisper reads it directly. The
- * cost is size - 16 kHz mono is about 1.9 MB a minute, so a long meeting is under
- * a hundred megabytes - and the file is deleted once its transcript exists.
+ * cost is size - 16 kHz stereo is about 3.8 MB a minute, so a long meeting is a
+ * couple of hundred megabytes - and the audio is kept until it is discarded on
+ * purpose.
+ *
+ * ## Two channels, because one cannot say who spoke
+ *
+ * The microphone goes left and the machine's own output goes right - see
+ * recorder.ts - which is what lets whisper label the transcript by speaker
+ * without any voice recognition at all. The channel count is carried on the
+ * recording rather than fixed here, so the header, the byte rate and the length
+ * cannot disagree with what is actually being written, and so a mono file made
+ * before this still reads back correctly.
  */
 
-/** 16 kHz mono is what whisper.cpp resamples everything to anyway. */
+/** 16 kHz is what whisper.cpp resamples everything to anyway. */
 const SAMPLE_RATE = 16000
-const CHANNELS = 1
 const BITS = 16
 
 /** A 44-byte WAV header with the two lengths left at zero until the file closes. */
-function header(dataBytes: number): Buffer {
+function header(dataBytes: number, channels: number): Buffer {
   const buffer = Buffer.alloc(44)
   buffer.write('RIFF', 0)
   buffer.writeUInt32LE(36 + dataBytes, 4)
@@ -29,10 +38,10 @@ function header(dataBytes: number): Buffer {
   buffer.write('fmt ', 12)
   buffer.writeUInt32LE(16, 16) // PCM header length
   buffer.writeUInt16LE(1, 20) // PCM, uncompressed
-  buffer.writeUInt16LE(CHANNELS, 22)
+  buffer.writeUInt16LE(channels, 22)
   buffer.writeUInt32LE(SAMPLE_RATE, 24)
-  buffer.writeUInt32LE((SAMPLE_RATE * CHANNELS * BITS) / 8, 28) // byte rate
-  buffer.writeUInt16LE((CHANNELS * BITS) / 8, 32) // block align
+  buffer.writeUInt32LE((SAMPLE_RATE * channels * BITS) / 8, 28) // byte rate
+  buffer.writeUInt16LE((channels * BITS) / 8, 32) // block align
   buffer.writeUInt16LE(BITS, 34)
   buffer.write('data', 36)
   buffer.writeUInt32LE(dataBytes, 40)
@@ -44,6 +53,7 @@ interface Recording {
   stream: WriteStream
   bytes: number
   started: number
+  channels: number
 }
 
 /** One at a time, deliberately: two meetings at once is a mistake, not a feature. */
@@ -60,7 +70,11 @@ export function isRecording(): boolean {
  * by a crash says which meeting it was and when - a folder of `rec-1.wav` tells
  * you nothing when you find it a week later.
  */
-export async function startRecording(recordingsDir: string, noteId: string): Promise<string> {
+export async function startRecording(
+  recordingsDir: string,
+  noteId: string,
+  channels = 2
+): Promise<string> {
   if (current !== null) {
     throw new Error('Already recording')
   }
@@ -69,8 +83,8 @@ export async function startRecording(recordingsDir: string, noteId: string): Pro
   const path = join(recordingsDir, `${noteId}-${stamp}.wav`)
 
   const stream = createWriteStream(path)
-  stream.write(header(0))
-  current = { path, stream, bytes: 0, started: Date.now() }
+  stream.write(header(0, channels))
+  current = { path, stream, bytes: 0, started: Date.now(), channels }
   return path
 }
 
@@ -101,7 +115,7 @@ export async function stopRecording(): Promise<{ path: string; seconds: number; 
   await new Promise<void>((resolve) => recording.stream.end(resolve))
   const handle = await fs.open(recording.path, 'r+')
   try {
-    await handle.write(header(recording.bytes), 0, 44, 0)
+    await handle.write(header(recording.bytes, recording.channels), 0, 44, 0)
   } finally {
     await handle.close()
   }
@@ -109,7 +123,9 @@ export async function stopRecording(): Promise<{ path: string; seconds: number; 
   return {
     path: recording.path,
     bytes: recording.bytes,
-    seconds: Math.round(recording.bytes / ((SAMPLE_RATE * CHANNELS * BITS) / 8))
+    seconds: Math.round(
+      recording.bytes / ((SAMPLE_RATE * recording.channels * BITS) / 8)
+    )
   }
 }
 
@@ -119,7 +135,7 @@ export async function stopRecording(): Promise<{ path: string; seconds: number; 
  * A recording outlives its transcript by design - it is discarded from the block
  * on purpose, once the words have been read - so the file nothing can ever point
  * at again is the one whose note was deleted with the audio still attached. The
- * control that would have thrown it away went with the note. 1.9MB a minute adds
+ * control that would have thrown it away went with the note. 3.8MB a minute adds
  * up quietly in a folder nobody opens.
  *
  * Only orphans. A recording whose note still exists might be transcribed

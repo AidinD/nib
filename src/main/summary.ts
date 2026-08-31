@@ -78,6 +78,14 @@ export interface SummaryRequest {
   notes: string
   /** The previous meeting with the same person, when there is one. */
   previous?: string
+  /**
+   * The names the transcript labels its turns with, when it has any.
+   *
+   * Present only for a recording that kept the two sides on separate channels.
+   * Worth telling the model about, because it changes how much of "whose promise
+   * was that" it has to infer from the words - see the instruction.
+   */
+  speakers?: { mine: string; theirs: string }
   language: 'sv' | 'en'
   model: string
 }
@@ -131,6 +139,35 @@ function instruction(request: SummaryRequest): string {
     ].join('\n')
   }
 
+  /*
+   * What the speaker labels are, and what they are not.
+   *
+   * They come from which device the sound arrived on - the user's own microphone
+   * against the call's own audio - so they are bookkeeping rather than voice
+   * recognition, and they answer the one question this whole instruction is
+   * built around: whose promise was that. Without them the model infers it from
+   * the words, which is exactly where it goes wrong.
+   *
+   * The caveat is told rather than hidden. On speakers the microphone also hears
+   * the far side, and a turn the recording could not separate is labelled `?`. A
+   * model told the labels were perfect would resolve that silently; told what
+   * they actually are, it can fall back on the words.
+   */
+  const labels =
+    request.speakers === undefined
+      ? ''
+      : `The transcript is labelled by speaker: "${request.speakers.mine}" is the user and "${request.speakers.theirs}" is the other side. The labels come from which microphone the sound arrived on rather than from recognising anybody's voice, so they are reliable about WHOSE side spoke - use them to decide whose promise a line is. A turn marked "?" is one the recording could not separate; fall back on the words there.`
+
+  /*
+   * A screenshot in the transcript is a time and nothing more.
+   *
+   * The model is told `[14:32] (skärmbild)` because that is honestly all this
+   * call carries: `ask` runs with its tools off and sends text, so nothing here
+   * has looked at the picture. Saying so is what stops it describing one.
+   */
+  const marks =
+    'A line like "[14:32] (skärmbild)" marks a screenshot the user pasted at that moment, and "[14:32] ..." marks something they typed then. You cannot see the screenshots - never describe what one showed. Treat them only as evidence that the moment mattered.'
+
   return [
     `You are reading a transcript of a meeting the user was in. Answer in ${language}, in their voice - plain, specific, no filler.`,
     '',
@@ -139,6 +176,9 @@ function instruction(request: SummaryRequest): string {
     '- An action point is something THEY committed to. "I\'ll look into it" counts, and counts as implied when the words were softer than the commitment. What the other person promised is not theirs and does not belong in that list.',
     '- Decisions are what was settled, not what was discussed.',
     '- A question is worth listing only if a good manager would wish they had asked it.',
+    '',
+    labels,
+    marks,
     '',
     'Do not invent. A transcript is imperfect and a name heard wrong is worse than a name left out - if you cannot tell what was said, leave it out rather than guess.',
     request.previous !== undefined && request.previous.length > 0

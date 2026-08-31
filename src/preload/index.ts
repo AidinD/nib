@@ -59,16 +59,17 @@ const api = {
    * the length of a meeting, and waiting for an answer that carries no
    * information would put an IPC round trip in the capture path.
    */
-  startRecording: (noteId: string): Promise<string> =>
-    ipcRenderer.invoke('recording:start', noteId),
+  startRecording: (noteId: string, channels: number): Promise<string> =>
+    ipcRenderer.invoke('recording:start', noteId, channels),
   sendChunk: (chunk: Uint8Array): void => ipcRenderer.send('recording:chunk', chunk),
   stopRecording: (): Promise<{ path: string; seconds: number; bytes: number } | null> =>
     ipcRenderer.invoke('recording:stop'),
   deleteRecording: (path: string): Promise<void> =>
     ipcRenderer.invoke('recording:delete', path),
-  // Whether the audio a block points at is still on disk. A recording is deleted
-  // the moment its words are in the note, so a block restored from a saved note
-  // can outlive its file - and clicking it would otherwise fail in whisper.
+  // Whether the audio a block points at is still on disk. The audio is kept
+  // until it is discarded on purpose, but a block restored from a saved note can
+  // still outlive its file - discarded, swept away with a deleted note, or made
+  // back when transcribing deleted it - and clicking it would fail in whisper.
   recordingExists: (path: string): Promise<boolean> =>
     ipcRenderer.invoke('recording:exists', path),
 
@@ -81,6 +82,8 @@ const api = {
     transcript: string
     notes: string
     previous?: string
+    /** The names the transcript labels its turns with, when it has any. */
+    speakers?: { mine: string; theirs: string }
     language: 'sv' | 'en'
     model: string
   }): Promise<{
@@ -108,8 +111,12 @@ const api = {
     path: string
     language: 'sv' | 'en'
     seconds: number
-  }): Promise<{ segments: { start: string; end: string; text: string }[]; text: string }> =>
-    ipcRenderer.invoke('transcribe:run', args),
+  }): Promise<{
+    // `speaker` is there only when the recording had two channels to tell apart:
+    // '0' is the microphone, '1' the machine's output, '?' whisper's own doubt.
+    segments: { start: string; end: string; text: string; speaker?: string }[]
+    text: string
+  }> => ipcRenderer.invoke('transcribe:run', args),
 
   /** How far along it is, pushed as whisper works through the file. */
   onTranscribeProgress: (handler: (fraction: number) => void): (() => void) => {

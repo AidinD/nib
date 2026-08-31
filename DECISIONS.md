@@ -3,6 +3,116 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-08-31 - Who spoke comes from the wiring, not from the voice
+
+**Decided.** A meeting is recorded as **two channels** rather than one: the
+microphone on the left, the machine's own output on the right. whisper is then
+given `-di`, which labels each segment by which channel was louder, and the
+transcript prints a name on the turn - "Jag" for the near side, and the note's
+sub-category for the far side, because that is the filing the author already did.
+
+**What was rejected.** Telling one person from another *within* the far side.
+That is real diarization: voice embeddings and clustering, a separate model stack
+outside whisper.cpp, and it degrades exactly where a meeting is hardest - several
+people talking over each other through one channel. It also is not the question
+being asked. The summary's job is to separate what the author promised from what
+somebody else promised, and "which side of the call" answers that completely.
+
+**The cost is not what this file used to claim.** `recorder.ts` said keeping the
+two apart "doubles the transcription". That is true of transcribing two files;
+this is one file, and whisper mixes down to mono for the words and uses the
+stereo only for the label. **Measured on a 50-second clip: 9.3s against 7.9s.**
+Eighteen percent. What it does cost is the file - 3.8 MB a minute against 1.9 -
+which only became affordable when the audio stopped being deleted with the
+transcript, and only became *useful* for the same reason.
+
+**Verified end to end**, not assumed:
+
+```text
+00:00:22 | 0 | om andra YouTubers.
+00:00:24 | ? | Sa vi kan ju forsoka fa med det ocksa
+00:00:26 | 1 | och se hur det har tolkas, transkriberas.
+```
+
+The label turns over at the seam of a file built with the first half in the left
+channel and the second in the right, and the segment lying *across* the seam
+comes back as `speaker ?` rather than as a guess. The Web Audio graph was checked
+separately in the renderer with two oscillators at different levels: the
+processor sees two channels and the peaks come back 0.9 and 0.3, so the sources
+reach the file still apart rather than summed into both.
+
+**The caveat, which is the author's actual setup.** He works on speakers, not
+headphones, and the room occasionally feeds back - so his microphone also hears
+the far side and the left channel is not purely him. It survives: the right
+channel has the call at full level straight off the machine while the left has it
+through a room, so the right still wins those segments, and while he talks there
+is usually nothing coming out of the speakers at all. Genuine overlap comes back
+as `?`, which is the honest answer.
+
+`echoCancellation` on the microphone stays **off**. Turning it on would clean the
+left channel up and is the lever to reach for if the labels do smear, but it also
+processes the one recording of a conversation that cannot be made again - and a
+transcript is worth more than a label on it.
+
+**What the label is not.** It says which side of the call spoke. The *name* is
+only what this notebook calls that side, taken from the folder the note sits in.
+That is why getting it from the filing is honest and getting it from the words
+would not be, and it is why the summary is told the labels come from a microphone
+rather than from recognising anybody's voice.
+
+## 2026-08-31 - A screenshot pasted during a meeting remembers when
+
+**Decided.** An image pasted while a recording is running, and any line marked
+with the new **Mark** button beside Stop, carries `data-at` - the offset in
+seconds - and `data-rec`, the recording it belongs to. The note shows a small
+`14:32` beside it; clicking that opens the transcript and lands on the words that
+were being said then. The summary gets the moments threaded into the transcript
+at the right line.
+
+**Nothing is written into the audio file.** It was the obvious place and it is
+the wrong one: the WAV is the only artefact here that cannot be made a second
+time, and it does not need to hold this. The offset comes from
+`recorder.seconds()`, which counts samples rather than wall clock, so it cannot
+drift from the file it points into. Data attributes survive the sanitiser - the
+same mechanism `data-canvas` and `data-alert` already rely on - so the moment
+survives a save and a reload, while the label itself is rebuilt on load like the
+transcript's cross.
+
+**Saying "Bild" out loud was rejected.** It interrupts the meeting, and it depends
+on the transcriber hearing one specific word correctly - which is the exact
+failure that made the model swap necessary in the first place.
+
+**Marking marks the line the caret is in**, rather than inserting a new one below
+it. You press it mid-sentence and the sentence keeps going; a button that moved
+the caret into a fresh block is a button you stop using in the third meeting.
+Pressing it again on the same line takes the mark off, because there is otherwise
+no way to correct marking the wrong one.
+
+**The honest limit.** The summary call is `claude -p` with its tools off, sending
+text. So the model is told `[14:32] (skärmbild)` - that something was on screen,
+and when - and is told explicitly that it cannot see the picture and must never
+describe one. Making it actually see the image is a change to keel's `ask` and a
+separate job.
+
+## 2026-08-31 - The e2e harness gets its own userData, not just its own notebook
+
+**Decided.** `scripts/e2e.mjs` now passes `--user-data-dir` as well as inheriting
+`NIB_DATA_DIR`.
+
+**What happened.** A test run against a scratch notebook deleted a real
+recording. `NIB_DATA_DIR` is not enough on its own: recordings live in `userData`
+rather than in the data directory, and the startup sweep removes every recording
+whose note the *current* index does not know about. Pointed at a seeded scratch
+notebook, that is all of them - so the run reached into
+`%APPDATA%\nib\recordings` and emptied it. The file was an orphan that the
+author's own next launch would have swept anyway, and it was still not this
+harness's to delete.
+
+The project rule was already "always point `NIB_DATA_DIR` at a scratch folder so
+a test never writes into real notes". The rule was followed and was insufficient,
+which is the useful part: an isolation rule that names one directory is only as
+good as the assumption that all the data is in it.
+
 ## 2026-08-31 - The Swedish model is large, and the fallback copy is now a trap
 
 **Decided.** `D:\whisper\ggml-model-q5_0.bin` is KBLab's **large** checkpoint. The

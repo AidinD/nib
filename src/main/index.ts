@@ -258,8 +258,8 @@ function registerIpc(): void {
    * every few hundred milliseconds for the length of a meeting, and a round trip
    * for each one buys nothing when there is no answer to wait for.
    */
-  ipcMain.handle('recording:start', (_event, noteId: string) =>
-    startRecording(recordingsDir(), noteId)
+  ipcMain.handle('recording:start', (_event, noteId: string, channels: number) =>
+    startRecording(recordingsDir(), noteId, channels)
   )
   ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
   ipcMain.handle('recording:stop', () => stopRecording())

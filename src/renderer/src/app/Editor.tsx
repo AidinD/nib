@@ -17,8 +17,13 @@ import {
   applyCanvasBlocks,
   applyRecordingBlocks,
   applySummaryBlocks,
+  applyTimeMarks,
   applyTranscriptBlocks,
   transcriptHtml,
+  transcriptForRecording,
+  transcriptLineAt,
+  transcriptSpeakers,
+  transcriptsWithMarks,
   summaryHtml,
   ownNotes,
   htmlToText,
@@ -279,6 +284,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      applyTimeMarks(bodyRef.current)
       applySummaryBlocks(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
@@ -347,6 +353,7 @@ export function Editor({
       applyCanvasBlocks(bodyRef.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
+      applyTimeMarks(bodyRef.current)
       applySummaryBlocks(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
@@ -748,13 +755,35 @@ export function Editor({
    * No width is set on insert: the image renders at its natural size, capped by
    * the column, so a screenshot is not upscaled into a blurry mess before anyone
    * asks for it to be bigger.
+   *
+   * Pasted DURING a meeting it also gets a time on it, and that is the whole
+   * feature: you paste the thing being discussed while it is being discussed, and
+   * the note remembers which minute that was. `recorder.seconds()` counts samples
+   * rather than wall clock, so it cannot drift from the file it points into - and
+   * nothing at all is written into the audio, which is the one artefact here that
+   * cannot be made a second time.
+   *
+   * Built as an element and inserted as its own `outerHTML` rather than assembled
+   * from a template string: a recording's path is a Windows path going into an
+   * attribute, and letting the DOM do the quoting is cheaper than remembering
+   * which characters need it.
    */
   const insertImageFromDataUrl = useCallback(
     async (dataUrl: string) => {
       const url = await window.nib.writeAsset(dataUrl)
-      exec('insertHTML', `<img src="${url}" alt="" />`)
+      const image = document.createElement('img')
+      image.src = url
+      image.alt = ''
+      if (recording !== null) {
+        image.dataset.at = String(recording.recorder.seconds())
+        image.dataset.rec = recording.recorder.path
+      }
+      exec('insertHTML', image.outerHTML)
+      if (bodyRef.current !== null) {
+        applyTimeMarks(bodyRef.current)
+      }
     },
-    [exec]
+    [exec, recording]
   )
 
   /**
@@ -886,6 +915,26 @@ export function Editor({
     }
   }, [])
 
+  /**
+   * What to call the two sides of a recording.
+   *
+   * The far side is named after the folder the note sits in, because that is the
+   * filing the person already did: a 1-1 lives under the person it is with, and
+   * Tend binds those folders to people for exactly this reason. A note that sits
+   * loose in a category has no such answer and gets "Dem", which is true.
+   *
+   * Not a guess at a voice. The label says which side of the call spoke, and the
+   * name is only what this notebook calls that side - which is why getting it
+   * from the filing is honest and getting it from the words would not be.
+   */
+  const speakerNames = useCallback((): { mine: string; theirs: string } => {
+    const sub = index.categories
+      .find((category) => category.id === note?.categoryId)
+      ?.subs.find((candidate) => candidate.id === note?.subId)
+    const theirs = sub?.name.trim() ?? ''
+    return { mine: 'Jag', theirs: theirs.length > 0 ? theirs : 'Dem' }
+  }, [index, note])
+
   const transcribeBlock = useCallback(
     async (block: HTMLElement) => {
       const root = bodyRef.current
@@ -914,7 +963,11 @@ export function Editor({
         stopListening()
 
         const holder = document.createElement('div')
-        holder.innerHTML = transcriptHtml(result.segments, Math.max(1, Math.round(seconds / 60)))
+        holder.innerHTML = transcriptHtml(
+          result.segments,
+          Math.max(1, Math.round(seconds / 60)),
+          speakerNames()
+        )
         const transcript = holder.firstElementChild
         if (transcript !== null) {
           /*
@@ -975,7 +1028,7 @@ export function Editor({
         block.textContent = `Recording · transcription failed: ${why}`
       }
     },
-    [onBodyInput]
+    [onBodyInput, speakerNames]
   )
 
   /**
@@ -1001,6 +1054,79 @@ export function Editor({
     },
     [onBodyInput]
   )
+
+  /**
+   * Pin the line being written to the minute it is being written in.
+   *
+   * The line the caret is already in, rather than a new one inserted below it.
+   * You press this in the middle of typing "kolla varfor Q3 sag ut sa" and the
+   * sentence keeps going - a button that moved the caret into a fresh block would
+   * be a button you stop using in the third meeting.
+   *
+   * Pressing it again on the same line takes the mark off. There is no other way
+   * to correct marking the wrong line, and the alternative - a mark you cannot
+   * remove - is worse than no mark.
+   */
+  const markMoment = useCallback(() => {
+    const root = bodyRef.current
+    const live = recording
+    if (root === null || live === null) {
+      return
+    }
+    withSelection(() => {
+      const block = blockAtSelection(root)
+      // Not inside something this app generated. A timestamp on a transcript
+      // line means nothing - it already has one - and one on a summary line
+      // would point into the recording from the wrong end of the note.
+      if (block === null || block.closest('[data-transcript], [data-recording], [data-summary]') !== null) {
+        return
+      }
+      if (block.dataset.at !== undefined) {
+        delete block.dataset.at
+        delete block.dataset.rec
+      } else {
+        block.dataset.at = String(live.recorder.seconds())
+        block.dataset.rec = live.recorder.path
+      }
+      applyTimeMarks(root)
+      onBodyInput()
+    })
+  }, [onBodyInput, recording, withSelection])
+
+  /**
+   * Go from a moment to the words that were being said at it.
+   *
+   * The transcript is opened on the way, because a moment that scrolls a folded
+   * block into view has done nothing. The line is highlighted for a second and a
+   * half rather than left marked: it answers "what was said here", and a
+   * transcript that accumulates highlights stops answering it.
+   */
+  const jumpToMoment = useCallback((owner: HTMLElement) => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const at = Number(owner.dataset.at)
+    if (!Number.isFinite(at)) {
+      return
+    }
+    const transcript = transcriptForRecording(root, owner.dataset.rec)
+    if (transcript === null) {
+      // Nothing to jump to yet: the recording has not been turned into text, or
+      // the note holds several and this mark cannot say which. Doing nothing is
+      // the honest answer - scrolling somewhere arbitrary would not be.
+      return
+    }
+    if (transcript instanceof HTMLDetailsElement) {
+      transcript.open = true
+    }
+    const line = transcriptLineAt(transcript, at)
+    ;(line ?? transcript).scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (line !== null) {
+      line.classList.add('is-moment')
+      window.setTimeout(() => line.classList.remove('is-moment'), 1500)
+    }
+  }, [])
 
   /**
    * Ask for the summary. The one thing here that costs anything.
@@ -1058,11 +1184,20 @@ export function Editor({
 
       const result = await window.nib.summarise({
         kind: source === 'transcripts' ? 'meeting' : 'note',
-        // Several transcripts are one conversation as far as the summary is
-        // concerned, in the order they were recorded.
-        transcript: transcripts.map((block) => block.textContent ?? '').join('\n\n'),
+        /*
+         * Several transcripts are one conversation as far as the summary is
+         * concerned, in the order they were recorded - and each one carries the
+         * moments marked while it ran, threaded in at the line they happened on.
+         * A screenshot pasted at eleven minutes is a fact about the meeting that
+         * the words themselves do not hold.
+         */
+        transcript: transcriptsWithMarks(root),
         notes: source === 'transcripts' ? ownNotes(root) : (root.textContent ?? ''),
         previous: previous === undefined ? undefined : htmlToText(previous).slice(0, 8000),
+        // Only when the recording actually kept the two sides apart. Absent, the
+        // model works out whose promise a line was from the words alone, the way
+        // it always has.
+        speakers: transcriptSpeakers(root),
         language:
           root.querySelector<HTMLElement>('[data-recording]')?.dataset.language === 'en'
             ? 'en'
@@ -1928,6 +2063,7 @@ export function Editor({
         {recording !== null && (
           <RecordingBar
             recorder={recording.recorder}
+            onMark={markMoment}
             onStop={() => {
               const { recorder, language } = recording
               setRecording(null)
@@ -2086,6 +2222,27 @@ export function Editor({
                 applySummaryBlocks(section)
               }
               onBodyInput()
+              return
+            }
+
+            /*
+             * A timestamp beside a screenshot or a marked line: go and read what
+             * was being said then. Caught before anything else, because the label
+             * sits inside ordinary prose and a click on it must not also count as
+             * a click on the paragraph.
+             */
+            const stamp = target.closest<HTMLElement>('[data-at-label]')
+            if (stamp !== null) {
+              // A block wears its label inside itself and an image wears it
+              // beside itself, so the owner is whichever of the two is there.
+              const owner =
+                stamp.closest<HTMLElement>('[data-at]') ??
+                (stamp.previousElementSibling instanceof HTMLElement
+                  ? stamp.previousElementSibling
+                  : null)
+              if (owner !== null) {
+                jumpToMoment(owner)
+              }
               return
             }
 

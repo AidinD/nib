@@ -65,6 +65,19 @@ the sidebar for working through them.
 - **Two windows on one note.** Typing in a sticky window shows up in the main window's editor, and vice versa, as soon as the window being typed into is not the one you are looking at.
 - **The `NIB_DATA_DIR` migration.** Pointed at an empty folder with data in `userData`, the index, the note files and the assets all moved across on first start.
 - **This round, through the harness.** No standing sub-category fields and a `+` on each category row; a card's delete cross hidden until hover and a delete that goes through; flag markers orange when open, grey when done, absent on empty lines; a `work` tag beside the `private` one; and a ticked-off card that stays in the review list as done.
+- **Moments, this round.** A seeded note holding a labelled transcript, a marked
+  line and a pasted screenshot was opened in the built app: the timestamps are put
+  back on load (they are not stored), the speaker labels survive the sanitiser,
+  and clicking a timestamp opens the folded transcript and lands on the last line
+  at or before it - `1:05` on the `01:00` line, `0:42` on the `00:40` one. The
+  highlight fades on its own.
+- **The stereo capture graph**, in the renderer that will run it, with two
+  oscillators standing in for the two captures: the processor sees two channels
+  and the interleaved output comes back with peaks of 0.9 and 0.3, matching the
+  two sources rather than a sum of them.
+- **The labels themselves**, through keel against a real stereo file: 23 segments,
+  the label turning over at the seam, `speaker ?` on the segment lying across it,
+  and the prefix stripped out of the words rather than left in them.
 - **The toolbar.** Selecting a line and pressing `B` now bolds it, and the tag is in the saved file - it did nothing at all before, for every formatting button.
 - **Alerts.** Hovering the document showed the markers; clicking one flagged its line, clicking a flagged one wrote `data-alert="done"` to the note file and dimmed the line while keeping it marked.
 - **Confirmations.** Deleting a note opens the app's own dialog naming the note, with Cancel focused.
@@ -96,7 +109,7 @@ Every requirement on the original list is now built. What is left is smaller:
 6. **Transcription is the open thread, after the first real meeting.** It came
    back about nine tenths right, with some words heard as entirely different
    ones. The audio is kept now rather than deleted the moment the transcript
-   appears, so a run can be done again - that part is built and verified. What is
+   appears, so a run can be done again - that part is built and verified.
    The engine is settled too: KBLab's `large` is installed as the Swedish model
    as of 2026-08-31, measured against `small` on a real clip rather than on a
    benchmark - 6.3x real time against 10.5x, and small was the one inventing
@@ -104,6 +117,24 @@ Every requirement on the original list is now built. What is left is smaller:
    not built are the two things that bear more directly on names than the model
    does: `--prompt` with a word list, which nothing passes today, and `--vad`,
    which is off, and which is what fills silence with sentences nobody said.
+   **Two things landed on top of it on 2026-08-31**, both verified in the running
+   app:
+   - **The transcript says who spoke.** A meeting is captured as two channels -
+     microphone left, the machine's own output right - and whisper's `-di` labels
+     each segment by which channel was louder. Eighteen percent slower, not
+     double; the file doubles. Names come from the note's folder. Telling one
+     person from another *within* the far side is deliberately not built - see
+     DECISIONS.
+   - **Screenshots and lines remember when they happened.** Anything pasted or
+     marked while a recording runs carries the offset in seconds, shows a
+     timestamp that jumps into the transcript, and is threaded into what the
+     summary reads. Nothing is written into the audio file.
+   What has NOT been exercised is a real meeting through the new capture path:
+   the audio graph was checked with oscillators and the labels with a synthetic
+   stereo file, because driving the real one needs a microphone and a screen
+   capture. The first real recording is the test that matters, and the thing to
+   watch on it is whether the labels smear - the author works on speakers rather
+   than headphones, so the microphone also hears the far side.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the

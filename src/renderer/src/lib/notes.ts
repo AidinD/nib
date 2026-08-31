@@ -815,19 +815,55 @@ export function noteTitles(index: NibIndex): Map<string, string> {
  * One paragraph per segment rather than one wall of text: the editor works on
  * blocks, so a flat blob could not be flagged, quoted or split, and a transcript
  * you cannot mark up is a transcript you can only read.
+ *
+ * ## The names on the turns
+ *
+ * A recording that kept the microphone and the machine's own output on separate
+ * channels comes back labelled, and `speakers` is what those labels are called
+ * in this note. It is not voice recognition: whisper reports which channel was
+ * louder, so what the label really says is which side of the call spoke - which
+ * happens to be the only distinction the summary needs to tell your promises
+ * from theirs.
+ *
+ * The name is printed when the speaker CHANGES rather than on every line. A name
+ * in front of all four hundred lines is a column of noise; printed on the turn it
+ * reads the way a transcript is supposed to.
+ *
+ * `?` is whisper's own doubt, and it is kept. It means the two channels were
+ * level - people talking over each other, or the far side coming back through
+ * the room into the microphone - and a guess with somebody's name on it would be
+ * worse than the question mark.
  */
 export function transcriptHtml(
-  segments: { start: string; end: string; text: string }[],
-  minutes: number
+  segments: { start: string; end: string; text: string; speaker?: string }[],
+  minutes: number,
+  speakers?: { mine: string; theirs: string }
 ): string {
   const escape = (text: string): string =>
     text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
+
+  /** Which side a segment came from, as the attribute the styling hangs on. */
+  const side = (speaker: string): 'mine' | 'theirs' | 'unknown' =>
+    speaker === '0' ? 'mine' : speaker === '1' ? 'theirs' : 'unknown'
+
+  const named = (speaker: string): string => {
+    if (speakers === undefined) {
+      return ''
+    }
+    const which = side(speaker)
+    const name = which === 'mine' ? speakers.mine : which === 'theirs' ? speakers.theirs : '?'
+    return `<span data-speaker="${which}">${escape(name)}</span> `
+  }
+
+  let previous: string | null = null
   const lines = segments
     .filter((segment) => segment.text.length > 0)
-    .map(
-      (segment) =>
-        `<p><em>${segment.start.replace(/^00:/, '')}</em> ${escape(segment.text)}</p>`
-    )
+    .map((segment) => {
+      const speaker = segment.speaker
+      const turn = speaker !== undefined && speaker !== previous ? named(speaker) : ''
+      previous = speaker ?? previous
+      return `<p><em>${segment.start.replace(/^00:/, '')}</em> ${turn}${escape(segment.text)}</p>`
+    })
     .join('')
   return (
     `<details data-transcript="1">` +
@@ -840,6 +876,245 @@ export function transcriptHtml(
     (lines.length > 0 ? lines : '<p><em>Ingenting hördes.</em></p>') +
     `</details>`
   )
+}
+
+/**
+ * A length in seconds as a clock, the way the transcript writes one.
+ *
+ * Minutes without a leading zero, because a timestamp beside a screenshot is
+ * read as "eleven minutes in" rather than as a duration.
+ */
+export function clock(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const rest = String(whole % 60).padStart(2, '0')
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}`
+    : `${minutes}:${rest}`
+}
+
+/**
+ * How far into the recording one transcript line is.
+ *
+ * Read back off the `em` the line was written with rather than stored a second
+ * time, so this answers for every transcript in the notebook and not only for
+ * the ones written after moments existed.
+ */
+export function lineSeconds(line: HTMLElement): number | null {
+  const stamp = line.querySelector('em')?.textContent?.trim() ?? ''
+  if (stamp.length === 0) {
+    return null
+  }
+  const parts = stamp.split(':').map(Number)
+  if (parts.length === 0 || parts.some((part) => !Number.isFinite(part))) {
+    return null
+  }
+  return parts.reduce((total, part) => total * 60 + part, 0)
+}
+
+/**
+ * The transcript that belongs to a recording.
+ *
+ * Document order rather than sibling walking, for the reason `transcribeBlock`
+ * already found: a transcript read back from disk comes wrapped in a paragraph,
+ * so the block's next sibling is a `p` and not the `details` inside it.
+ *
+ * A note with exactly one transcript answers with it whatever was asked, which
+ * is what keeps a moment working after its recording block has been deleted -
+ * the block is a control, the transcript is the content, and people throw the
+ * control away.
+ */
+export function transcriptForRecording(
+  root: HTMLElement,
+  recording?: string
+): HTMLElement | null {
+  const blocks = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
+  )
+  const transcripts = blocks.filter((block) => block.hasAttribute('data-transcript'))
+  if (recording !== undefined && recording.length > 0) {
+    const at = blocks.findIndex((block) => block.dataset.recording === recording)
+    const next = at < 0 ? undefined : blocks[at + 1]
+    if (next !== undefined && next.hasAttribute('data-transcript')) {
+      return next
+    }
+  }
+  return transcripts.length === 1 ? transcripts[0] : null
+}
+
+/** The last line at or before a moment - where a click on it should land. */
+export function transcriptLineAt(transcript: HTMLElement, at: number): HTMLElement | null {
+  let best: HTMLElement | null = null
+  for (const line of transcript.querySelectorAll<HTMLElement>('p')) {
+    const seconds = lineSeconds(line)
+    if (seconds === null || seconds > at) {
+      continue
+    }
+    best = line
+  }
+  return best
+}
+
+/** What a mark says, with its own timestamp label left out of the answer. */
+function markText(owner: HTMLElement): string {
+  if (owner.tagName === 'IMG') {
+    return '(skärmbild)'
+  }
+  const copy = owner.cloneNode(true) as HTMLElement
+  for (const label of copy.querySelectorAll('[data-at-label]')) {
+    label.remove()
+  }
+  const text = (copy.textContent ?? '').trim()
+  return text.length > 0 ? text : '(markerat)'
+}
+
+/**
+ * Everything in the note that is pinned to a moment in a recording.
+ *
+ * A screenshot pasted during a meeting, or a line marked while it was being
+ * said. `data-at` is the offset in seconds and `data-rec` says which recording
+ * it belongs to - both survive the sanitiser, which is why they are attributes
+ * rather than a class or a wrapper.
+ *
+ * Nothing is written into the audio file. The offset comes from the recorder's
+ * own sample count, which is the only clock that cannot drift from the file, and
+ * the WAV is left exactly as it was recorded - it is the one artefact here that
+ * cannot be made a second time.
+ */
+export function timeMarks(
+  root: HTMLElement
+): { owner: HTMLElement; at: number; recording: string; text: string }[] {
+  const marks: { owner: HTMLElement; at: number; recording: string; text: string }[] = []
+  for (const owner of root.querySelectorAll<HTMLElement>('[data-at]')) {
+    if (owner.closest('[data-transcript]') !== null) {
+      continue
+    }
+    const at = Number(owner.dataset.at)
+    if (!Number.isFinite(at)) {
+      continue
+    }
+    marks.push({ owner, at, recording: owner.dataset.rec ?? '', text: markText(owner) })
+  }
+  return marks.sort((a, b) => a.at - b.at)
+}
+
+/**
+ * Put the timestamp back on every moment.
+ *
+ * Rebuilt on load the way the transcript's cross is, rather than stored: the
+ * label is a control, and a half-deleted one must not be able to survive in a
+ * note. An image wears it after itself; anything else wears it in front.
+ *
+ * The first pass removes labels whose owner has gone. Deleting the screenshot
+ * has to take its timestamp with it, and the browser will happily leave the span
+ * behind on its own.
+ */
+export function applyTimeMarks(root: HTMLElement): void {
+  for (const label of root.querySelectorAll<HTMLElement>('[data-at-label]')) {
+    const before = label.previousElementSibling
+    const parent = label.parentElement
+    const onImage = before !== null && before.tagName === 'IMG' && before.hasAttribute('data-at')
+    const onBlock =
+      parent !== null && parent.hasAttribute('data-at') && parent.firstElementChild === label
+    if (!onImage && !onBlock) {
+      label.remove()
+    }
+  }
+
+  for (const mark of timeMarks(root)) {
+    const owner = mark.owner
+    const beside = owner.tagName === 'IMG' ? owner.nextElementSibling : owner.firstElementChild
+    const found =
+      beside instanceof HTMLElement && beside.hasAttribute('data-at-label') ? beside : null
+    const label = found ?? document.createElement('span')
+    label.dataset.atLabel = '1'
+    label.contentEditable = 'false'
+    label.title = 'Hoppa dit i transkriptet'
+    label.textContent = clock(mark.at)
+    if (found === null) {
+      if (owner.tagName === 'IMG') {
+        owner.after(label)
+      } else {
+        owner.insertBefore(label, owner.firstChild)
+      }
+    }
+  }
+}
+
+/**
+ * The transcripts as the summary pass should read them, moments and all.
+ *
+ * A screenshot pasted at eleven minutes is a fact about the meeting that the
+ * words do not carry - somebody put something on screen, and whatever was being
+ * said around it mattered enough to keep. Threaded in at the right line it costs
+ * one line of text and tells the model where to look.
+ *
+ * It says `(skärmbild)` and not what the picture showed, because nothing here
+ * has seen it: the summary call sends text with its tools off. The instruction
+ * says so as well, so the model does not fill the gap in.
+ */
+export function transcriptsWithMarks(root: HTMLElement): string {
+  const blocks = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
+  )
+  const transcripts = blocks.filter((block) => block.hasAttribute('data-transcript'))
+  const all = timeMarks(root)
+
+  return transcripts
+    .map((transcript) => {
+      const at = blocks.indexOf(transcript)
+      const before = at > 0 ? blocks[at - 1] : undefined
+      const recording =
+        before !== undefined && before.hasAttribute('data-recording')
+          ? before.dataset.recording ?? ''
+          : ''
+      /*
+       * With one transcript there is nothing to get wrong, so a mark whose
+       * recording block has been deleted still lands. With several, a mark that
+       * cannot name its own recording is left out rather than guessed at - a
+       * screenshot filed under the wrong meeting is worse than one left out.
+       */
+      const mine =
+        transcripts.length === 1
+          ? [...all]
+          : all.filter((mark) => mark.recording === recording && recording.length > 0)
+
+      const lines: string[] = []
+      const pending = [...mine]
+      for (const line of transcript.querySelectorAll<HTMLElement>('p')) {
+        const seconds = lineSeconds(line)
+        while (pending.length > 0 && seconds !== null && pending[0].at <= seconds) {
+          const mark = pending.shift()
+          if (mark !== undefined) {
+            lines.push(`[${clock(mark.at)}] ${mark.text}`)
+          }
+        }
+        lines.push(line.textContent ?? '')
+      }
+      // Anything marked after the last spoken line still happened.
+      for (const mark of pending) {
+        lines.push(`[${clock(mark.at)}] ${mark.text}`)
+      }
+      return lines.join('\n')
+    })
+    .join('\n\n')
+}
+
+/**
+ * The two names a transcript labels its turns with, when it has any.
+ *
+ * Read back off the document rather than worked out a second time, so the
+ * summary is told the same two names the person reading the note can see.
+ */
+export function transcriptSpeakers(
+  root: HTMLElement
+): { mine: string; theirs: string } | undefined {
+  const named = (which: string): string =>
+    root.querySelector<HTMLElement>(`[data-speaker="${which}"]`)?.textContent?.trim() ?? ''
+  const mine = named('mine')
+  const theirs = named('theirs')
+  return mine.length > 0 && theirs.length > 0 ? { mine, theirs } : undefined
 }
 
 /**

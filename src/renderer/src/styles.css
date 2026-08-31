@@ -3144,6 +3144,95 @@ body.is-resizing .splitter-grip {
   color: var(--alert);
 }
 
+/*
+ * Who spoke, in front of the turn rather than in front of every line.
+ *
+ * Two weights of the same quiet: your own name recedes because you know what you
+ * said, and the other side's carries the accent because that is the half you are
+ * reading the transcript for. `?` is whisper's own doubt and is dimmer than
+ * either - it must not read as a third person in the room.
+ */
+.doc-body details[data-transcript] [data-speaker] {
+  margin-right: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.doc-body details[data-transcript] [data-speaker='mine'] {
+  color: var(--text-dim);
+}
+
+.doc-body details[data-transcript] [data-speaker='theirs'] {
+  color: var(--accent);
+}
+
+.doc-body details[data-transcript] [data-speaker='unknown'] {
+  color: var(--text-dim);
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/*
+ * The line a moment jumps to.
+ *
+ * A background wash rather than an outline: it fades, and an outline that fades
+ * reflows the block it is on. A second and a half is long enough to find the
+ * line with your eye and short enough that a second jump is not competing with
+ * the first one.
+ */
+.doc-body details[data-transcript] p.is-moment {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: background 0.4s ease;
+}
+
+/*
+ * A timestamp on a screenshot, or on a line marked while it was said.
+ *
+ * Small, tabular and set in the accent, because it is the one thing in a note
+ * that is a link into the recording rather than something to read. Non-editable,
+ * so backspacing next to it removes the line rather than half the timestamp.
+ */
+.doc-body [data-at-label] {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Beside an image rather than in front of a line, so it hangs off its corner. */
+.doc-body img[data-at] + [data-at-label] {
+  margin-right: 0;
+  margin-left: 6px;
+}
+
+.doc-body [data-at-label]:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Marking the line being typed, beside Stop and quieter than it: this one is
+   pressed several times a meeting and Stop is pressed once. */
+.recording-mark {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.recording-mark:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---------- the summary ---------- */
 
 /*

@@ -6,10 +6,30 @@
  * process. Recording only the microphone gets one side of a conversation, which
  * is worse than useless for a transcript: it reads as a monologue with pauses.
  *
- * The two are mixed into one 16 kHz mono stream, which is what whisper reads.
- * Keeping them apart would allow speaker labels later, and is deliberately not
- * done yet: it doubles the transcription and the recording is deleted as soon as
- * the transcript exists, so there would be nothing left to go back to.
+ * The two are kept APART, as the two channels of one 16 kHz stereo stream: your
+ * microphone on the left, the machine's output on the right. That is what lets
+ * the transcript say who spoke, and it is bookkeeping rather than voice
+ * recognition - whisper compares the two channels and reports which was louder,
+ * so the answer is as good as the separation was. See keel's whisper module.
+ *
+ * They used to be summed. The reasons not to have both gone: the audio is kept
+ * now rather than deleted with the transcript, so there is something to label,
+ * and the cost turned out to be eighteen percent of the transcription rather
+ * than double it. What it does cost is the file - 3.8 MB a minute against 1.9.
+ *
+ * ## Echo cancellation stays off, even on speakers
+ *
+ * On speakers the microphone also hears the far side, so the left channel is not
+ * purely you. It survives anyway: the right channel has the call at full level
+ * straight off the machine and the left has it through a room, so the right one
+ * still wins those segments - and while you talk there is usually nothing coming
+ * out of the speakers at all. Where they genuinely overlap whisper answers
+ * `speaker ?`, which is the honest answer rather than a wrong name.
+ *
+ * Turning `echoCancellation` on would clean the left channel up and is the lever
+ * to reach for if the labels do smear. It is off because it also processes the
+ * one recording of a conversation that cannot be made again, and a transcript is
+ * worth more than a label on it.
  *
  * `ScriptProcessorNode` is deprecated and used anyway. Its replacement needs a
  * separate module loaded by URL, which fights the bundler for no gain here, and
@@ -24,6 +44,11 @@ const SAMPLE_RATE = 16000
 
 /** ~250ms at 16kHz. Small enough that a crash costs a quarter of a second. */
 const CHUNK_SAMPLES = 4096
+
+/** You on the left, them on the right - and whisper reads left as speaker 0. */
+const MIC_CHANNEL = 0
+const SYSTEM_CHANNEL = 1
+const CHANNELS = 2
 
 export interface Levels {
   /** 0..1, how loud each side is right now - the self-test before you start. */
@@ -100,44 +125,65 @@ export async function openSelfTest(): Promise<{
   }
 }
 
+/** One float sample as 16-bit PCM, clamped rather than allowed to wrap.
+ *  A stream that exceeds 1.0 wraps into loud noise, which is the one artefact a
+ *  transcript cannot survive. */
+function pcm16(value: number): number {
+  const bounded = Math.max(-1, Math.min(1, value))
+  return bounded < 0 ? bounded * 0x8000 : bounded * 0x7fff
+}
+
 /** Start capturing into the note's own file. */
 export async function startRecording(noteId: string): Promise<Recorder> {
   const mic = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
   })
   const system = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false })
-  const path = await window.nib.startRecording(noteId)
+  const path = await window.nib.startRecording(noteId, CHANNELS)
 
   const context = new AudioContext({ sampleRate: SAMPLE_RATE })
-  const mixer = context.createGain()
+  /*
+   * A merger rather than a gain node, which is the whole change.
+   *
+   * Each of its inputs is one channel and is down-mixed to mono on the way in -
+   * which matters, because the system capture can arrive already in stereo and
+   * would otherwise decide the layout for us.
+   */
+  const merger = context.createChannelMerger(CHANNELS)
 
-  const attach = (stream: MediaStream): AnalyserNode => {
+  const attach = (stream: MediaStream, channel: number): AnalyserNode => {
     const source = context.createMediaStreamSource(stream)
     const analyser = context.createAnalyser()
     analyser.fftSize = 512
     source.connect(analyser)
-    source.connect(mixer)
+    source.connect(merger, 0, channel)
     return analyser
   }
-  const micNode = attach(mic)
-  const systemNode = attach(system)
+  // Left is you and right is them, and that order is load-bearing: whisper
+  // reports the left channel as speaker 0, and the transcript names them from
+  // that. Swapping these two lines swaps every label in every meeting.
+  const micNode = attach(mic, MIC_CHANNEL)
+  const systemNode = attach(system, SYSTEM_CHANNEL)
   const scratch = new Uint8Array(new ArrayBuffer(micNode.fftSize))
 
-  const processor = context.createScriptProcessor(CHUNK_SAMPLES, 1, 1)
+  const processor = context.createScriptProcessor(CHUNK_SAMPLES, CHANNELS, CHANNELS)
   let samples = 0
   processor.onaudioprocess = (event) => {
-    const input = event.inputBuffer.getChannelData(0)
-    const pcm = new Int16Array(input.length)
-    for (let i = 0; i < input.length; i++) {
-      // Clamp before scaling: two summed streams can exceed 1.0 and wrap into
-      // loud noise, which is the one artefact a transcript cannot survive.
-      const value = Math.max(-1, Math.min(1, input[i]))
-      pcm[i] = value < 0 ? value * 0x8000 : value * 0x7fff
+    const left = event.inputBuffer.getChannelData(MIC_CHANNEL)
+    const right = event.inputBuffer.getChannelData(SYSTEM_CHANNEL)
+    // Interleaved, which is what a WAV holds: L R L R rather than one channel
+    // after the other.
+    const frames = new Int16Array(left.length * CHANNELS)
+    for (let i = 0; i < left.length; i++) {
+      frames[i * 2] = pcm16(left[i])
+      frames[i * 2 + 1] = pcm16(right[i])
     }
-    samples += input.length
-    window.nib.sendChunk(new Uint8Array(pcm.buffer))
+    // Frames, not samples - so `seconds` stays a length in time whatever the
+    // channel count is.
+    samples += left.length
+    window.nib.sendChunk(new Uint8Array(frames.buffer))
   }
-  mixer.connect(processor)
+  merger.connect(processor)
   // A destination the processor can run into. Zero gain, so nothing is played
   // back - a recording that echoes itself into the room is its own feedback loop.
   const silence = context.createGain()

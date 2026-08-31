@@ -159,9 +159,12 @@ export function RecordPanel({ noteId, onStarted, onClose }: RecordPanelProps): R
 /** The strip that replaces the button while a meeting is being recorded. */
 export function RecordingBar({
   recorder,
+  onMark,
   onStop
 }: {
   recorder: Recorder
+  /** Pin the line being typed to this minute of the recording. */
+  onMark: () => void
   onStop: () => void
 }): React.JSX.Element {
   const [seconds, setSeconds] = useState(0)
@@ -191,6 +194,22 @@ export function RecordingBar({
           style={{ opacity: 0.25 + Math.sqrt(levels.system) * 0.75 }}
         />
       </div>
+      {/*
+        Marking the moment, not the note.
+
+        `onMouseDown` is prevented so the caret stays where it was: this marks
+        the line being typed, and a button that took focus first would have
+        nothing to mark by the time it ran.
+      */}
+      <button
+        type="button"
+        className="recording-mark"
+        title="Markera den här raden i inspelningen"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onMark}
+      >
+        Mark
+      </button>
       <button type="button" className="recording-stop" onClick={onStop}>
         Stop
       </button>
