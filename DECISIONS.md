@@ -3,6 +3,47 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-01 - A summary's own headings cannot be flagged
+
+**Decided.** `cycleAlert` refuses to put a flag on a heading inside
+`[data-summary]`. It still clears one that is already there.
+
+**What happened.** A real note came back with its summary's first heading -
+`Sammanfattning` - carrying `data-alert="done"`, so the index held an action
+point whose text was the opening 160 characters of the summary. Nothing in the
+code sets that by itself; every path that writes `data-alert` needs a gesture.
+The gesture is the point though: the gutter runs the whole height of the
+document's left margin and a heading is a valid target in it, so a stray click
+level with the first line of a summary flags the summary. Then the three-state
+cycle - flag, done, gone - turns the obvious attempt to undo it into a green
+tick rather than into nothing.
+
+**Why it matters more than it looks.** A flag is not decoration. It is an entry in
+`index.json`, an action point on the card, and a promise with a clock on it once
+Tend reads the index. Filing a summary's heading there invents a commitment out of
+a section title, which is the same failure as the auto-flagging removed earlier
+today, reached by a different route.
+
+**In `cycleAlert`, not in the gutter's candidate list.** The reason is about the
+block and not about which gesture reached it, and `Ctrl+Shift+A` with the caret in
+the heading is the other way in. One guard covers both.
+
+**Refusing to create, not refusing to touch.** The check sits inside the
+`state === undefined` branch, exactly where the empty-line guard sits and for the
+same reason: a heading flagged before this existed has to stay one click from
+being cleared. A fix that stranded the note that reported the problem would be
+worse than the problem.
+
+**Only the headings.** The action lines are the whole reason a summary is worth
+flagging, and whether the summary's prose or a decision line deserves a flag is a
+judgement left to whoever is reading it. Just the structure the summary writes
+stops being a target.
+
+**Verified in the running app.** Three real pointer events into the gutter of a
+seeded note: an already-flagged summary heading cleared, an unflagged one refused,
+and a heading typed outside the summary still flagged. Plus three unit tests over
+`isSummaryHeading`.
+
 ## 2026-09-01 - A summary flags nothing; flagging is a decision you make
 
 **Decided.** Action points in a generated summary are listed, never flagged. The

@@ -183,6 +183,16 @@ Every requirement on the original list is now built. What is left is smaller:
    gutter click does a single line. Summaries written under the old rule keep
    their flags and gain the control they never had. Verified through the running
    app in both directions, as far as `index.json`. See DECISIONS.
+
+   **And the same mistake by another route, found the same day.** A real note came
+   back with the heading `Sammanfattning` itself flagged, so the index held an
+   action point whose text was the first 160 characters of the summary. Nothing
+   sets that automatically - the gutter runs the full height of the left margin and
+   a heading is a valid target in it, so a stray click level with the summary's
+   first line flags the summary, and the three-state cycle turns the attempt to
+   undo it into a green tick. A summary's own headings are no longer flaggable;
+   clearing one that already is stays possible, or the fix would strand the note
+   that reported it.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the

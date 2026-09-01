@@ -650,6 +650,29 @@ export function extractAlerts(html: string): AlertMeta[] {
   return alerts
 }
 
+/**
+ * Whether a block is one of a generated summary's own headings.
+ *
+ * `Sammanfattning`, `Beslut`, `Åtgärdspunkter`, `Frågor jag inte ställde` - the
+ * structure the summary writes, not anything anybody promised. Flagging one puts
+ * 160 characters of the summary in the index as an action point, and from there
+ * into Tend as a promise nobody made. It happened: the gutter runs the whole
+ * height of the document's left margin, so a stray click level with the first
+ * heading flagged it, and the three-state cycle turned the attempt to undo it
+ * into a green tick.
+ *
+ * The same reasoning the gutter already applies to a transcript's lines: what was
+ * said in a meeting is a record, and what you flag is the action points the
+ * summary lifts out of it. The action lines themselves stay flaggable, and so
+ * does the summary's prose - only the headings stop being targets.
+ */
+export function isSummaryHeading(block: {
+  tagName: string
+  closest: (selector: string) => unknown
+}): boolean {
+  return /^H[1-4]$/.test(block.tagName) && block.closest('[data-summary]') !== null
+}
+
 /** The block a selection sits in, or null when the selection is outside `root`. */
 export function blockAtSelection(root: HTMLElement): HTMLElement | null {
   const selection = window.getSelection()

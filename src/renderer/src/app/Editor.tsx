@@ -44,6 +44,7 @@ import {
   extractAlerts,
   extractLinks,
   imageWidth,
+  isSummaryHeading,
   newId,
   noteTrail,
   placeRecording,
@@ -699,6 +700,21 @@ export function Editor({
          * reachable.
          */
         if ((block.textContent ?? '').trim().length === 0) {
+          return
+        }
+        /*
+         * A summary's own headings are not action points - see `isSummaryHeading`.
+         *
+         * Guarded here rather than in the gutter's list of candidates so it covers
+         * `Ctrl+Shift+A` with the caret in the heading as well; the reason is about
+         * the block, not about which gesture reached it.
+         *
+         * Inside the `undefined` branch on purpose, exactly like the empty-line
+         * guard above: this refuses to CREATE the flag, and leaves clearing one
+         * alone. A heading flagged before this existed has to stay one click from
+         * being cleared, or the fix would strand the very note that reported it.
+         */
+        if (isSummaryHeading(block)) {
           return
         }
         block.dataset.alert = '1'
