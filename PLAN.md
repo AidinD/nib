@@ -129,12 +129,24 @@ Every requirement on the original list is now built. What is left is smaller:
      marked while a recording runs carries the offset in seconds, shows a
      timestamp that jumps into the transcript, and is threaded into what the
      summary reads. Nothing is written into the audio file.
-   What has NOT been exercised is a real meeting through the new capture path:
-   the audio graph was checked with oscillators and the labels with a synthetic
-   stereo file, because driving the real one needs a microphone and a screen
-   capture. The first real recording is the test that matters, and the thing to
-   watch on it is whether the labels smear - the author works on speakers rather
-   than headphones, so the microphone also hears the far side.
+   **A real meeting has now been through it**, on 0.12.0: 53 minutes of an
+   English company meeting, captured stereo, 746 segments, nine turns. The
+   labels are corroborated by the content rather than taken on trust - the
+   transcript has somebody asking the author by name how long he needs, the next
+   segment labelled as his answering "perhaps 10 minutes", a handover four
+   minutes later, and then a 150-segment run labelled as his that lasts nine
+   minutes fifty-eight. Not one segment came back as `?`, which says the channel
+   margin is wide: on speakers, the microphone's pickup of the far side is
+   nowhere near loud enough to compete with the same audio taken straight off the
+   machine. That is the question `echoCancellation` was left off over, answered.
+   203MB for the 53 minutes - 3.84MB a minute, against the 3.8 estimated.
+
+   What it also showed is that the English model hears the author's own name as a
+   different name throughout, which is the case `--prompt` with a word list
+   exists for and nothing passes one today.
+
+   Moments are still unexercised in a real meeting: nothing was pasted or marked
+   during that one.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
