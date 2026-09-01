@@ -3,6 +3,30 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-01 - The summary could not read a long meeting, which is the only kind worth summarising
+
+**What happened.** Summarising a 53-minute meeting failed with
+`Could not start Claude Code: spawn ENAMETOOLONG`. The prompt was passed to the
+`claude` executable as `-p <prompt>`, and Windows caps a whole command line at
+32,767 characters. That transcript is around 40,000 characters on its own, before
+the instruction, the schema and the system prompt.
+
+**Fixed in keel 0.1.9**: the prompt goes in on stdin, which has no such limit.
+Measured, 45,072 characters through it, exit 0, the schema still honoured. See
+`keel/src/claude/ask.mjs` for the whole reasoning, including why the pipe is
+closed the instant the prompt is written.
+
+**The part worth remembering is the shape of the failure, not the fix.** The
+ceiling sat at roughly forty minutes of meeting - so every test recording worked,
+every short call worked, and the feature broke precisely at the point where it
+starts being worth having. A limit that scales with the input a feature exists
+for is invisible until the day it matters, and this one had been shipped since
+the summary was built.
+
+It also means nothing in this app should pass user content as a command-line
+argument. `summarise` is the only caller of `ask`, so there is nowhere else to
+fix today, and this is the note to read before adding a second one.
+
 ## 2026-08-31 - The second copy of the whisper payload is gone
 
 **Decided.** `%LOCALAPPDATA%\whisper` is deleted. 1.47GB, 47 files, nothing in it
