@@ -73,6 +73,20 @@ const api = {
   recordingExists: (path: string): Promise<boolean> =>
     ipcRenderer.invoke('recording:exists', path),
 
+  /*
+   * Where the recording stopped being the meeting it is filed as, when the file
+   * says so at all - a stretch with nothing on any channel, which a live capture
+   * does not produce. Null is the ordinary answer.
+   */
+  recordingCallEnd: (
+    path: string
+  ): Promise<{ endsAt: number; silence: number; tail: number; seconds: number } | null> =>
+    ipcRenderer.invoke('recording:callEnd', path),
+  // Shorten a recording to its first `seconds`. There is no undo, so the caller
+  // asks first.
+  trimRecording: (path: string, seconds: number): Promise<{ seconds: number; bytes: number }> =>
+    ipcRenderer.invoke('recording:trim', path, seconds),
+
   /**
    * Summarise a meeting. The only call in this app that leaves the machine, and
    * the only one that spends anything.

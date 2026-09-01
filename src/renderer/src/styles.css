@@ -3145,6 +3145,26 @@ body.is-resizing .splitter-grip {
 }
 
 /*
+ * The offer to cut a recording back to where the call ended.
+ *
+ * Marked out from its two neighbours because it is not one of the things you do
+ * with every recording - it appears only when the file has something to say, and
+ * it is saying that the note is holding a conversation nobody asked it to keep.
+ * Quiet until hover all the same: it is a suggestion from a heuristic, not a
+ * warning, and a recording that ran on is not an emergency.
+ */
+.recording-block [data-trim] {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+
+.recording-block [data-trim]:hover {
+  color: var(--alert);
+  text-decoration-style: solid;
+}
+
+/*
  * Who spoke, in front of the turn rather than in front of every line.
  *
  * Two weights of the same quiet: your own name recedes because you know what you

@@ -15,6 +15,8 @@ import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
+  clock,
+  lineSeconds,
   applyRecordingBlocks,
   applySummaryBlocks,
   applyTimeMarks,
@@ -163,6 +165,7 @@ export function Editor({
   /** The recording whose audio is waiting on a yes. Held the same way, and for a
    *  worse reason: the file is about to leave the disk, where undo cannot reach. */
   const [pendingAudioDrop, setPendingAudioDrop] = useState<HTMLElement | null>(null)
+  const [pendingTrim, setPendingTrim] = useState<HTMLElement | null>(null)
   const [summaryPanel, setSummaryPanel] = useState(false)
   /** Which tier to use. Per note rather than a setting: it is a judgement about
    *  this meeting, not a preference about all of them. */
@@ -818,6 +821,26 @@ export function Editor({
       root.appendChild(after)
       applyRecordingBlocks(root)
       onBodyInput()
+
+      /*
+       * Ask the file whether the call ended before the recording did.
+       *
+       * After the block is in the note rather than before, because the answer is
+       * an offer on it and the block should not wait on a scan of two hundred
+       * megabytes to appear. It takes a fraction of a second and it may equally
+       * find nothing, which is the ordinary case.
+       */
+      void window.nib
+        .recordingCallEnd(path)
+        .then((found) => {
+          if (found === null || !root.isConnected || !root.contains(block)) {
+            return
+          }
+          block.dataset.callEnd = String(found.endsAt)
+          applyRecordingBlocks(root)
+          onBodyInput()
+        })
+        .catch(() => undefined)
     },
     [onBodyInput]
   )
@@ -1051,6 +1074,60 @@ export function Editor({
       block.dataset.state = 'lost'
       applyRecordingBlocks(root)
       onBodyInput()
+    },
+    [onBodyInput]
+  )
+
+  /**
+   * Cut the recording back to where the call ended, transcript and all.
+   *
+   * Both halves or neither: shortening the audio and leaving the words that came
+   * after it would leave the note claiming a conversation the file no longer
+   * holds, and that is worse than either mistake alone. The lines go by their own
+   * timestamps, which every transcript in the notebook already carries.
+   *
+   * The audio goes first. If the trim fails there is nothing to undo in the note;
+   * if the note update failed after a successful trim the worst case is a
+   * transcript longer than its audio, which the next run puts right.
+   */
+  const trimToCallEnd = useCallback(
+    async (block: HTMLElement): Promise<void> => {
+      const root = bodyRef.current
+      const path = block.dataset.recording
+      const endsAt = Number(block.dataset.callEnd ?? '')
+      if (root === null || path === undefined || !Number.isFinite(endsAt) || endsAt <= 0) {
+        return
+      }
+      try {
+        const done = await window.nib.trimRecording(path, endsAt)
+        block.dataset.seconds = String(done.seconds)
+        block.removeAttribute('data-call-end')
+
+        const transcript = transcriptForRecording(root, path)
+        if (transcript !== null) {
+          for (const line of Array.from(transcript.querySelectorAll<HTMLElement>('p'))) {
+            const at = lineSeconds(line)
+            if (at !== null && at > done.seconds) {
+              line.remove()
+            }
+          }
+          // The summary line counts what is there, so it has to be counted again.
+          const label = transcript.querySelector('summary')?.firstChild ?? null
+          if (label !== null && label.nodeType === Node.TEXT_NODE) {
+            const left = transcript.querySelectorAll('p').length
+            label.textContent = `Transkript · ${Math.max(1, Math.round(done.seconds / 60))} min · ${left} avsnitt`
+          }
+        }
+        applyRecordingBlocks(root)
+        applyTranscriptBlocks(root)
+        applyTimeMarks(root)
+        onBodyInput()
+      } catch (error) {
+        block.dataset.state = 'failed'
+        block.textContent = `Recording · could not trim: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      }
     },
     [onBodyInput]
   )
@@ -2027,6 +2104,24 @@ export function Editor({
           />
         )}
 
+        {pendingTrim !== null && (
+          <ConfirmModal
+            title="Klipp inspelningen?"
+            message={
+              `Ljudet efter ${clock(Number(pendingTrim.dataset.callEnd ?? 0))} tas bort, och med det ` +
+              'raderna i transkriptet som ligger efter den punkten. Det går inte att ångra. ' +
+              'Filen säger att samtalet slutade där - men det är en gissning, så läs ' +
+              'transkriptet först om du är osäker.'
+            }
+            confirmLabel="Klipp"
+            onConfirm={() => {
+              void trimToCallEnd(pendingTrim)
+              setPendingTrim(null)
+            }}
+            onCancel={() => setPendingTrim(null)}
+          />
+        )}
+
         {summaryPanel && !summarising && (
           <SummaryPanel
             transcripts={transcriptCount}
@@ -2259,6 +2354,14 @@ export function Editor({
               const block = again.closest<HTMLElement>('[data-recording]')
               if (block !== null) {
                 void transcribeBlock(block)
+              }
+              return
+            }
+            const trim = target.closest<HTMLElement>('[data-trim]')
+            if (trim !== null) {
+              const block = trim.closest<HTMLElement>('[data-recording]')
+              if (block !== null) {
+                setPendingTrim(block)
               }
               return
             }

@@ -17,6 +17,8 @@ import {
   isRecording,
   startRecording,
   stopRecording,
+  findCallEnd,
+  trimRecording,
   sweepRecordings
 } from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
@@ -265,6 +267,18 @@ function registerIpc(): void {
   ipcMain.handle('recording:stop', () => stopRecording())
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
   ipcMain.handle('recording:exists', (_event, path: string) => existsSync(path))
+
+  /*
+   * Where the call ended, and shortening the file to it.
+   *
+   * Two calls rather than one because they are two decisions: the app may look,
+   * and only the person may cut. See `findCallEnd` for why the file can answer
+   * the first at all.
+   */
+  ipcMain.handle('recording:callEnd', (_event, path: string) => findCallEnd(path))
+  ipcMain.handle('recording:trim', (_event, path: string, seconds: number) =>
+    trimRecording(path, seconds)
+  )
 
   /*
    * The summary: the one step that leaves the machine.

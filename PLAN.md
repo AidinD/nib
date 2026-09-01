@@ -116,7 +116,10 @@ Every requirement on the original list is now built. What is left is smaller:
    proper nouns out of phrases it could not hear. See DECISIONS. What is still
    not built are the two things that bear more directly on names than the model
    does: `--prompt` with a word list, which nothing passes today, and `--vad`,
-   which is off, and which is what fills silence with sentences nobody said.
+   which is off. The worry about `--vad` is smaller than this file used to claim:
+   fed 93 seconds of a dead capture on 2026-09-01, the Swedish model returned
+   empty segments labelled `speaker ?` rather than inventing sentences. Real room
+   noise is still untested.
    **Two things landed on top of it on 2026-08-31**, both verified in the running
    app:
    - **The transcript says who spoke.** A meeting is captured as two channels -
@@ -147,6 +150,24 @@ Every requirement on the original list is now built. What is left is smaller:
 
    Moments are still unexercised in a real meeting: nothing was pasted or marked
    during that one.
+
+   **A third thing landed on 2026-09-01, from the second real meeting: the
+   recording offers to stop where the call did.** That meeting ran 19 minutes for
+   a 14-minute call - Stop was forgotten, and what the note ended up holding was
+   five minutes of a different conversation, transcribed and filed under the
+   manager meeting. Twice out of two real meetings the mistake has been the
+   stopping, not the recording.
+
+   The file can answer it: when a call drops, both streams stop delivering at the
+   same instant, and that is not something a live capture produces. `findCallEnd`
+   looks for it and the block offers to trim, audio and transcript together,
+   after asking. Verified against both real recordings on this machine - it found
+   14:10 on the one that needed it and stayed quiet on the 53-minute one that did
+   not - and end to end in the running app. See DECISIONS.
+
+   What it does NOT cover is the recording that runs on with the call still up:
+   somebody stays on the line, so there is no dead stretch and nothing to find.
+   Nothing detects that, and probably nothing should.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the

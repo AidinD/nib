@@ -3,6 +3,72 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-01 - The recording knows when the call ended, so it offers to stop there
+
+**Decided.** When a recording is stopped, the file is scanned for a stretch where
+every channel is under a peak of 512 for at least twenty seconds. If one is found
+with real audio left over on either side of it, the block carries
+`data-call-end` and offers **"the call ends at 14:10 · trim the rest"**. Taking
+the offer shortens the audio in place and drops the transcript lines past that
+point, together, after asking.
+
+**Why the file can answer this at all.** When a call drops, the microphone stream
+and the machine's output stream stop delivering at the same instant, and what
+lands in the file is not a quiet room - it is nothing. A live capture never does
+that. On the meeting that prompted this, the recording never fell below a peak of
+a few thousand while the dead stretch never rose above 312, which is not a close
+call. That is also why the test for it is peak-based and not
+speech-detection: this is not asking whether anybody is talking, it is asking
+whether the capture is still running.
+
+**Near-silence, not exact zeros.** The first attempt looked for runs of literal
+zero and was wrong on the real file: single 100 ms blocks inside the dead stretch
+carried a handful of samples peaking at 224, which split one 83-second answer
+into pieces and moved the suggestion 36 seconds past the truth. Blocks with a
+peak threshold survive that and still cannot be tripped by somebody being quiet.
+The test named "stray samples in the dead stretch do not break the run" is that
+bug, kept.
+
+**The longest stretch wins, not the first.** Muting yourself mid-meeting produces
+the same shape as a call ending. Between the two, the longer one is the better
+guess: the mistake this exists for leaves minutes behind, not seconds.
+
+**Verified three ways.** Twelve unit tests over built files - a dropped call, a
+recording left running into an empty room, a ten-second pause that must NOT
+trigger, mono, a file that is silence from the start, the stray-sample
+regression. Then against the two real recordings on this machine: the 19-minute
+one answered `ends 14:10 · dead 83s · tail 220s`, which is exactly where the call
+ended by hand, and the 53-minute meeting that was stopped properly answered
+nothing - the false positive that would have mattered most. 0.2s over 70MB, 0.4s
+over 200MB. Then end to end in the running app: the offer survives the sanitiser
+and a load from disk, cancelling changes nothing, and confirming leaves the audio
+at exactly 60 seconds with 7 of 22 transcript lines and a relabelled summary.
+
+**Both halves or neither.** Shortening the audio and leaving the words that came
+after it would leave the note describing a conversation the file no longer holds,
+which is worse than either mistake alone. The lines go by the timestamps every
+transcript already carries, so this reaches transcripts written before the
+feature existed.
+
+**It is an offer, never an act.** It appears on a recording and on a transcribed
+one alike - discovering the mistake after reading the transcript is if anything
+the likelier way round - and it goes through the same dialog as discarding the
+audio. The one artefact here that cannot be made a second time does not get
+shortened because a heuristic was confident.
+
+**What was rejected.** Trimming automatically on stop, which is the same argument
+as above. Detecting it during capture in `recorder.ts`, which would only ever
+help recordings made after it shipped, where reading the file works on everything
+already in the notebook. And using whisper's silence handling for it, which
+answers a different question and costs minutes rather than a fraction of a second.
+
+**A measurement that came out the other way.** The concern that made this look
+urgent - that a long silence would make whisper invent sentences, which is why
+PLAN.md flags `--vad` being off - did not reproduce. Fed the 93-second dead
+stretch, the Swedish model returned empty segments labelled `speaker ?` rather
+than filling it in. So the reason to cut is what the tail contains, not what the
+transcriber does with the gap.
+
 ## 2026-09-01 - The summary could not read a long meeting, which is the only kind worth summarising
 
 **What happened.** Summarising a 53-minute meeting failed with

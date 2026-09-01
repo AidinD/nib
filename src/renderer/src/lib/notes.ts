@@ -110,6 +110,26 @@ export function applyRecordingBlocks(root: HTMLElement): void {
     const language = block.dataset.language === 'en' ? 'English' : 'Svenska'
 
     /*
+     * The offer to cut, when the file says the call ended before the recording did.
+     *
+     * Written here rather than at the moment it is found, so it survives a save
+     * and a reload like every other thing about a block: `data-call-end` is the
+     * fact, this is only how it looks. It is an offer on both a raw recording and
+     * a transcribed one - discovering the mistake after reading the transcript is
+     * if anything the likelier way round.
+     */
+    const offerTrim = (): void => {
+      const endsAt = Number(block.dataset.callEnd ?? '')
+      if (!Number.isFinite(endsAt) || endsAt <= 0 || endsAt >= seconds) {
+        return
+      }
+      const trim = document.createElement('span')
+      trim.dataset.trim = String(endsAt)
+      trim.textContent = `the call ends at ${clock(endsAt)} · trim the rest`
+      block.append(document.createTextNode(' · '), trim)
+    }
+
+    /*
      * A transcribed recording keeps its audio, so the block is not a receipt for
      * something finished - it is the two things still worth doing.
      *
@@ -128,6 +148,7 @@ export function applyRecordingBlocks(root: HTMLElement): void {
       discard.dataset.discard = '1'
       discard.textContent = 'discard the audio'
       block.append(again, document.createTextNode(' · '), discard)
+      offerTrim()
       continue
     }
 
@@ -141,6 +162,9 @@ export function applyRecordingBlocks(root: HTMLElement): void {
             // something it cannot do.
             `Recording · ${length} · the audio is no longer on disk`
           : `Recording · ${length} · ${language} · click to transcribe`
+    if (state === 'recorded') {
+      offerTrim()
+    }
   }
 }
 
