@@ -148,8 +148,14 @@ Every requirement on the original list is now built. What is left is smaller:
    different name throughout, which is the case `--prompt` with a word list
    exists for and nothing passes one today.
 
-   Moments are still unexercised in a real meeting: nothing was pasted or marked
-   during that one.
+   **Moments have now been used in a real meeting**, on 0.13.0: nine screenshots
+   marked across a 30-minute call, every one carrying the right offset and the
+   right file, from 2:51 to 24:40.
+   The feature works. What it exposed is where the recording ended up - below all
+   nine of them, because the block was appended at the end of the document - so a
+   note whose point is the meeting opened on a stack of images. The block now goes
+   to the top, under a summary if there is one. See DECISIONS for why the
+   obvious version of that rule is wrong when there are two recordings.
 
    **A third thing landed on 2026-09-01, from the second real meeting: the
    recording offers to stop where the call did.** That meeting ran 19 minutes for
@@ -168,6 +174,15 @@ Every requirement on the original list is now built. What is left is smaller:
    What it does NOT cover is the recording that runs on with the call still up:
    somebody stays on the line, so there is no dead stretch and nothing to find.
    Nothing detects that, and probably nothing should.
+
+   **A summary no longer flags its own action points**, as of 2026-09-01. A
+   meeting's used to; a note's already did not. A flagged line is an open promise
+   in the index and therefore in Tend, so what the old behaviour did was hand you
+   a list of commitments the model chose, before you had read it. They are listed
+   instead, and the control under the list flags all of them in one click, or one
+   gutter click does a single line. Summaries written under the old rule keep
+   their flags and gain the control they never had. Verified through the running
+   app in both directions, as far as `index.json`. See DECISIONS.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the

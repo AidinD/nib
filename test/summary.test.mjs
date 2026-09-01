@@ -1,12 +1,16 @@
 /**
  * Tests for what a summary flags.
  *
- * The rule being guarded: a meeting's action points flag themselves, a note's do
- * not. Summarising a note about something that had already happened produced two
- * flagged lines describing what the writer DID - the past tense rather than a
- * task - and a flagged line becomes an open promise in Tend.
- * Listing them is useful; committing the writer to them is not a decision the
- * summary gets to make.
+ * The rule being guarded: NOTHING. A summary lists action points and flags none
+ * of them, whether it summarised a meeting or a note.
+ *
+ * It used to flag a meeting's, on the reasoning that a promise made out loud and
+ * left in a summary nobody reopens is not a promise. Two things were wrong with
+ * that. A flagged line is an open promise in Tend, so the model's list became a
+ * list its reader was answerable for before having read it - and summarising a
+ * note about something already finished flagged "presented three arguments",
+ * which is the past tense rather than a task. The exemption written for the
+ * second was the whole rule.
  */
 
 import { test } from 'node:test'
@@ -27,67 +31,46 @@ const VALUE = {
   people: []
 }
 
-let counter = 0
-const ids = () => `alert-${++counter}`
-
-test('a meeting flags its action points', () => {
-  counter = 0
-  const html = summaryHtml(PROVENANCE, VALUE, ids, 'meeting')
-  assert.equal((html.match(/data-alert="1"/g) ?? []).length, 2)
-  assert.equal((html.match(/data-alert-id="alert-\d"/g) ?? []).length, 2)
+test('nothing is flagged, and there is no way to ask for it to be', () => {
+  const html = summaryHtml(PROVENANCE, VALUE)
+  assert.equal(html.includes('data-alert'), false)
+  // No second argument decides this any more. The parameter that used to is
+  // gone, so a caller cannot turn flagging back on by passing 'meeting'.
+  assert.equal(summaryHtml(PROVENANCE, VALUE, () => 'alert-1', 'meeting').includes('data-alert'), false)
 })
 
-test('a note lists them without flagging them', () => {
-  counter = 0
-  const html = summaryHtml(PROVENANCE, VALUE, ids, 'note')
-  assert.equal(html.includes('data-alert'), false)
-  // Still there to read, and one click each turns one into a real action point.
+test('the action points are still all there to read', () => {
+  const html = summaryHtml(PROVENANCE, VALUE)
   assert.equal(html.includes('Boka om workshopen'), true)
   assert.equal(html.includes('Hor av dig till Nilsson'), true)
 })
 
-test('an inferred commitment says so in both', () => {
-  for (const kind of ['meeting', 'note']) {
-    counter = 0
-    const html = summaryHtml(PROVENANCE, VALUE, ids, kind)
-    assert.equal(html.includes('(underförstått)'), true, kind)
-    // And only the inferred one carries it.
-    assert.equal((html.match(/\(underförstått\)/g) ?? []).length, 1, kind)
-  }
+test('every action line is marked as one, so the control can find them', () => {
+  const html = summaryHtml(PROVENANCE, VALUE)
+  assert.equal((html.match(/data-action="1"/g) ?? []).length, 2)
 })
 
-test('the model that wrote it is named, whatever the kind', () => {
-  for (const kind of ['meeting', 'note']) {
-    const html = summaryHtml(PROVENANCE, VALUE, ids, kind)
-    assert.equal(html.includes('data-provenance="1"'), true, kind)
-    assert.equal(html.includes('claude-haiku-4-5'), true, kind)
-  }
+test('the flag-all control is there whatever was summarised', () => {
+  // It used to be a note's consolation for not being flagged. Now it is the only
+  // way any summary's lines become action points without one gutter click each.
+  assert.equal(summaryHtml(PROVENANCE, VALUE).includes('data-flag-all'), true)
 })
 
-test('a note gets the flag-all control, a meeting does not', () => {
-  counter = 0
-  assert.equal(summaryHtml(PROVENANCE, VALUE, ids, 'note').includes('data-flag-all'), true)
-  counter = 0
-  assert.equal(summaryHtml(PROVENANCE, VALUE, ids, 'meeting').includes('data-flag-all'), false)
+test('an inferred commitment says so', () => {
+  const html = summaryHtml(PROVENANCE, VALUE)
+  assert.equal(html.includes('(underförstått)'), true)
+  // And only the inferred one carries it.
+  assert.equal((html.match(/\(underförstått\)/g) ?? []).length, 1)
 })
 
-test('every action line is marked as one, flagged or not', () => {
-  for (const kind of ['meeting', 'note']) {
-    counter = 0
-    const html = summaryHtml(PROVENANCE, VALUE, ids, kind)
-    assert.equal((html.match(/data-action="1"/g) ?? []).length, 2, kind)
-  }
+test('the model that wrote it is named', () => {
+  const html = summaryHtml(PROVENANCE, VALUE)
+  assert.equal(html.includes('data-provenance="1"'), true)
+  assert.equal(html.includes('claude-haiku-4-5'), true)
 })
 
 test('a summary with no actions gets no control', () => {
-  counter = 0
-  const html = summaryHtml(PROVENANCE, { ...VALUE, actions: [] }, ids, 'note')
+  const html = summaryHtml(PROVENANCE, { ...VALUE, actions: [] })
   assert.equal(html.includes('data-flag-all'), false)
   assert.equal(html.includes('Atgardspunkter'), false)
-})
-
-test('meeting is the default, so an old caller keeps flagging', () => {
-  counter = 0
-  const html = summaryHtml(PROVENANCE, VALUE, ids)
-  assert.equal((html.match(/data-alert="1"/g) ?? []).length, 2)
 })

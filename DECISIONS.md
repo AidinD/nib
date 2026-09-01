@@ -3,6 +3,115 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-01 - A summary flags nothing; flagging is a decision you make
+
+**Decided.** Action points in a generated summary are listed, never flagged. The
+`kind` parameter that used to decide it is gone from `summaryHtml`, and so is the
+`newAlertId` it needed. Every summary now carries the flag-all control that only a
+note's used to get, and a summary written under the old rule keeps its flags and
+gains that control on load.
+
+**Why.** A flagged line is `data-alert` in the note, an entry in `index.json`, an
+action point on the card, and a promise with a clock on it once Tend reads the
+index. So the old behaviour took a list the model chose out of half an hour of
+talking and made the reader answerable for it before they had read it. That is a
+lot of consequence for an inference.
+
+**This was already half-decided and the half was the whole thing.** A note's
+summary was exempted on 2026-08-31 because summarising a story about a
+conversation in 2019 flagged "presented three arguments" and "held the position" -
+the past tense, not a task. The reasoning given for keeping it on meetings was
+that a promise made out loud and left in a summary nobody reopens is not a
+promise. True, and not an argument for who decides: the fix for a promise that
+would be forgotten is a control that flags all of them in one click, which the
+note case already had. Deciding which lines are actually yours takes ten seconds.
+
+**The parameter went rather than being defaulted to `note`.** A parameter with one
+live value is somewhere for the old behaviour to come back from. There is now no
+argument that turns flagging on, and the test asserts that passing the old ones
+anyway changes nothing.
+
+**Old summaries keep their flags.** Unflagging them on load would be the same
+mistake pointing the other way - some of those lines have been acted on, and a
+flag that disappears on upgrade is worse than one that should not have been set.
+They get the control instead, backfilled by `applySummaryBlocks` the way the
+transcript's delete cross is, and placed after the last action line so it sits
+under the list rather than below the signature.
+
+**Verified in the running app, both directions, as far as the index.** Two seeded
+notes - one summary in the old shape, one in the new - driven through
+`scripts/e2e.mjs`. The old one loaded with both flags intact, gained the control
+reading **"Ta bort flaggorna"**, and one click took both flags off, both ids with
+them, and left `alerts: []` in `index.json`. The new one loaded unflagged with
+nothing in the index, and one click put two flagged lines in the note and two
+entries with fresh ids in the index. The index round trip is the part worth
+driving: a line that loses its flag on screen and keeps its promise in the file
+would be the worst of the three states.
+
+## 2026-09-01 - A recording goes to the top of its note, not the bottom
+
+**Decided.** A finished recording's block is inserted at the top of the note -
+under a summary if there is one - rather than appended at the end. Its transcript
+still goes immediately after it. Existing notes are not reordered.
+
+**What was wrong with the end.** The end was never a decision; it was where the
+last thing that happened landed. The reason for not using the caret is still
+sound - the caret is wherever you were typing during the meeting, and a block
+dropped into the middle of that sentence is not what **stop** should mean - but
+"not the caret" was answered with "the end". The first meeting marked with
+moments settled it: nine screenshots, and the recording, its controls and a
+half-hour transcript all sat below the ninth. Opening the note meant scrolling
+past every image to reach the thing the note is about. It costs one line at the
+top rather than a wall, because the transcript is folded.
+
+**Under the summary, not above it.** The summary is an account of the meeting and
+the transcript is the meeting, and that is the order to read them in. It also
+means the summary keeps the place it already had, at `root.firstChild`.
+
+**A second recording goes after the first, and that is the whole difficulty.**
+Document order is what pairs a transcript with its own recording block in
+`transcriptsWithMarks`, and what tells the summary which half of a two-recording
+conversation came first - so recorded order and document order have to stay the
+same thing. `recordingInsertAt` therefore returns the position after the last
+recording OR transcript, whichever is later.
+
+**Not "after the block, or two on if a transcript follows".** That was the first
+version, and the note that prompted this showed why it is wrong: it had saved as
+`<div data-recording><p></p><details data-transcript>`, with an empty paragraph
+in between - left over from the place-to-type the old code appended
+unconditionally. A rule that looked only at the next child would have inserted
+the second recording into that gap. On screen that is a blank line; to
+`transcriptsWithMarks` it is a transcript now preceded by the wrong block, which
+files every screenshot under the wrong meeting.
+
+**The place-to-type is now conditional.** The empty paragraph is appended only
+when the block lands last. Anywhere else it is a blank line shoved above content
+that was already there - and it is what produced the gap above.
+
+**Existing notes are left as they are.** The alternative was the rule
+`applyTranscriptBlocks` uses, putting the order back on every load so old notes
+get it too. Rejected: it would move blocks in notes where prose was deliberately
+written above them, and reordering somebody's document on open is not a
+placement change. An old note keeps its block at the bottom, and a second
+recording added to it still goes below - which is both where it used to go and
+the only place that keeps the order.
+
+**Stop scrolls the block into view, minimally.** At the end of the note the block
+appeared next to where you had been typing, so stopping showed you the result. At
+the top it can be off screen, and the block is the only place the offers to
+transcribe or to trim live. `scrollIntoView({ block: 'nearest' })` does nothing
+when it is already visible.
+
+**Verified against the app, and it corrected the plan.** Thirteen unit tests over
+`recordingInsertAt` and `blockKind`, then a run of `scripts/e2e.mjs` against a
+scratch notebook seeded with a note of the same shape - moments as images, block,
+empty paragraph, folded transcript. The live DOM came back `p p p div p p p`:
+the transcript is a **paragraph** once loaded, not the top-level `details` it is
+on disk. So `blockKind` asking about the subtree rather than the child's own
+attributes is load-bearing rather than defensive, and the measured seven-kind
+array is pinned as a test. The one assertion that failed was the one where the
+expectation had been written from the note file instead of from the app.
+
 ## 2026-09-01 - The recording knows when the call ended, so it offers to stop there
 
 **Decided.** When a recording is stopped, the file is scanned for a stretch where

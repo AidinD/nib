@@ -213,6 +213,87 @@ export function applyTranscriptBlocks(root: HTMLElement): void {
   }
 }
 
+/** What one of a note's top-level children is, as far as placement cares. */
+export type BlockKind = 'summary' | 'recording' | 'transcript' | 'other'
+
+/**
+ * Where a finished recording's block belongs among a note's top-level children.
+ *
+ * It used to belong at the very end, and the reason was sound as far as it went:
+ * the caret is wherever you were typing during the meeting, so inserting at the
+ * caret would drop a block into the middle of a sentence. The end is not where it
+ * belongs though - it is only where the last thing that happened lands. A meeting
+ * marked with nine screenshots put the recording, its controls and a
+ * half-hour transcript below all nine, so opening the note meant scrolling past
+ * every image to reach the thing the note is about.
+ *
+ * So: the top, under a summary if there is one. The summary is an account of the
+ * meeting and the transcript is the meeting, and that is the order to read them
+ * in. It costs one line rather than a wall, because the transcript is folded.
+ *
+ * The exception, and the reason this is a function rather than "index 0": a
+ * SECOND recording goes after the first, not above it. Document order is what
+ * pairs a transcript with its own recording block, and what tells the summary
+ * which half of the conversation came first - so recorded order and document
+ * order have to stay the same thing. That also leaves an older note, whose
+ * recording is still at the bottom, working exactly as it did.
+ *
+ * "After the first" means after the last recording OR transcript, whichever
+ * comes later, and not "after the block, or two on if a transcript follows it".
+ * The first version was the second thing, and a real note showed why it is
+ * wrong: the block and its transcript are not always neighbours. A half-hour
+ * meeting had `<div data-recording><p></p><details data-transcript>` - an empty
+ * paragraph in between, left over from the place-to-type this used to append -
+ * so the next recording would have gone into that gap, between a block and its
+ * own transcript. On screen that is a blank line. To `transcriptsWithMarks` it
+ * is the transcript now being preceded by the WRONG recording, which files every
+ * screenshot under the wrong meeting.
+ */
+export function recordingInsertAt(kinds: BlockKind[]): number {
+  const last = Math.max(kinds.lastIndexOf('recording'), kinds.lastIndexOf('transcript'))
+  if (last >= 0) {
+    return last + 1
+  }
+  const summary = kinds.indexOf('summary')
+  return summary >= 0 ? summary + 1 : 0
+}
+
+/**
+ * Which kind a top-level child is.
+ *
+ * `closest` is not enough and neither is a plain attribute check: a transcript
+ * read back from disk arrives wrapped in a paragraph, so the child that
+ * represents it is a `p` that CONTAINS the `details`. Asking about the subtree is
+ * what makes a reloaded note sort the same as a freshly recorded one.
+ */
+export function blockKind(child: {
+  dataset: DOMStringMap
+  querySelector: (selector: string) => unknown
+}): BlockKind {
+  for (const kind of ['summary', 'recording', 'transcript'] as const) {
+    if (kind in child.dataset || child.querySelector(`[data-${kind}]`) !== null) {
+      return kind
+    }
+  }
+  return 'other'
+}
+
+/**
+ * Put a recording's block where it belongs, and answer whether it landed last.
+ *
+ * The caller needs to know: an empty paragraph after the block is a place to
+ * type when there is nothing below it, and a blank line pushed into the middle of
+ * a note when there is.
+ */
+export function placeRecording(root: HTMLElement, block: HTMLElement): boolean {
+  // `children` is typed as plain `Element`, which has no `dataset`. Everything a
+  // note body holds is HTML - the sanitiser's allow-list is all HTML tags.
+  const children = Array.from(root.children) as HTMLElement[]
+  const before = children[recordingInsertAt(children.map((child) => blockKind(child)))] ?? null
+  root.insertBefore(block, before)
+  return before === null
+}
+
 /**
  * Write the label on the summary's flag-all control, and keep it honest.
  *
@@ -256,6 +337,32 @@ export function applySummaryBlocks(root: HTMLElement): void {
       parent.insertBefore(section.firstChild, section)
     }
     section.remove()
+  }
+
+  /*
+   * Give the control to summaries written before every summary got one.
+   *
+   * A meeting summary used to flag its own action points and had no control,
+   * because there was nothing left to flag. Now that nothing flags itself, those
+   * notes are the ones that most need it: their lines are all flagged, and the
+   * control is what offers to take the flags off. Their flags are left exactly as
+   * they are - promoting was the summary's mistake, and unflagging what somebody
+   * has since acted on would be this one.
+   *
+   * Placed after the last action line rather than at the end of the section, so
+   * it sits under the list it acts on and not below the signature.
+   */
+  for (const section of root.querySelectorAll<HTMLElement>('[data-summary]')) {
+    if (section.querySelector('[data-flag-all]') !== null) {
+      continue
+    }
+    const lines = section.querySelectorAll<HTMLElement>('p[data-action]')
+    if (lines.length === 0) {
+      continue
+    }
+    const control = document.createElement('p')
+    control.dataset.flagAll = '1'
+    lines[lines.length - 1].after(control)
   }
 
   for (const control of root.querySelectorAll<HTMLElement>('[data-flag-all]')) {
@@ -1144,11 +1251,20 @@ export function transcriptSpeakers(
 /**
  * A meeting's summary, as blocks the editor already understands.
  *
- * Action points come back as FLAGGED lines - `data-alert` with an id - which is
- * the same marker the alert gutter sets by hand. That is the whole reason this
- * feature is in Nib rather than in a transcription app: a promise made out loud
- * becomes a flagged line, the flagged line becomes an action point on the card,
- * and Tend reads it as a promise with a clock on it. Nothing is retyped.
+ * Action points are LISTED, never flagged. `data-action` marks them as the lines
+ * the summary wrote; `data-alert`, which is what makes a line an action point on
+ * the card and a promise with a clock on it in Tend, is put on by hand - one
+ * gutter click each, or the control below for all of them at once.
+ *
+ * The other way round was the original design and it was wrong in the direction
+ * that costs something. A meeting's summary flagged itself, on the reasoning that
+ * a promise made out loud and left in a summary nobody reopens is not a promise.
+ * What that actually produces is a list the model chose being promoted to a list
+ * you are answerable for, before you have read it. A note's summary was already
+ * exempt for a narrower version of the same reason - it turned "presented three
+ * arguments" into an open promise - and the narrow version was the whole rule.
+ * Deciding which lines are yours takes ten seconds and is not the summary's to
+ * make.
  *
  * An implied commitment is marked as such rather than silently promoted. "I can
  * take a look at that" is a promise in effect, and the person reading it back
@@ -1163,19 +1279,7 @@ export function summaryHtml(
     questions: string[]
     people: string[]
     lastTime?: string
-  },
-  newAlertId: () => string,
-  /*
-   * Whether these action points flag themselves.
-   *
-   * A meeting's do: you said out loud that you would do something, and a promise
-   * that only exists in a summary nobody reopens is not a promise. A note's do
-   * not. Summarising a story about a conversation in 2019 produced two flagged
-   * lines - "presented three arguments", "held the position" - which are the past
-   * tense, not a task, and they became open promises in Tend. Listing them is
-   * useful; committing you to them is not something the summary gets to decide.
-   */
-  kind: 'meeting' | 'note' = 'meeting'
+  }
 ): string {
   const escape = (text: string): string =>
     text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
@@ -1199,31 +1303,28 @@ export function summaryHtml(
   if (value.actions.length > 0) {
     parts.push('<h2>Åtgärdspunkter</h2>')
     for (const action of value.actions) {
-      const flagged = kind === 'meeting' ? ` data-alert="1" data-alert-id="${newAlertId()}"` : ''
       // `data-action` marks the line as one of these, whatever its flag state -
       // which is what lets the control below find exactly the lines it wrote,
       // rather than guessing from position under a heading.
       parts.push(
-        `<p data-action="1"${flagged}>${escape(action.text)}` +
+        `<p data-action="1">${escape(action.text)}` +
           (action.implied ? ' <em>(underförstått)</em>' : '') +
           '</p>'
       )
     }
-    if (kind === 'note') {
-      /*
-       * One click for all of them, where you are already reading them.
-       *
-       * A note's action points do not flag themselves - see DECISIONS - and
-       * promoting them one gutter click at a time is the right price for one and
-       * the wrong price for four. A modal after the summary was the alternative
-       * and would arrive before the summary had been read, showing the lines out
-       * of the context that decides whether they are promises at all.
-       *
-       * Its label is written by `applySummaryBlocks`, so it says the right thing
-       * after a reload too.
-       */
-      parts.push('<p data-flag-all="1"></p>')
-    }
+    /*
+     * One click for all of them, where you are already reading them.
+     *
+     * Nothing flags itself - see DECISIONS - and promoting them one gutter click
+     * at a time is the right price for one and the wrong price for four. A modal
+     * after the summary was the alternative and would arrive before the summary
+     * had been read, showing the lines out of the context that decides whether
+     * they are promises at all.
+     *
+     * Its label is written by `applySummaryBlocks`, so it says the right thing
+     * after a reload too.
+     */
+    parts.push('<p data-flag-all="1"></p>')
   }
 
   if (value.questions.length > 0) {

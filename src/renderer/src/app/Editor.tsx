@@ -46,6 +46,7 @@ import {
   imageWidth,
   newId,
   noteTrail,
+  placeRecording,
   relativeTime,
   sanitizeHtml,
   wordCount
@@ -799,10 +800,11 @@ export function Editor({
   /**
    * Put the finished recording into the note, as a block.
    *
-   * Built with DOM calls and placed at the END of the document rather than at the
-   * caret: a meeting was just recorded, so the caret is wherever you were typing
-   * during it, and dropping a block into the middle of the sentence you were
-   * writing is not what "stop" should mean.
+   * Built with DOM calls and placed by `placeRecording` rather than at the caret:
+   * a meeting was just recorded, so the caret is wherever you were typing during
+   * it, and dropping a block into the middle of the sentence you were writing is
+   * not what "stop" should mean. Where it goes instead - the top, under a summary,
+   * after any earlier recording - and why, is written there.
    */
   const insertRecordingBlock = useCallback(
     (path: string, seconds: number, language: Language) => {
@@ -815,12 +817,27 @@ export function Editor({
       block.dataset.seconds = String(seconds)
       block.dataset.language = language
       block.dataset.state = 'recorded'
-      const after = document.createElement('p')
-      after.appendChild(document.createElement('br'))
-      root.appendChild(block)
-      root.appendChild(after)
+      const last = placeRecording(root, block)
+      if (last) {
+        // Somewhere to type, but only when the block is the end of the note -
+        // otherwise this is a blank line shoved above whatever was already there.
+        const after = document.createElement('p')
+        after.appendChild(document.createElement('br'))
+        root.appendChild(after)
+      }
       applyRecordingBlocks(root)
       onBodyInput()
+      /*
+       * Scroll it into view, minimally.
+       *
+       * At the end of the note the block appeared next to where you had been
+       * typing, so stopping showed you the result. At the top it can be off
+       * screen, and the block is the only place the offers to transcribe or to
+       * cut live - a control that appears where you cannot see it is a control
+       * you do not know you have. `nearest` does nothing when it is already
+       * visible, so this does not yank the view around for its own sake.
+       */
+      block.scrollIntoView({ block: 'nearest' })
 
       /*
        * Ask the file whether the call ended before the recording did.
@@ -1290,9 +1307,7 @@ export function Editor({
       const holder = document.createElement('div')
       holder.innerHTML = summaryHtml(
         { model: result.model ?? model, costUsd: result.costUsd ?? null },
-        result.value,
-        () => newId('alert'),
-        source === 'transcripts' ? 'meeting' : 'note'
+        result.value
       )
       const section = document.createElement('div')
       section.dataset.summary = '1'
