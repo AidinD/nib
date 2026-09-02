@@ -1829,3 +1829,82 @@ export function forgetStaleTranscribing(root: HTMLElement, running: Set<string>)
   }
   return changed
 }
+
+/*
+ * ---------- a summary that outlives the note being open ----------
+ *
+ * The same bug as the transcription one and a worse version of it, reported the
+ * same day: a summary started on one note was pasted into whichever note was open
+ * when it came back. Not lost - PASTED, at the top of somebody else's meeting,
+ * and saved there.
+ *
+ * Why worse. `transcribeBlock` held a CHILD of the body, which a note switch
+ * detaches, and writing to a parentless node is a no-op - so the result vanished
+ * quietly. `summarise` held the body ITSELF, and the editor reuses that one
+ * element for every note. So the reference stayed perfectly valid and started
+ * pointing at a different meeting. A dropped result is a wasted call; this
+ * writes one conversation's account of itself into another's.
+ *
+ * It was sitting in plain sight while the transcription fix was written. The
+ * lesson is not "check the other one too" - it is that `bodyRef.current` captured
+ * before an await is never the note you meant, and the only durable way to say
+ * which note you meant is its id.
+ */
+
+/**
+ * Put a summary at the top of a note, filling in its own questions on the way.
+ *
+ * Shared by the open-note path and the on-disk one, so a note that was not on
+ * screen ends up with exactly the shape it would have had. The answers are filled
+ * FIRST because the provenance line reports how many landed.
+ *
+ * Returns how many of the note's own questions were answered.
+ */
+export function insertSummary(
+  root: HTMLElement,
+  provenance: { model: string; costUsd: number | null },
+  value: {
+    summary: string
+    decisions: string[]
+    actions: { text: string; implied: boolean }[]
+    questions: string[]
+    people: string[]
+    lastTime?: string
+    answers?: { id: string; answer: string }[]
+  }
+): number {
+  const filled = fillAnswers(root, value.answers ?? [])
+
+  const holder = document.createElement('div')
+  holder.innerHTML = summaryHtml({ ...provenance, filled }, value)
+  const section = document.createElement('div')
+  section.dataset.summary = '1'
+  while (holder.firstChild !== null) {
+    section.appendChild(holder.firstChild)
+  }
+  root.insertBefore(section, root.firstChild)
+
+  normaliseBlocks(root)
+  applySummaryBlocks(root)
+  return filled
+}
+
+/**
+ * Write a finished summary into a note's stored HTML.
+ *
+ * For the note that is NOT on screen, which is the case that used to put one
+ * meeting's summary on top of another's. Done in the renderer because it is the
+ * side with a DOM: `insertSummary` runs against a detached copy of the stored
+ * body, so nothing about the result depends on which note the editor happens to
+ * be showing.
+ */
+export function withSummary(
+  html: string,
+  provenance: { model: string; costUsd: number | null },
+  value: Parameters<typeof insertSummary>[2]
+): { html: string; filled: number } {
+  const root = document.createElement('div')
+  root.innerHTML = sanitizeHtml(html)
+  const filled = insertSummary(root, provenance, value)
+  return { html: sanitizeHtml(root.innerHTML), filled }
+}

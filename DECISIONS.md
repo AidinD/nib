@@ -3,6 +3,57 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-02 - A summary goes to the note that asked for it
+
+**Decided.** `summarise` carries the note's id, not a reference to the editor's
+body. When the answer arrives and that note is no longer on screen, the note is
+patched on disk instead.
+
+**What happened.** A summary was started on one 1-1, the author changed card to
+read another while it worked, and the first note's summary was pasted at the top
+of the second one - and saved there. Reported an hour after the transcription fix
+for the same underlying mistake shipped.
+
+**Why this one is worse than the transcription version.** `transcribeBlock` held a
+CHILD of the body. A note switch detaches it, and `after()` on a parentless node
+is a no-op, so the result vanished quietly: a wasted call and nothing else.
+`summarise` held the body ITSELF - and the editor reuses that one contenteditable
+for every note. So the reference stayed perfectly valid and simply started
+pointing at a different meeting. `root.insertBefore(section, root.firstChild)`
+then did exactly what it was told, to the wrong note, and `onBodyInput()` saved
+it. One conversation's account of itself written into another's, which is the
+worst thing this app can do.
+
+Both halves of a summary leak, not just the block: `fillAnswers` also ran against
+whatever body was there, so a 1-1 note's answers could land under another 1-1's
+identical template questions. In the real incident they did not, because the
+summary that leaked came from a note with no prompts - luck, not design.
+
+**The lesson, which is not "check the other one too".** It was sitting in plain
+sight while the transcription fix was written, in a function that had already
+been read that session. The durable rule is that `bodyRef.current` captured
+before an await never means "this note" afterwards - the element outlives every
+note in it - and the only thing that still means this note is its id. The test is
+`loadedId.current === noteId`, never `root !== null`, which is always true and was
+the old guard.
+
+**Shared insertion, so both paths agree.** `insertSummary` runs against a root -
+the live body, or a detached copy of the stored HTML - and does the whole job:
+fill the answers first (the provenance line reports how many), build the block,
+put it at the top, normalise. Two copies of that is how an off-screen note would
+quietly start getting a different shape from an open one.
+
+**In the renderer, not the main process.** It is the side with a DOM. The main
+process would have to do the same placement by string surgery, on HTML the
+renderer owns.
+
+**Verified with a real call.** Two seeded notes carrying the same template
+prompts, so a leak had two ways to show. Summary started on A, switched to B
+while it was in flight - confirmed still running after the switch - and it landed
+in A only: one summary, about A's conversation, three of its own questions
+answered. B got no summary, no filled answers, and still held only its own words.
+Back on A the summary sits at the top with its provenance line.
+
 ## 2026-09-02 - A transcription survives you changing note
 
 **Decided.** A running transcription is no longer tied to the element that

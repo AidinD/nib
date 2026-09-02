@@ -26,9 +26,9 @@ import {
   transcriptLineAt,
   transcriptSpeakers,
   transcriptsWithMarks,
-  summaryHtml,
+  insertSummary,
+  withSummary,
   notePrompts,
-  fillAnswers,
   placeTranscript,
   withTranscript,
   forgetStaleTranscribing,
@@ -1409,6 +1409,19 @@ export function Editor({
       return
     }
 
+    /*
+     * Which note asked for this, captured before anything is awaited.
+     *
+     * `root` is not that answer and this is where the worst bug of the day came
+     * from: the editor reuses ONE contenteditable for every note, so a reference
+     * to it taken now stays valid and quietly starts pointing at whichever note
+     * is open when the model replies - minutes later. A summary of one 1-1 was
+     * pasted at the top of another's, and saved there.
+     *
+     * The id is the only thing that still means this note afterwards.
+     */
+    const noteId = note.id
+
     setSummarising(true)
     try {
       /*
@@ -1470,40 +1483,56 @@ export function Editor({
         return
       }
 
-      /*
-       * The note's own questions first, so the summary can say how many it
-       * answered.
-       *
-       * Order is safe either way - `fillAnswers` ignores anything inside a
-       * summary block - but doing it first is what lets the provenance line carry
-       * the count. That line is the only place the note admits the model wrote
-       * somewhere other than the top, and a filled-in answer six headings down is
-       * exactly the thing you want told rather than discovered.
-       */
-      const filled = fillAnswers(root, result.value.answers ?? [])
+      const provenance = { model: result.model ?? model, costUsd: result.costUsd ?? null }
 
-      const holder = document.createElement('div')
-      holder.innerHTML = summaryHtml(
-        { model: result.model ?? model, costUsd: result.costUsd ?? null, filled },
-        result.value
-      )
-      const section = document.createElement('div')
-      section.dataset.summary = '1'
-      while (holder.firstChild !== null) {
-        section.appendChild(holder.firstChild)
+      /*
+       * Whether the note that asked for this is still the one on screen.
+       *
+       * Not `root !== null`, which was the old test and is always true - the body
+       * element outlives every note in it. `loadedId` is what the body is
+       * actually holding, so comparing it with the id captured before the call is
+       * the only question worth asking.
+       */
+      const live = bodyRef.current
+      if (live !== null && loadedId.current === noteId) {
+        insertSummary(live, provenance, result.value)
+        setSummaryError(null)
+        onBodyInput()
+        return
       }
-      root.insertBefore(section, root.firstChild)
-      normaliseBlocks(root)
-      applySummaryBlocks(root)
+
+      /*
+       * You changed note while it was thinking, so the note is patched on disk.
+       *
+       * This is the whole point of the fix and not a rare case: a summary takes
+       * long enough that reading another note meanwhile is the obvious thing to
+       * do - and it is what the report was. Read immediately before writing, and
+       * the index updated too, since `note:write` only writes the file and the
+       * card would otherwise show no sign that a summary had arrived.
+       */
+      const doc = await window.nib.readNote(noteId)
+      if (doc === null) {
+        return
+      }
+      const patched = withSummary(doc.html, provenance, result.value)
+      const edited = await window.nib.writeNote({ ...doc, html: patched.html })
+      onSaved(noteId, {
+        title: doc.title,
+        preview: buildPreview(patched.html),
+        edited,
+        hasImage: bodyHasImage(patched.html),
+        hasDrawing: bodyHasDrawing(patched.html),
+        alerts: extractAlerts(patched.html),
+        links: extractLinks(patched.html)
+      })
       setSummaryError(null)
-      onBodyInput()
     } catch (error) {
       setSummaryError(error instanceof Error ? error.message : String(error))
     } finally {
       setSummarising(false)
     }
     },
-    [index, note, onBodyInput, summarising]
+    [index, note, onBodyInput, onSaved, summarising]
   )
 
   /**

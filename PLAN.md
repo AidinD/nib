@@ -241,6 +241,23 @@ Every requirement on the original list is now built. What is left is smaller:
    Still open: nothing cancels a transcription. That is deliberate for now - the
    work is minutes of GPU time and the reason to start it is to walk away - but a
    cancel button is probably worth having.
+
+   **And the same mistake in the summary, found an hour later and worse.** A
+   summary started on one 1-1 was pasted at the TOP of another note, because
+   `summarise` held the body element itself rather than a child of it - and the
+   editor reuses one contenteditable for every note, so the reference stayed valid
+   and started pointing at a different meeting. The transcription version lost a
+   result quietly; this one wrote one conversation's account of itself into
+   another's and saved it. `fillAnswers` leaks the same way, so a note's answers
+   could land under another note's identical template questions.
+
+   Fixed the same way, by id rather than by element, with the note patched on disk
+   when it is not the one on screen. The rule worth carrying: `bodyRef.current`
+   captured before an await never means "this note" afterwards, and the test is
+   `loadedId.current === noteId` - not `root !== null`, which is always true.
+
+   Two notes needed repairing by hand afterwards. Worth remembering that a bug
+   which writes into the wrong note costs more than the fix does.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
