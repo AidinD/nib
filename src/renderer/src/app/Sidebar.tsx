@@ -106,6 +106,23 @@ export function Sidebar({
             onClick={() => onSelect({ kind: 'alerts' })}
           />
         )}
+        {/*
+          The other half of the flags, and the reason this row exists at all.
+
+          Commitments and things to get better at were one list, so the count
+          said nine when three were owed - and a principle being practised looked
+          permanently overdue. Same appear-only-when-it-means-something rule as
+          the rows around it.
+        */}
+        {counts.practice > 0 && (
+          <SmartRow
+            label="Practising"
+            count={counts.practice}
+            marker="practice"
+            active={selection.kind === 'practice'}
+            onClick={() => onSelect({ kind: 'practice' })}
+          />
+        )}
         {/* Same rule: the archive is a place you go looking for something, so
             the row appears once there is something in it and stays out of the
             way otherwise. */}
@@ -212,14 +229,14 @@ function SmartRow({
   label: string
   count: number
   active: boolean
-  marker?: 'plain' | 'sticky' | 'alert' | 'archive'
+  marker?: 'plain' | 'sticky' | 'alert' | 'practice' | 'archive'
   onClick: () => void
 }): React.JSX.Element {
   return (
     <button type="button" className={`row smart-row${active ? ' is-active' : ''}`} onClick={onClick}>
       {/* The markers are what tell the smart rows apart at a glance: a dot for
           the plain ones, a rounded amber square for sticky, an orange ring for
-          the action points. */}
+          the action points and a violet one for what is being practised. */}
       <span className={marker === 'plain' ? 'marker' : `marker marker-${marker}`} />
       <span className="row-label">{label}</span>
       <span className="row-count">{count}</span>

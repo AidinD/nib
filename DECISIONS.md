@@ -3,6 +3,64 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-02 - Two rows: what you owe, and what you are practising
+
+**Decided.** The flags split into two sidebar rows - "Needs you" and
+"Practising" - and which one a note's flags land in is decided by whether the
+note carries the Principle tag.
+
+**What was wrong with one row.** A commitment is finished by doing it. Something
+you are working on is not finished at all: "listen longer than it is
+comfortable" has no done state. One list holding both made the count
+meaningless - it said nine when three were owed - and made every principle look
+permanently overdue. The strip under the header had the same problem in a worse
+place, because a line that is always in it is a line you learn not to read.
+
+**The tag rather than the flag.** Put as a question, and this was the answer. It
+costs the case where one note holds both kinds - a 1-1 summary can carry "send
+the underlying material", which is owed, and "listen longer", which is
+practised, and splitting by the note's tag cannot tell them apart. A mixed note
+lands wholly on one side. What it buys is a rule with nothing to learn, no
+second gesture in a gutter where a stray click has already caused trouble once
+today, and agreement with how Tend already separates the same two ideas -
+`openActionPoints(notes, principleTagId)` was doing this before Nib was.
+
+The cost is pinned in a test rather than left as a surprise, so nobody later
+reads it as a bug.
+
+**One branch, not two.** The two lists are the same predicate and the same sort,
+differing only in which side of the tag they want. Written as two branches they
+would drift.
+
+**Named for what it is.** "Needs you" is a demand and gets answered; "Practising"
+is a habit in progress and does not. A row called "To do" beside it would have
+made them the same thing again.
+
+**Violet, and on the note rather than the list.** The marker keeps the same ring
+shape - both are flags put there by hand, and a different shape would say they
+were unrelated - in violet rather than a paler orange, because a near-orange
+reads as a weaker version of the same thing. A practice note's flags, its bullet
+markers and its count badge are violet in every list, not only inside the
+Practising one: they ARE practice flags everywhere, not orange ones seen through
+a filter. The first cut coloured only the sidebar marker and the violet row was
+full of orange flags, which read as "the same alerts, filtered" - found by
+looking at it rather than by reasoning about it.
+
+The done state stays green on both. That is whether a thing is finished, not
+which kind of thing it is.
+
+**Not done here, and it is the half that matters most.** Tend turns every Nib
+flag into a promise with a clock: `nib:<note>:<alert>`, with no tag guard. So a
+principle flagged for practice still arrives there as something owed, whatever
+Nib's sidebar now says. That is a change in Tend, in another repo, and it is
+recorded here because the split is only cosmetic until it happens.
+
+**Verified in the running app.** A 1-1 with two things owed, a principle with two
+to work on, and a note with neither: two rows with the right counts and
+different marker colours, each row showing only its own note, and the strip
+listing what is owed and nothing else. Eleven unit tests over the counts, the
+lists, the naming and the accepted cost.
+
 ## 2026-09-02 - A summary goes to the note that asked for it
 
 **Decided.** `summarise` carries the note's id, not a reference to the editor's

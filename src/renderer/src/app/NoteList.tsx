@@ -5,7 +5,13 @@ import { CardMenu } from './CardMenu'
 import { TagPicker } from './TagPicker'
 import { dateStamp, noteReference, noteTrail, relativeTime, sameDay } from '../lib/notes'
 import type { Selection } from '../lib/selection'
-import { selectionColor, selectionShowsCrumb, selectionTarget, selectionTitle } from '../lib/selection'
+import {
+  isPractice,
+  selectionColor,
+  selectionShowsCrumb,
+  selectionTarget,
+  selectionTitle
+} from '../lib/selection'
 import type { DropSlot } from '../lib/dnd'
 import { DRAG_MIME, draggedItem, endDrag, readDrop, slotEquals, slotFor, startDrag } from '../lib/dnd'
 
@@ -338,7 +344,9 @@ export function NoteList({
             <article
               className={`card${note.id === activeNoteId ? ' is-active' : ''}${
                 note.flag === '' ? '' : ` is-${note.flag}`
-              }${note.kind === 'story' ? ' is-story' : ''}`}
+              }${note.kind === 'story' ? ' is-story' : ''}${
+                isPractice(note) ? ' is-practice' : ''
+              }`}
               draggable
               onClick={() => onOpen(note.id)}
               onContextMenu={(event) => {
@@ -480,7 +488,8 @@ export function NoteList({
 
               {/* In the review view a card shows its action points rather than
                 its opening lines: that is what you came to the list for. */}
-              {selection.kind === 'alerts' && note.alerts.length > 0 ? (
+              {(selection.kind === 'alerts' || selection.kind === 'practice') &&
+              note.alerts.length > 0 ? (
                 <ul className="card-alerts">
                   {note.alerts.map((alert) => (
                     <li key={alert.id} className={alert.done ? 'is-done' : ''}>

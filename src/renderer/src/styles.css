@@ -1303,6 +1303,19 @@ body.is-sticky-window {
   border: 2px solid var(--alert);
 }
 
+/*
+ * What is being practised: the same ring, a different colour.
+ *
+ * The same shape on purpose - both rows are flags you put there by hand, and
+ * making one a square would say they were unrelated. Violet rather than a paler
+ * orange, because a near-orange reads as a weaker version of the same thing and
+ * a principle you are working on is not a weaker commitment.
+ */
+.marker-practice {
+  background: transparent;
+  border: 2px solid var(--violet);
+}
+
 /* The strip sits between the header and the panes, and only exists when there
    is something in it. */
 .alert-strip {
@@ -2005,6 +2018,26 @@ body.is-sticky-window {
   opacity: 1;
 }
 
+/*
+ * A practice note's flags are violet wherever they are shown.
+ *
+ * Keyed on the note rather than on which list is open, which is the honest
+ * version: these ARE practice flags in every list, not orange ones being viewed
+ * through a filter. The first cut coloured only the sidebar marker, and a violet
+ * row full of orange flags read as "the same alerts, filtered" - measured by
+ * looking at it.
+ *
+ * The done state stays green in both. That is not the kind of flag it is, it is
+ * whether it is finished, and those are different questions.
+ */
+.card.is-practice .alert-flag:not(.is-done) {
+  color: var(--violet);
+}
+
+.card.is-practice .card-alerts li::marker {
+  color: var(--violet);
+}
+
 .card-alerts li.is-done span {
   color: var(--text-dim);
 }
@@ -2408,6 +2441,13 @@ body.is-sticky-window {
   font-size: 10px;
   line-height: 16px;
   white-space: nowrap;
+}
+
+/* The count follows the flags it counts. Left orange it was the last thing on a
+   practice card still claiming to be something owed. */
+.card.is-practice .card-points {
+  background: color-mix(in srgb, var(--violet) 18%, transparent);
+  color: var(--violet);
 }
 
 /* ---------- backlinks ---------- */

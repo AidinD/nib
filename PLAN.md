@@ -31,13 +31,25 @@ From the author's own list, with where each one stands.
 | Sub-categories, e.g. `Manager meeting > February > note` | Done |
 | Sticky notes | Done - a window per pinned note |
 | Canvas drawing with a pressure-sensitive stylus (stretch goal) | Done - drawn, stored and shown; not yet tried with a real stylus |
-| **Alerts** - mark a note as an action point and see them in one "needs you" view | Done - block-level flags, a strip and a review row |
+| **Alerts** - mark a note as an action point and see them in one "needs you" view | Done - block-level flags, a strip and two review rows |
 
 Alerts arrived in the Jot task list after the design spec was written, so the spec
 does not cover them; the design is recorded in DECISIONS instead. A flag sits on a
 block inside a note, a note counts as flagged when it holds one, and the flags
 show up in two places: an ambient strip under the header and a "Needs you" row in
 the sidebar for working through them.
+
+**Since 2026-09-02 there are two rows rather than one.** A commitment is finished
+by doing it; something you are practising is never finished, so one list of both
+made the count meaningless and every principle look overdue. A note tagged
+Principle sends its flags to "Practising" instead, in violet - the tag rather
+than a per-flag kind, which is cheap and matches how Tend already splits the two,
+at the cost of a note that holds both kinds landing wholly on one side.
+
+Still owed on that: **Tend turns every Nib flag into a promise with a clock**
+(`nib:<note>:<alert>`, no tag guard), so a principle flagged for practice still
+arrives there as something owed. Until that changes in Tend, the split is only
+cosmetic.
 
 ## Built so far
 
@@ -238,9 +250,10 @@ Every requirement on the original list is now built. What is left is smaller:
    deliberate double click, and the transcript landing in the note that was not
    open. See DECISIONS.
 
-   Still open: nothing cancels a transcription. That is deliberate for now - the
-   work is minutes of GPU time and the reason to start it is to walk away - but a
-   cancel button is probably worth having.
+   Nothing cancels a transcription, and that is settled rather than open: the
+   author considered a cancel button and decided against it on 2026-09-02. The
+   work is minutes of GPU time and the reason to start it is to walk away, so
+   landing it in the right place was the whole requirement.
 
    **And the same mistake in the summary, found an hour later and worse.** A
    summary started on one 1-1 was pasted at the TOP of another note, because

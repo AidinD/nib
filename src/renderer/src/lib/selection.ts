@@ -6,6 +6,15 @@ export type Selection =
   | { kind: 'recent' }
   | { kind: 'sticky' }
   | { kind: 'alerts' }
+  /**
+   * The other kind of flag: something to get better at, not something owed.
+   *
+   * Split out because one list of both is a list you cannot act on. "Send the
+   * underlying material" is finished by sending it; "listen longer than it is
+   * comfortable" is never finished, and a row that mixes them makes the second
+   * kind look permanently overdue.
+   */
+  | { kind: 'practice' }
   | { kind: 'archive' }
   | { kind: 'category'; categoryId: string }
   | { kind: 'sub'; categoryId: string; subId: string }
@@ -111,13 +120,24 @@ export function selectedNotes(
      * the count are what they leave.
      */
     case 'alerts':
+    case 'practice': {
+      /*
+       * The same list twice, cut by which kind of flag the note carries.
+       *
+       * One predicate and one sort, because they are the same view of the same
+       * thing - what differs is only whether these are things owed or things
+       * being worked on, and writing them as two branches is how the two would
+       * drift apart.
+       */
+      const wanted = selection.kind === 'practice'
       notes = pool()
-        .filter((note) => note.flag !== '' || note.alerts.length > 0)
+        .filter((note) => (note.flag !== '' || note.alerts.length > 0) && isPractice(note) === wanted)
         .sort((a, b) => {
           const open = Number(isOutstanding(b)) - Number(isOutstanding(a))
           return open !== 0 ? open : b.edited - a.edited
         })
       break
+    }
     /*
      * The one list that shows archived notes, and shows nothing else.
      *
@@ -176,6 +196,22 @@ export function archivedHits(
 }
 
 /** Does this note still need you, as opposed to carrying only dealt-with flags? */
+/**
+ * The tag that decides which of the two lists a note's flags belong in.
+ *
+ * The note's tag rather than the flag's own kind, which was the choice made when
+ * it was put as a question. It costs the case where one note holds both - a 1-1
+ * where "send the underlying material" and "listen longer" sit under the same
+ * summary - and it buys a rule with nothing to learn and no second gesture,
+ * matching how Tend already splits the same two ideas.
+ */
+export const PRACTICE_TAG = 'tag-principle'
+
+/** Whether a note's flags are things to practise rather than things owed. */
+export function isPractice(note: Pick<NoteMeta, 'tags'>): boolean {
+  return (note.tags ?? []).includes(PRACTICE_TAG)
+}
+
 export function isOutstanding(note: NoteMeta): boolean {
   return note.flag === 'open' || note.alerts.some((alert) => !alert.done)
 }
@@ -202,6 +238,15 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
       return 'Sticky notes'
     case 'alerts':
       return 'Needs you'
+    /*
+     * Named for what it is rather than for what to do about it.
+     *
+     * "Needs you" is a demand and gets answered; this is a habit in progress and
+     * does not. A row called "To do" beside it would have made them the same
+     * thing again, which is the whole problem being fixed.
+     */
+    case 'practice':
+      return 'Practising'
     case 'archive':
       return 'Archive'
     case 'tag':
@@ -225,7 +270,15 @@ export function selectionColor(index: NibIndex, selection: Selection): string {
   if (selection.kind === 'sticky') {
     return '#ffb054'
   }
-  return selection.kind === 'alerts' ? '#ff8c42' : '#9a9da3'
+  if (selection.kind === 'alerts') {
+    return '#ff8c42'
+  }
+  // Violet rather than a paler orange: near-orange would read as a weaker
+  // version of the same thing, and it is a different thing.
+  if (selection.kind === 'practice') {
+    return '#b98cff'
+  }
+  return '#9a9da3'
 }
 
 /** Where a new note goes for the current selection, or null when it has no home. */
@@ -241,10 +294,26 @@ export function selectionTarget(
   return null
 }
 
+/** Open flags across a set of notes, plus the notes that are themselves one. */
+function outstanding(notes: NoteMeta[]): number {
+  return notes.reduce(
+    (total, note) =>
+      total + note.alerts.filter((alert) => !alert.done).length + (note.flag === 'open' ? 1 : 0),
+    0
+  )
+}
+
 export function smartCounts(
   index: NibIndex,
   filter: ScopeFilter
-): { all: number; recent: number; sticky: number; alerts: number; archived: number } {
+): {
+  all: number
+  recent: number
+  sticky: number
+  alerts: number
+  practice: number
+  archived: number
+} {
   const notes = allNotes(index, filter)
   return {
     all: notes.length,
@@ -254,13 +323,12 @@ export function smartCounts(
     // Counted in action points, not in notes: the row answers "how many things
     // need me", and one note can hold several - plus the notes that are
     // themselves the action point.
-    alerts: notes.reduce(
-      (total, note) =>
-        total +
-        note.alerts.filter((alert) => !alert.done).length +
-        (note.flag === 'open' ? 1 : 0),
-      0
-    )
+    //
+    // Practice notes are counted separately and NOT here. A count that included
+    // them is the thing that made the number meaningless: it said nine when
+    // three were owed.
+    alerts: outstanding(notes.filter((note) => !isPractice(note))),
+    practice: outstanding(notes.filter(isPractice))
   }
 }
 
@@ -273,9 +341,17 @@ export interface AlertEntry {
   alert: AlertMeta | null
 }
 
-/** Everything outstanding, newest note first - what the strip shows. */
+/**
+ * Everything outstanding, newest note first - what the strip shows.
+ *
+ * Things to practise are left out. The strip is the ambient "you owe these"
+ * line under the header, and a principle you are working on is not owed to
+ * anybody - it would sit there permanently, which is how you learn to stop
+ * reading the strip.
+ */
 export function allAlerts(index: NibIndex, filter: ScopeFilter): AlertEntry[] {
   return allNotes(index, filter)
+    .filter((note) => !isPractice(note))
     .slice()
     .sort((a, b) => b.edited - a.edited)
     .flatMap((note) => [
