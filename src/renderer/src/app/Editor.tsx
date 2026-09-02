@@ -29,6 +29,9 @@ import {
   summaryHtml,
   notePrompts,
   fillAnswers,
+  placeTranscript,
+  withTranscript,
+  forgetStaleTranscribing,
   ownNotes,
   htmlToText,
   applyImageWidths,
@@ -208,6 +211,17 @@ export function Editor({
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
   const loadedId = useRef<string | null>(null)
+  /*
+   * The audio paths going through whisper right now.
+   *
+   * A ref rather than state: nothing renders from it, and it has to be readable
+   * by a callback that started minutes ago. It does two jobs. It refuses a second
+   * run on the same file - which is what actually broke a day of 1-1s, because
+   * two whispers holding a 1.08 GB model each on an 8 GB card starve the third
+   * into `CUDA error: out of memory` - and it tells the load-time cleanup which
+   * `working` blocks are telling the truth.
+   */
+  const transcribing = useRef<Set<string>>(new Set())
   // The `edited` stamp of what is currently in the body. Anything newer on disk
   // came from somewhere else - this note's sticky window, or another machine.
   const loadedEdited = useRef(0)
@@ -289,6 +303,16 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      // Before applyRecordingBlocks, which writes the label FROM the state:
+      // corrected after it, the state was right and the block still said
+      // "transcribing…" - measured, on the first run of this test.
+      //
+      // `working` is a fact about this second, not about the note. It reaches
+      // disk anyway, because setting it mutates the body and the next save
+      // takes it, and left there it is permanent: the transcribe click refuses
+      // a block already marked working. The live set spares a block whose audio
+      // really is going through whisper right now.
+      forgetStaleTranscribing(bodyRef.current, transcribing.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
       applyTimeMarks(bodyRef.current)
@@ -358,6 +382,16 @@ export function Editor({
       bodyRef.current.innerHTML = html
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
+      // Before applyRecordingBlocks, which writes the label FROM the state:
+      // corrected after it, the state was right and the block still said
+      // "transcribing…" - measured, on the first run of this test.
+      //
+      // `working` is a fact about this second, not about the note. It reaches
+      // disk anyway, because setting it mutates the body and the next save
+      // takes it, and left there it is permanent: the transcribe click refuses
+      // a block already marked working. The live set spares a block whose audio
+      // really is going through whisper right now.
+      forgetStaleTranscribing(bodyRef.current, transcribing.current)
       applyRecordingBlocks(bodyRef.current)
       applyTranscriptBlocks(bodyRef.current)
       applyTimeMarks(bodyRef.current)
@@ -1000,6 +1034,26 @@ export function Editor({
       if (root === null || path === undefined || block.dataset.state === 'working') {
         return
       }
+      /*
+       * One whisper per file, and this is the guard that holds.
+       *
+       * `data-state` cannot do it: it lives on a block that a note switch throws
+       * away, so coming back to a note reloaded from disk offers the transcribe
+       * click again and a second process starts on audio already being read. Two
+       * of those and the third attempt dies of GPU memory. This ref outlives the
+       * element, which is the whole point.
+       */
+      if (transcribing.current.has(path)) {
+        return
+      }
+      /*
+       * Which note this belongs to, captured now.
+       *
+       * The words arrive minutes later, and by then the open note may be another
+       * one entirely. Everything after the await is decided against this id
+       * rather than against whatever is on screen.
+       */
+      const noteId = loadedId.current
       const language = block.dataset.language === 'en' ? 'en' : 'sv'
       const seconds = Number(block.dataset.seconds ?? 0)
 
@@ -1010,10 +1064,30 @@ export function Editor({
         return
       }
 
+      transcribing.current.add(path)
       block.dataset.state = 'working'
       applyRecordingBlocks(root)
+      /*
+       * Progress is written to whichever block is on screen for this audio, not
+       * to the one captured above.
+       *
+       * The captured element is detached by a note switch, so the percentages
+       * were going to a node with no parent - which is why switching away and
+       * back showed a block that had apparently done nothing for ten minutes.
+       * Looked up per tick because the element is replaced on every reload.
+       */
       const stopListening = window.nib.onTranscribeProgress((fraction) => {
-        block.textContent = `Recording · transcribing… ${Math.round(fraction * 100)}%`
+        const live = bodyRef.current
+        if (live === null || loadedId.current !== noteId) {
+          return
+        }
+        const showing = Array.from(live.querySelectorAll<HTMLElement>('[data-recording]')).find(
+          (candidate) => candidate.dataset.recording === path
+        )
+        if (showing !== undefined) {
+          showing.dataset.state = 'working'
+          showing.textContent = `Recording · transcribing… ${Math.round(fraction * 100)}%`
+        }
       })
 
       try {
@@ -1027,40 +1101,76 @@ export function Editor({
           speakerNames()
         )
         const transcript = holder.firstElementChild
-        if (transcript !== null) {
-          /*
-           * A second run replaces this block's transcript rather than stacking a
-           * new one under it.
-           *
-           * Found in document order rather than by walking siblings, which is what
-           * the first version did and what the test caught: a transcript comes back
-           * from disk wrapped in a paragraph, so the block's next sibling is a `p`
-           * and not the `details` inside it. Stopping at the next recording is what
-           * keeps a second meeting's transcript out of it.
-           */
-          const inOrder = Array.from(
-            root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
-          )
-          const following = inOrder[inOrder.indexOf(block) + 1]
-          const previous =
-            following !== undefined && following.hasAttribute('data-transcript')
-              ? following
-              : null
-          if (previous !== null) {
-            // The paragraph it was wrapped in is left behind empty otherwise, and
-            // an empty paragraph is a blank line in the note.
-            const holder = previous.parentElement
-            previous.remove()
-            if (holder !== null && holder !== root && holder.childNodes.length === 0) {
-              holder.remove()
-            }
-          }
-          block.after(transcript)
+        if (transcript === null) {
+          return
         }
-        block.dataset.state = 'transcribed'
-        applyRecordingBlocks(root)
-        applyTranscriptBlocks(root)
-        onBodyInput()
+
+        /*
+         * Where the words go now that minutes have passed.
+         *
+         * The block captured at the start is not the answer: switching notes
+         * replaces the body's contents, so it may be a parentless node by now and
+         * `after()` on one of those is a no-op that reports nothing. So the block
+         * is looked up again, and the note it belongs to decides which of two
+         * paths runs.
+         */
+        const live = bodyRef.current
+        const onScreen =
+          live === null || loadedId.current !== noteId
+            ? undefined
+            : Array.from(live.querySelectorAll<HTMLElement>('[data-recording]')).find(
+                (candidate) => candidate.dataset.recording === path
+              )
+
+        if (live !== null && onScreen !== undefined) {
+          placeTranscript(live, onScreen, transcript)
+          onScreen.dataset.state = 'transcribed'
+          applyRecordingBlocks(live)
+          applyTranscriptBlocks(live)
+          onBodyInput()
+          return
+        }
+
+        /*
+         * The note is not on screen, so it is patched on disk instead.
+         *
+         * This is the case that used to lose a whole transcription in silence,
+         * and it is not an edge: a 35-minute meeting takes minutes to transcribe
+         * and the reason to start it is so you can get on with the next note.
+         * Read immediately before writing rather than from anything cached, so a
+         * sticky window editing the same note is the one that loses a race here -
+         * and it loses a paragraph, not a meeting.
+         */
+        if (noteId === null) {
+          return
+        }
+        const doc = await window.nib.readNote(noteId)
+        if (doc === null) {
+          return
+        }
+        const patched = withTranscript(doc.html, path, holder.innerHTML)
+        if (patched === null) {
+          // The recording block is gone - deleted while whisper was running.
+          // Nowhere to put the words, and inventing somewhere is worse.
+          return
+        }
+        const edited = await window.nib.writeNote({ ...doc, html: patched.html })
+        /*
+         * And the card, which the index owns.
+         *
+         * `note:write` only writes the note file. Without this the list keeps
+         * yesterday's preview and edit time for a note that just gained nine
+         * thousand words, and nothing says the transcription ever finished.
+         */
+        onSaved(noteId, {
+          title: doc.title,
+          preview: buildPreview(patched.html),
+          edited,
+          hasImage: bodyHasImage(patched.html),
+          hasDrawing: bodyHasDrawing(patched.html),
+          alerts: extractAlerts(patched.html),
+          links: extractLinks(patched.html)
+        })
 
         /*
          * The audio stays on disk.
@@ -1075,18 +1185,46 @@ export function Editor({
       } catch (error) {
         stopListening()
         const why = error instanceof Error ? error.message : String(error)
+
+        /*
+         * The failure has to be shown on the block that is on screen, for the
+         * same reason the transcript does. Written on the captured element it
+         * went nowhere, and a run that failed after a note switch looked like a
+         * run still going - which is how somebody clicks transcribe again and
+         * starts the pile-up that caused the failure in the first place.
+         *
+         * When the note is elsewhere the failure is dropped rather than written
+         * to disk. `working` was never saved, so the block is already back to
+         * offering the click; saving `failed` into a note nobody is looking at
+         * would replace that offer with a stale complaint.
+         */
+        const live = bodyRef.current
+        const onScreen =
+          live === null || loadedId.current !== noteId
+            ? undefined
+            : Array.from(live.querySelectorAll<HTMLElement>('[data-recording]')).find(
+                (candidate) => candidate.dataset.recording === path
+              )
+        if (live === null || onScreen === undefined) {
+          return
+        }
+
         // A missing file is not a failure to retry - the audio is not coming
         // back, and a block that keeps saying "click to transcribe" is a lie.
         if (why.includes('the audio file is gone')) {
-          block.dataset.state = 'lost'
-          applyRecordingBlocks(root)
+          onScreen.dataset.state = 'lost'
+          applyRecordingBlocks(live)
           return
         }
-        block.dataset.state = 'failed'
-        block.textContent = `Recording · transcription failed: ${why}`
+        onScreen.dataset.state = 'failed'
+        onScreen.textContent = `Recording · transcription failed: ${why}`
+      } finally {
+        // Whatever happened, this file is no longer in whisper's hands - so the
+        // next click is allowed to try again.
+        transcribing.current.delete(path)
       }
     },
-    [onBodyInput, speakerNames]
+    [onBodyInput, onSaved, speakerNames]
   )
 
   /**

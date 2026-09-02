@@ -3,6 +3,83 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-02 - A transcription survives you changing note
+
+**Decided.** A running transcription is no longer tied to the element that
+started it. The block is found again by its audio path when the words come back,
+the note is patched on disk when it is not the one on screen, `working` never
+survives a reload, and one audio file cannot be handed to two whispers.
+
+**What it looked like.** "When I transcribe and change card the transcription is
+cancelled - is that meant to happen?" It was not cancelled. Nothing anywhere
+cancels one: whisper runs in a child process off the main process and finishes
+the job. What was lost was the result.
+
+**Why, measured rather than reasoned.** The editor keeps ONE contenteditable and
+swaps its `innerHTML` per note, so the recording block a transcription is holding
+is detached the moment the card changes - with no parent at all. `after()` on a
+parentless node is a no-op by specification, so the line that places the
+transcript did nothing, threw nothing and logged nothing. The progress
+percentages went to the same invisible node, which is why coming back showed a
+block that had apparently sat at nothing for ten minutes, and
+`state = 'transcribed'` went with them, so the note on disk still said `recorded`
+and offered the click again.
+
+**And that offer is what did the damage.** Accepting it starts a SECOND whisper on
+the same audio, because the guard against that lived on `data-state` - on the
+block that was thrown away. Two of them, each holding a 1.08 GB model plus
+compute buffers on an 8 GB card, and the third attempt died with `CUDA error: out
+of memory`. whisper.cpp turns that into a hard abort rather than a message, so
+what surfaced was exit `0xC0000409` and the last four lines of stderr, which
+happened to be about reading the audio file. Two real conversations looked
+corrupt for an afternoon and both files were perfectly fine - verified by running
+the identical command by hand once the GPU was free, which transcribed them
+without complaint.
+
+That is the whole reason this is one entry and not two. A silent dropped result
+and a GPU out of memory look like unrelated bugs; the first causes the second.
+
+**A separate, permanent trap, found on the way.** `working` reaches disk - setting
+it mutates the body and the next save takes it, and typing one line during a
+transcription is enough. Left there it is forever: `transcribeBlock` returns
+immediately on `working`, and the load-time rescue only looked at recorded,
+failed and transcribed. So the block said "transcribing…" and no click could ever
+retry it. Now `forgetStaleTranscribing` puts it back to `recorded` on load,
+sparing only paths actually going through whisper this second.
+
+**Before `applyRecordingBlocks`, not after.** That correction has to run before the
+pass that writes the label FROM the state. Put after it, the state was right and
+the block still read "transcribing…" - which the test caught on its first run,
+and which would have been the same bug wearing a different face.
+
+**The off-screen write happens in the renderer.** It is the side with a DOM, so the
+same `placeTranscript` runs against a detached copy of the stored HTML and an
+off-screen note ends up with exactly the shape an open one would. Two copies of
+that placement logic is how the two would quietly stop agreeing. The note is read
+immediately before it is written rather than from anything cached, and the index
+is updated too - `note:write` only writes the file, so without that the card
+keeps its old preview for a note that just gained nine thousand words.
+
+**In-flight paths live in a ref, not in the DOM.** That is the point: it outlives
+the element. `data-state` cannot guard against a double start because a note
+switch throws away the thing carrying it.
+
+**What is deliberately not done.** Nothing cancels a transcription, still. It runs
+to completion and lands where it belongs, which is better than cancelling - the
+work is minutes of GPU time and the reason to start it is to walk away. A cancel
+button may be worth having; losing the work by accident was never the thing to
+fix.
+
+**Verified in the running app, with real whisper.** Synthetic audio, because the
+real recordings are somebody's 1-1s and copying one into a temp folder to test
+with is a mistake this project has already written down. A note started
+transcribing, clicked twice on purpose, then left for another note: exactly one
+whisper process across forty samples half a second apart, the transcript arrived
+in the note that was not on screen, the note that WAS on screen was untouched,
+and going back showed the transcript sitting directly after its recording with
+the block marked transcribed. Plus a block seeded as `working` loading back as a
+clickable `recorded`.
+
 ## 2026-09-02 - A summary also answers the questions the note came with
 
 **Decided.** When a note holds predefined questions - a template's prompts - the

@@ -1698,3 +1698,134 @@ export function fillAnswers(root: HTMLElement, answers: { id: string; answer: st
   }
   return filled
 }
+
+/*
+ * ---------- a transcription that outlives the note being open ----------
+ *
+ * Transcribing a 35-minute meeting takes minutes, and the whole point of the app
+ * is that you carry on working meanwhile. Switching notes used to lose the
+ * result, and losing it was the mild half of the consequence.
+ *
+ * What happened, measured rather than reasoned: the editor keeps ONE
+ * contenteditable and swaps its `innerHTML` per note, so the recording block the
+ * transcription is holding is detached the moment you change card - with no
+ * parent at all. `block.after(transcript)` on a parentless node is a no-op by
+ * specification, so the transcript was placed nowhere, silently, with nothing
+ * thrown and nothing logged. The progress percentages went to the same invisible
+ * node, and `state = 'transcribed'` with them, so the note on disk still said
+ * `recorded` and offered to transcribe again.
+ *
+ * Then the real damage. Accepting that offer starts a SECOND whisper on the same
+ * audio, because the `working` guard lives on the block that was thrown away. Two
+ * processes, each holding a 1.08 GB model plus buffers on an 8 GB card, and the
+ * third attempt died with `CUDA error: out of memory` - which whisper.cpp turns
+ * into a hard abort rather than a message, so the app reported a crash whose last
+ * stderr lines happened to mention reading the audio. Two real conversations
+ * looked unreadable and the files were perfectly fine.
+ *
+ * So: the block is found again by its audio path when the words come back, the
+ * note is patched on disk when it is not the one on screen, and a path already
+ * being transcribed cannot be started twice.
+ */
+
+/**
+ * Put a transcript after its recording block, replacing that block's old one.
+ *
+ * Found in document order rather than by walking siblings, which is what the
+ * first version did and what the test caught: a transcript comes back from disk
+ * wrapped in a paragraph, so the block's next sibling is a `p` and not the
+ * `details` inside it. Stopping at the next recording is what keeps a second
+ * meeting's transcript out of it.
+ *
+ * Shared by both paths deliberately. The note on screen and the note on disk have
+ * to end up with the same shape, and two copies of this logic is how they would
+ * quietly stop agreeing.
+ */
+export function placeTranscript(root: HTMLElement, block: HTMLElement, transcript: Element): void {
+  const inOrder = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
+  )
+  const following = inOrder[inOrder.indexOf(block) + 1]
+  const previous =
+    following !== undefined && following.hasAttribute('data-transcript') ? following : null
+  if (previous !== null) {
+    // The paragraph it was wrapped in is left behind empty otherwise, and an
+    // empty paragraph is a blank line in the note.
+    const holder = previous.parentElement
+    previous.remove()
+    if (holder !== null && holder !== root && holder.childNodes.length === 0) {
+      holder.remove()
+    }
+  }
+  block.after(transcript)
+}
+
+/**
+ * Write a finished transcript into a note's stored HTML.
+ *
+ * For the note that is NOT on screen. The renderer does this rather than the main
+ * process because it is the side with a DOM: the same `placeTranscript` runs
+ * against a detached copy, so an off-screen note gets exactly the shape an open
+ * one would.
+ *
+ * Returns null when the block is no longer there - the recording was deleted
+ * while whisper was running, and inventing somewhere to put the words would be
+ * worse than dropping them.
+ */
+export function withTranscript(
+  html: string,
+  path: string,
+  transcript: string
+): { html: string } | null {
+  const root = document.createElement('div')
+  root.innerHTML = sanitizeHtml(html)
+
+  // The attribute value is a Windows path with backslashes, so it is matched by
+  // reading the attribute rather than by putting it in a selector.
+  const block = Array.from(root.querySelectorAll<HTMLElement>('[data-recording]')).find(
+    (candidate) => candidate.dataset.recording === path
+  )
+  if (block === undefined) {
+    return null
+  }
+
+  const holder = document.createElement('div')
+  holder.innerHTML = transcript
+  const node = holder.firstElementChild
+  if (node === null) {
+    return null
+  }
+
+  placeTranscript(root, block, node)
+  block.dataset.state = 'transcribed'
+  return { html: sanitizeHtml(root.innerHTML) }
+}
+
+/**
+ * Take `working` off any block that is not actually being transcribed.
+ *
+ * `working` is a fact about this second, not about the note, and it has no
+ * business surviving a reload - but it reaches disk anyway, because setting it
+ * mutates the body and the next save picks it up. Typing one line during a
+ * transcription is enough.
+ *
+ * Left alone it is permanent: `transcribeBlock` returns immediately when it sees
+ * `working`, and the load-time rescue only looks at recorded, failed and
+ * transcribed. So the block said "transcribing…" for ever and no click could
+ * retry it. Measured in the running app - clicked it, nothing happened.
+ *
+ * The live set is what makes this safe to run on every load: a block whose audio
+ * really is going through whisper right now keeps its state.
+ */
+export function forgetStaleTranscribing(root: HTMLElement, running: Set<string>): boolean {
+  let changed = false
+  for (const block of root.querySelectorAll<HTMLElement>('[data-recording]')) {
+    const path = block.dataset.recording
+    if (block.dataset.state !== 'working' || (path !== undefined && running.has(path))) {
+      continue
+    }
+    block.dataset.state = 'recorded'
+    changed = true
+  }
+  return changed
+}

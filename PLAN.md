@@ -211,10 +211,36 @@ Every requirement on the original list is now built. What is left is smaller:
    template: six of eight answered, the two nobody reached left alone, both
    rotation weeks answered separately. See DECISIONS.
 
-   Untested by a real meeting yet - the first one is today. The thing to watch is
-   the voice: the answers came back addressed to the other person ("du flyttade
-   den till ny runner"), which reads naturally in a 1-1 note and is a choice
-   nobody made deliberately.
+   Checked against the first real one the same day: eight prompt lines, six
+   answered, zero misplaced, and both blanks were the rotation's other week. The
+   thing to watch is the voice - the answers came back addressed to the other
+   person ("du flyttade den till ny runner"), which reads naturally in a 1-1 note
+   and is a choice nobody made deliberately.
+
+   **A transcription now survives you changing note**, as of 2026-09-02, and this
+   one arrived as "is that meant to happen?" It was not cancelled - nothing
+   cancels one, whisper finishes in its own process - the RESULT was dropped. The
+   editor swaps one contenteditable's `innerHTML` per note, so the block a
+   transcription holds is detached with no parent, and `after()` on a parentless
+   node is a no-op: the transcript was placed nowhere, silently.
+
+   The dropped result then caused a much louder failure. The note reloaded as
+   `recorded`, offered the transcribe click again, and taking it started a second
+   whisper on the same audio - two models on an 8 GB card, and the next attempt
+   died of `CUDA error: out of memory`, which whisper.cpp reports as a hard abort
+   whose stderr tail happened to mention reading the audio. Two real
+   conversations looked corrupt for an afternoon; both files were fine.
+
+   Fixed by finding the block again by its audio path, patching the note on disk
+   when it is not on screen, never letting `working` survive a reload, and
+   keeping in-flight paths in a ref so one file cannot be handed to two whispers.
+   Verified with real whisper on synthetic audio: exactly one process across a
+   deliberate double click, and the transcript landing in the note that was not
+   open. See DECISIONS.
+
+   Still open: nothing cancels a transcription. That is deliberate for now - the
+   work is minutes of GPU time and the reason to start it is to walk away - but a
+   cancel button is probably worth having.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the
