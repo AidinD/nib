@@ -142,4 +142,10 @@ that are silent, since electron-updater does not require signing for NSIS.
 
 - Jot is the reference for project layout and build setup. When a structural question comes up, look at how Jot solved it before inventing something new.
 - Nib is a separate application with its own data store. Do not reach into Jot's data.
-- Task tracking lives in the Jot category **Note taking app**, bound to this repository via its `repoPath`.
+- Task tracking has no home on the Jot board right now. Check that board's own `categories`
+  list before assuming otherwise, and do not take a category name from this document. This
+  line used to name a category that the board has never had, so a session reading it went
+  looking for something that did not exist; a category bound to this repository by `repoPath`
+  did exist under a different name, and has since been deleted. If a covering category exists
+  when you read this, use it the way the sibling repos here do: create or claim a task and set
+  it to `in-progress` at the start, then move it to `review` when done, never `done`.
