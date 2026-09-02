@@ -67,6 +67,18 @@ and finding one later without having been told is the moment you stop trusting
 which words in the note are yours. `data-filled` marks each one and a rule down
 its left says it at a glance.
 
+**And the question moves too, which the first version missed.** Marking only the
+answer was not enough: a question and its answer are both a paragraph of body
+text at the same size and weight, one of them italic, and in a real note they ran
+together. Reported after the first real 1-1 went through it. Both ends move now
+and in opposite directions - the prompt is dimmed, the answer keeps full contrast
+and gains an accent rule and a wash. A prompt is scaffolding, the same words
+every fortnight, and once something is written under it nobody reads it again;
+dimming it is what lets the answer stand out without being loud. The prompt rule
+is keyed on the same wholly-italic signature the fill-in uses, so it also makes
+visible which lines the app treats as questions - what the button will do stops
+being a surprise.
+
 **It skips the app's own blocks by `blockKind`, not by its own attributes.** A
 transcript read back from disk arrives wrapped in a paragraph - measured, not
 assumed - so the top-level child standing for it is a `p` holding nine thousand
@@ -87,6 +99,18 @@ answered separately, the hand-written line still there with the answer below it,
 the transcript intact and not misread, nothing flagged, and every answer still
 present after a reload past the sanitiser. Plus thirteen unit tests over
 `promptLayout`, which is where the placement decision lives.
+
+**Then checked against the first real one.** An 18-minute 1-1, 355 transcript
+lines, read back off disk. Eight prompt lines, six answered, zero misplaced - and
+the two left blank were both the rotation's other week, which is exactly right
+for a conversation that only asked one week's questions. Worth recording how the
+blanks were checked rather than assumed: the transcript has no line anywhere
+about a technical blocker, so that question genuinely never came up. The other
+blank is the interesting one - there IS a nearby passage about finding a balance
+in how much to lean on AI without losing the habit of thinking, and the question
+asks about balance between pressure and time to learn. Adjacent, not the same,
+and it was left alone. The rule errs toward the blank, and on this evidence that
+is the right direction.
 
 ## 2026-09-01 - A summary's own headings cannot be flagged
 

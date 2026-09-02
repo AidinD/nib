@@ -3432,7 +3432,39 @@ body.is-resizing .splitter-grip {
 }
 
 /*
- * An answer the summary filled in under one of the note's own questions.
+ * ---------- a question and its answer ----------
+ *
+ * The first version marked only the answer, with a rule in `--accent-soft` down
+ * its left. It was too quiet to do the one job it had: a question and its answer
+ * are both a paragraph of body text at the same size and weight, one italic, and
+ * on screen in a full note they ran together.
+ *
+ * So both ends move, and in opposite directions - which is cheaper than making
+ * the answer louder on its own and reads better. A prompt is scaffolding: it is
+ * the same words every fortnight, and once there is an answer under it nobody
+ * needs to read it again. The answer is the content. Dimming the first is what
+ * lets the second sit at full contrast without shouting.
+ */
+
+/*
+ * A prompt line: a top-level paragraph that is wholly one emphasis.
+ *
+ * The same signature the fill-in itself uses, which is the point - this makes
+ * visible which lines the app is treating as questions, so what the Summarise
+ * button will do stops being a surprise.
+ *
+ * `> p` rather than any paragraph, so a transcript's lines and the summary's own
+ * italic footnotes are outside it without needing to be excluded by name: those
+ * live inside a `details` and a `div`, and a line of the document is a direct
+ * child.
+ */
+.doc-body > p:has(> em:only-child),
+.doc-body > p:has(> i:only-child) {
+  color: var(--text-dim);
+}
+
+/*
+ * An answer the summary filled in under one of those questions.
  *
  * The summary block deliberately carries no "generated" styling, because it sits
  * at the top under its own heading and nothing else up there could have written
@@ -3440,15 +3472,17 @@ body.is-resizing .splitter-grip {
  * writing, under their heading, in their voice, and a paragraph that reads as
  * theirs and is not is the one thing this feature must not produce.
  *
- * A rule down the left rather than a background or a box. It says "not yours"
- * at a glance while scrolling, survives being read next to a real paragraph, and
- * leaves the text at full contrast - the answer is worth reading, it just is not
- * a memory.
+ * A rule and a wash rather than a box or a different typeface. It marks the
+ * paragraph as an object without changing how it reads, and the accent is the
+ * same one used everywhere else something is the app talking rather than the
+ * note - so it needs no explaining.
  */
 .doc-body [data-filled] {
-  border-left: 2px solid var(--accent-soft);
-  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 10px 4px 10px;
   margin-left: -12px;
+  border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 /* ---------- the summary panel ---------- */
