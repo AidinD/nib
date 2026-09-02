@@ -27,6 +27,8 @@ import {
   transcriptSpeakers,
   transcriptsWithMarks,
   summaryHtml,
+  notePrompts,
+  fillAnswers,
   ownNotes,
   htmlToText,
   applyImageWidths,
@@ -1308,6 +1310,16 @@ export function Editor({
         // model works out whose promise a line was from the words alone, the way
         // it always has.
         speakers: transcriptSpeakers(root),
+        /*
+         * The questions the note came with, when it came from a template.
+         *
+         * Only for a meeting. Summarising the whole note instead reads the note's
+         * own text as the source, and asking it to answer that text's questions
+         * out of that same text is a circle - it would write back what is already
+         * on the page. A transcript is a different source, which is the whole
+         * reason there is something to fill in.
+         */
+        prompts: source === 'transcripts' ? notePrompts(root) : undefined,
         language:
           root.querySelector<HTMLElement>('[data-recording]')?.dataset.language === 'en'
             ? 'en'
@@ -1320,9 +1332,21 @@ export function Editor({
         return
       }
 
+      /*
+       * The note's own questions first, so the summary can say how many it
+       * answered.
+       *
+       * Order is safe either way - `fillAnswers` ignores anything inside a
+       * summary block - but doing it first is what lets the provenance line carry
+       * the count. That line is the only place the note admits the model wrote
+       * somewhere other than the top, and a filled-in answer six headings down is
+       * exactly the thing you want told rather than discovered.
+       */
+      const filled = fillAnswers(root, result.value.answers ?? [])
+
       const holder = document.createElement('div')
       holder.innerHTML = summaryHtml(
-        { model: result.model ?? model, costUsd: result.costUsd ?? null },
+        { model: result.model ?? model, costUsd: result.costUsd ?? null, filled },
         result.value
       )
       const section = document.createElement('div')
@@ -2156,6 +2180,10 @@ export function Editor({
         {summaryPanel && !summarising && (
           <SummaryPanel
             transcripts={transcriptCount}
+            /* Read off the body at open time rather than kept in state: the
+               panel is mounted by this press, so this runs exactly when the
+               question is asked and cannot go stale behind an edit. */
+            prompts={bodyRef.current === null ? 0 : notePrompts(bodyRef.current).length}
             model={summaryModel}
             onModel={setSummaryModel}
             onClose={() => setSummaryPanel(false)}

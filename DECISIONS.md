@@ -3,6 +3,91 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-02 - A summary also answers the questions the note came with
+
+**Decided.** When a note holds predefined questions - a template's prompts - the
+summary answers the ones the conversation answered and writes each answer under
+its own question. In addition to the summary block, which is unchanged.
+
+**What was missing.** A 1-1 note starts from a template: six headings, eight
+prompt lines, the questions you meant to ask already on the page. Recording that
+conversation and summarising it produced four sections at the top and left every
+one of those questions sitting there unanswered. It is the one shape where a
+transcript and a note are looking straight at each other and neither says so -
+the answers were in the transcript, the questions were in the note, and nothing
+joined them.
+
+**The unit is the LINE.** This is the part that decides whether the feature
+works, and it took being told. A prompt in the 1-1 template is not one question:
+"Hur går det med det vi kom överens om förra gången? Något som behöver ändras,
+eller kan vi checka av det?" is two questions and one thing a person asks.
+Splitting on the question mark gives two half-answers to that. Keying on the
+heading gives one answer where "Energi och friktion" needs two, because the
+fortnightly rotation writes both weeks into the note as separate lines. So: one
+answer per prompt line, covering every question on it, keyed by an id that
+addresses the line rather than its words.
+
+**Under what you wrote, never over it.** The answer goes at the end of the run
+belonging to its line, below anything typed there during the conversation, and
+nothing hand-written is touched. That was the choice made when it was put as a
+question, and it is the same rule the instruction already ran on: what you typed
+while it was happening is a judgement the transcript does not contain. It also
+decides what gets sent - the existing text goes to the model so it adds rather
+than restates, but a previous pass's own answer does not, because feeding that
+back would have the model defer to itself.
+
+**One call, not two.** The questions ride along with the transcript in the same
+request. The transcript is what this costs, so asking a second thing about the
+same words in a second call doubles the bill - and the two halves of the answer
+should agree with each other, which two independent calls cannot promise.
+
+**A signature, not every heading.** A question is a wholly-italic paragraph,
+which is how both shipped templates write one and the shape `story.ts` already
+reads back. A heading ending in a question mark counts too, but only in a section
+with no italic line at all. Treating every heading as a question was the
+alternative and it fills in under "Anteckningar" and under a heading typed
+mid-meeting to separate two topics - the model writing into structure that never
+asked anything. The cost is that a template written without italics is not
+recognised, and that is the failure worth having: nothing happens, rather than
+something unasked-for happening.
+
+**Blank beats plausible.** The instruction says to leave a question out unless
+the conversation actually answered it. These are questions you chose to ask, and
+a confident invention under one that never came up is worse than an empty
+section, because an empty section is readable as "we did not get to it". The
+verification run bore this out: of eight questions six were answered, and the two
+the conversation never reached - the balance-of-pressure week and "Något annat" -
+were left exactly as they were.
+
+**It says so, twice.** The panel counts the questions before you press, and the
+summary's provenance line reports how many were answered afterwards. The summary
+block itself sits at the top under its own heading and could not be mistaken for
+yours; an answer filled in under your fifth heading, in your structure, could -
+and finding one later without having been told is the moment you stop trusting
+which words in the note are yours. `data-filled` marks each one and a rule down
+its left says it at a glance.
+
+**It skips the app's own blocks by `blockKind`, not by its own attributes.** A
+transcript read back from disk arrives wrapped in a paragraph - measured, not
+assumed - so the top-level child standing for it is a `p` holding nine thousand
+words of meeting. Left in the scan it classifies as prose and counts as something
+you wrote under the question above it: the answer would land beneath the whole
+transcript, and the model would be told you had written the meeting out by hand.
+
+**Meetings only.** Summarising the whole note instead reads the note's own text
+as the source, so asking it to answer that text's questions out of that same text
+is a circle. A transcript is a different source, which is the entire reason there
+is anything to fill in.
+
+**Verified with a real call.** The shipped 1-1 template seeded into a scratch
+notebook with a transcript placed last - the position that can fool the scan -
+then the real Summarise button, the real panel, Haiku, and the real model. Six of
+eight questions answered, both rotation weeks under "Energi och friktion"
+answered separately, the hand-written line still there with the answer below it,
+the transcript intact and not misread, nothing flagged, and every answer still
+present after a reload past the sanitiser. Plus thirteen unit tests over
+`promptLayout`, which is where the placement decision lives.
+
 ## 2026-09-01 - A summary's own headings cannot be flagged
 
 **Decided.** `cycleAlert` refuses to put a flag on a heading inside

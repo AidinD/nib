@@ -193,6 +193,28 @@ Every requirement on the original list is now built. What is left is smaller:
    undo it into a green tick. A summary's own headings are no longer flaggable;
    clearing one that already is stays possible, or the fix would strand the note
    that reported it.
+
+   **The summary now also answers the questions the note came with**, as of
+   2026-09-02, ahead of a day of 1-1s. A templated note already holds the
+   questions you meant to ask - the 1-1 template is six headings and eight prompt
+   lines - and summarising a recording of that conversation used to leave every
+   one of them blank while writing four sections of its own at the top. It now
+   answers the ones the conversation answered, each under its own prompt line and
+   below anything you typed there yourself. The summary block is unchanged; this
+   is in addition to it.
+
+   The unit is the LINE and that is the whole design: a prompt in that template
+   holds two questions and has one place for an answer, and one heading can hold
+   two prompt lines because the fortnightly rotation writes both weeks into the
+   note. Keying on the heading or splitting on the question mark both produce
+   answers in the wrong shape. Verified with a real Haiku call against the shipped
+   template: six of eight answered, the two nobody reached left alone, both
+   rotation weeks answered separately. See DECISIONS.
+
+   Untested by a real meeting yet - the first one is today. The thing to watch is
+   the voice: the answers came back addressed to the other person ("du flyttade
+   den till ny runner"), which reads naturally in a 1-1 note and is a choice
+   nobody made deliberately.
 7. The flag column is enumerated three levels deep, in CSS. A fourth level of nesting shares the third's column. Not worth solving until someone nests four deep.
 
 Everything else in the first version's scope is done: the three panes, the

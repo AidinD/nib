@@ -1294,7 +1294,7 @@ export function transcriptSpeakers(
  * deserves to know the model inferred it rather than heard it.
  */
 export function summaryHtml(
-  provenance: { model: string; costUsd: number | null },
+  provenance: { model: string; costUsd: number | null; filled?: number },
   value: {
     summary: string
     decisions: string[]
@@ -1372,8 +1372,20 @@ export function summaryHtml(
     provenance.costUsd === null || provenance.costUsd === undefined
       ? ''
       : ` · $${provenance.costUsd.toFixed(3)}`
+  /*
+   * And whether it wrote anywhere else.
+   *
+   * The summary sits at the top and is obviously the machine's. An answer filled
+   * in under the note's own fifth heading is not obviously anything, and finding
+   * one later without having been told is the moment you stop trusting which
+   * words in the note are yours. One clause here is the whole remedy.
+   */
+  const filled =
+    provenance.filled === undefined || provenance.filled === 0
+      ? ''
+      : ` · besvarade ${provenance.filled} ${provenance.filled === 1 ? 'fråga' : 'frågor'} i noteringen`
   parts.push(
-    `<p data-provenance="1"><em>Sammanfattad med ${escape(provenance.model)}${cost}</em></p>`
+    `<p data-provenance="1"><em>Sammanfattad med ${escape(provenance.model)}${cost}${filled}</em></p>`
   )
 
   return parts.join('')
@@ -1391,4 +1403,298 @@ export function ownNotes(root: HTMLElement): string {
     generated.remove()
   }
   return (copy.textContent ?? '').replace(/\s{3,}/g, '\n\n').trim()
+}
+
+/*
+ * ---------- the note's own questions ----------
+ *
+ * A templated note arrives with its questions already in it - the 1-1 template is
+ * six headings with a prompt under each - and the summary used to ignore them
+ * completely. It wrote its own four sections at the top and left the questions
+ * sitting there unanswered, which is the one shape where a transcript and a note
+ * are looking straight at each other and neither says so.
+ *
+ * So the questions are read out of the note, sent along with the transcript, and
+ * the answers written back where they belong. The summary block is unchanged:
+ * this is in ADDITION to it. What was decided and what you promised are still the
+ * answer to "what happened"; this is the answer to "what did I mean to ask".
+ *
+ * ## The unit is the LINE, not the heading and not the question
+ *
+ * This is the part that decides whether the feature works, and it took being
+ * told. A prompt line in the 1-1 template is not one question:
+ *
+ *   "Hur går det med det vi kom överens om förra gången? Något som behöver
+ *    ändras, eller kan vi checka av det?"
+ *
+ * Two questions, one line, one place an answer can go. Splitting on the question
+ * mark produces two half-answers to what a person asks as one thing. Keying on
+ * the heading produces one answer where "Energi och friktion" holds two separate
+ * lines - the fortnightly rotation, Vecka 1 and Vecka 2 - which are different
+ * questions asked in different weeks.
+ *
+ * So: one answer per prompt line, covering every question on that line, written
+ * under that line. The heading travels along as context and nothing more.
+ *
+ * ## Why the layout is worked out on a list of kinds
+ *
+ * Same split as `recordingInsertAt`: the decision is about order and adjacency,
+ * not about elements, and `npm test` runs against `src/` with no DOM at all. So
+ * the DOM is reduced to one kind per top-level child, the plan is computed from
+ * that list, and only then is it read back into elements.
+ */
+
+/** What one top-level child of the note is, as far as its questions are concerned. */
+export type PromptLineKind =
+  /** A heading, which opens a section. */
+  | 'heading'
+  /** A heading that is itself a question - it ends in a question mark. */
+  | 'asking-heading'
+  /** A wholly-italic paragraph: how a template writes a prompt. */
+  | 'prompt'
+  /** An answer a previous pass wrote here. */
+  | 'filled'
+  /** Something the user wrote. */
+  | 'text'
+  /** A blank line. Carries nothing and never becomes an anchor. */
+  | 'empty'
+
+/** Where one question is, and where its answer goes. All indices into the list of kinds. */
+export interface PromptPlan {
+  /** The nth question in the note. The key an answer comes back under. */
+  id: string
+  /** The heading it sits under, or -1 for a question before any heading. */
+  heading: number
+  /** The prompt line, or the heading itself when the heading is the question. */
+  question: number
+  /** Insert the answer after this one. */
+  anchor: number
+  /** A previous pass's answers here, to be replaced rather than added to. */
+  filled: number[]
+  /** What the user wrote here. */
+  existing: number[]
+}
+
+const OPENS_SECTION = (kind: PromptLineKind): boolean =>
+  kind === 'heading' || kind === 'asking-heading'
+
+/**
+ * Where every question in the note is, and where each answer belongs.
+ *
+ * ## What counts as a question
+ *
+ * A wholly-italic paragraph. That is not a guess about intent - it is how both
+ * shipped templates are written, and `story.ts` already reads the same shape back
+ * to tell a half-captured story from a finished one.
+ *
+ * A heading ending in a question mark counts too, but only in a section holding
+ * no italic line at all - somebody writing their own template as bare headings.
+ * A fallback rather than a rule, because a question mark is a weak signal: inside
+ * a section that has real prompt lines it would add a phantom question competing
+ * with the ones actually written.
+ *
+ * The alternative to any signature was treating every heading as a question,
+ * which fills in under "Anteckningar" and under a heading typed mid-meeting to
+ * separate two topics - the model writing into structure that never asked
+ * anything. Requiring the signature means a template written without italics is
+ * not recognised, and that is the failure worth having: nothing happens, rather
+ * than something unasked-for happening.
+ *
+ * ## Where the answer goes
+ *
+ * After the last thing the user wrote under that line, so it lands BELOW their
+ * own words and never in place of them. That is the rule they chose, and it is
+ * the same one the whole instruction runs on: what they typed while it was
+ * happening is a judgement the transcript does not contain.
+ *
+ * A trailing blank line is not an anchor - an answer wedged under a blank reads
+ * as belonging to the next question rather than to this one.
+ */
+export function promptLayout(kinds: PromptLineKind[]): PromptPlan[] {
+  /** The note split at its headings. A note may open with prose and no heading. */
+  const sections: { heading: number; from: number; to: number }[] = []
+  let at = 0
+  if (kinds.length > 0 && !OPENS_SECTION(kinds[0])) {
+    while (at < kinds.length && !OPENS_SECTION(kinds[at])) {
+      at += 1
+    }
+    sections.push({ heading: -1, from: 0, to: at })
+  }
+  while (at < kinds.length) {
+    let to = at + 1
+    while (to < kinds.length && !OPENS_SECTION(kinds[to])) {
+      to += 1
+    }
+    sections.push({ heading: at, from: at + 1, to })
+    at = to
+  }
+
+  const plans: PromptPlan[] = []
+  const add = (heading: number, question: number, from: number, to: number): void => {
+    const existing: number[] = []
+    const filled: number[] = []
+    let anchor = question
+    for (let index = from; index < to; index += 1) {
+      if (kinds[index] === 'text') {
+        existing.push(index)
+        anchor = index
+      } else if (kinds[index] === 'filled') {
+        filled.push(index)
+      }
+    }
+    plans.push({ id: `q${plans.length + 1}`, heading, question, anchor, filled, existing })
+  }
+
+  for (const section of sections) {
+    const lines: number[] = []
+    for (let index = section.from; index < section.to; index += 1) {
+      if (kinds[index] === 'prompt') {
+        lines.push(index)
+      }
+    }
+
+    if (lines.length > 0) {
+      for (let which = 0; which < lines.length; which += 1) {
+        const to = which + 1 < lines.length ? lines[which + 1] : section.to
+        add(section.heading, lines[which], lines[which] + 1, to)
+      }
+      continue
+    }
+
+    if (section.heading !== -1 && kinds[section.heading] === 'asking-heading') {
+      add(section.heading, section.heading, section.from, section.to)
+    }
+  }
+  return plans
+}
+
+/** One top-level child, as a kind. */
+export function promptLineKind(node: Element): PromptLineKind {
+  const text = (node.textContent ?? '').trim()
+  if (/^H[1-4]$/.test(node.tagName)) {
+    return text.endsWith('?') ? 'asking-heading' : 'heading'
+  }
+  if (text.length === 0) {
+    return 'empty'
+  }
+  if ('filled' in (node as HTMLElement).dataset) {
+    return 'filled'
+  }
+  if (node.tagName === 'P') {
+    const emphasised = Array.from(node.querySelectorAll('em, i'))
+      .map((em) => (em.textContent ?? '').trim())
+      .join(' ')
+    // Not an exact match: a template that puts the trailing punctuation outside
+    // the emphasis is the same shape and should not fall out over one character.
+    if (emphasised.length >= text.length - 2) {
+      return 'prompt'
+    }
+  }
+  return 'text'
+}
+
+/** One prompt line found in the note. */
+export interface NotePrompt {
+  /** Position in the note, in document order. The key the answer comes back under. */
+  id: string
+  /** The heading it sits under, sent as context so the model knows what is asked about. */
+  heading: string
+  /** The line, verbatim. Usually more than one question, and answered as one thing. */
+  question: string
+  /** What the user already wrote under this line. Sent so the model adds rather than repeats. */
+  existing: string
+}
+
+/**
+ * The note's top-level children and their kinds, with the app's own blocks out.
+ *
+ * `blockKind` rather than a check on the node's own attributes, and that is the
+ * whole reason this is a separate function. A transcript read back from disk
+ * arrives wrapped in a paragraph - measured, not assumed - so the child standing
+ * for it is a `p` whose text is nine thousand words of meeting. Left in, it
+ * classifies as prose and gets counted as something the user wrote under the last
+ * question above it: the answer would land beneath the entire transcript, and the
+ * model would be told the user had already written the meeting out by hand.
+ *
+ * The summary block goes for the same reason from the other direction - its own
+ * headings and lines are not questions, and it is not the note's structure.
+ */
+function scan(root: HTMLElement): { nodes: Element[]; kinds: PromptLineKind[] } {
+  const nodes = Array.from(root.children).filter(
+    (node) => blockKind(node as HTMLElement) === 'other'
+  )
+  return { nodes, kinds: nodes.map(promptLineKind) }
+}
+
+/**
+ * The questions to ask about, as data to send.
+ *
+ * The note's own text goes with them, because the user's answer outranks the
+ * transcript and a model that cannot see what they wrote restates it. Sending it
+ * is what lets the instruction say "add what the conversation adds". A previous
+ * pass's own answer is not in that set: it is not their judgement, and feeding it
+ * back would have the model defer to itself.
+ */
+export function notePrompts(root: HTMLElement): NotePrompt[] {
+  const { nodes, kinds } = scan(root)
+  const text = (index: number): string => (nodes[index]?.textContent ?? '').trim()
+  return promptLayout(kinds).map((plan) => ({
+    id: plan.id,
+    heading: plan.heading === -1 ? '' : text(plan.heading),
+    question: text(plan.question),
+    existing: plan.existing.map(text).join('\n')
+  }))
+}
+
+/**
+ * Write the answers back under the lines they answer.
+ *
+ * ## Matched by position, and dropped when it does not match
+ *
+ * The plan is re-read here rather than trusted from the request, and an id is the
+ * nth question in the note. Re-reading is what makes the summary block landing at
+ * the top between the two calls harmless, and it means an answer to a question
+ * that has since been deleted finds nothing and is dropped rather than placed
+ * somewhere plausible. A wrong section is worse than a missing one: it reads as
+ * something the conversation established about the wrong subject.
+ *
+ * A re-run replaces its own last answer rather than stacking a second one.
+ * Summarising twice is a real thing to do - the same transcript through a larger
+ * model, or a second recording added to the note - and two answers under one
+ * question is the note arguing with itself. Only paragraphs marked `data-filled`
+ * are replaced, and nothing the user typed is in that set.
+ *
+ * Returns how many landed, which is what the summary's provenance line reports.
+ */
+export function fillAnswers(root: HTMLElement, answers: { id: string; answer: string }[]): number {
+  const { nodes, kinds } = scan(root)
+  const plans = new Map(promptLayout(kinds).map((plan) => [plan.id, plan]))
+  let filled = 0
+
+  for (const { id, answer } of answers) {
+    const text = answer.trim()
+    const plan = plans.get(id)
+    if (text.length === 0 || plan === undefined) {
+      continue
+    }
+    // Consumed, so a model answering the same id twice cannot write twice.
+    plans.delete(id)
+
+    for (const stale of plan.filled) {
+      nodes[stale]?.remove()
+    }
+
+    const anchor = nodes[plan.anchor]
+    if (anchor === undefined || anchor.parentElement === null) {
+      continue
+    }
+    const paragraph = document.createElement('p')
+    // `data-filled` is what says a human did not write this line - it is what the
+    // styling hangs off, and what a re-run recognises as its own to replace.
+    paragraph.dataset.filled = '1'
+    paragraph.textContent = text
+    anchor.parentElement.insertBefore(paragraph, anchor.nextSibling)
+    filled += 1
+  }
+  return filled
 }

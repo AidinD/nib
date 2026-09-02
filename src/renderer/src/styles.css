@@ -3431,6 +3431,26 @@ body.is-resizing .splitter-grip {
   font-size: 11px;
 }
 
+/*
+ * An answer the summary filled in under one of the note's own questions.
+ *
+ * The summary block deliberately carries no "generated" styling, because it sits
+ * at the top under its own heading and nothing else up there could have written
+ * it. This is the opposite situation: it lands in the middle of the user's own
+ * writing, under their heading, in their voice, and a paragraph that reads as
+ * theirs and is not is the one thing this feature must not produce.
+ *
+ * A rule down the left rather than a background or a box. It says "not yours"
+ * at a glance while scrolling, survives being read next to a real paragraph, and
+ * leaves the text at full contrast - the answer is worth reading, it just is not
+ * a memory.
+ */
+.doc-body [data-filled] {
+  border-left: 2px solid var(--accent-soft);
+  padding-left: 10px;
+  margin-left: -12px;
+}
+
 /* ---------- the summary panel ---------- */
 
 .summary-panel {

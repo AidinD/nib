@@ -62,6 +62,24 @@ const SCHEMA = {
       type: 'string',
       description:
         'Only when a previous meeting was supplied: what was agreed then and is unresolved now.'
+    },
+    answers: {
+      type: 'array',
+      description:
+        'Only when the note carried its own questions. One entry per question the meeting actually answered - leave a question out entirely rather than filling it.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'answer'],
+        properties: {
+          id: { type: 'string', description: 'The id of the question, exactly as given.' },
+          answer: {
+            type: 'string',
+            description:
+              'What the conversation said in answer to that whole line, including every question on it. One short paragraph.'
+          }
+        }
+      }
     }
   }
 } as const
@@ -78,6 +96,13 @@ export interface SummaryRequest {
   notes: string
   /** The previous meeting with the same person, when there is one. */
   previous?: string
+  /**
+   * The note's own questions, when it was started from a template that has any.
+   *
+   * Keyed by id rather than by their text, because a prompt line holds more than
+   * one question and the answer has to come back to the line - see `notePrompts`.
+   */
+  prompts?: { id: string; heading: string; question: string; existing: string }[]
   /**
    * The names the transcript labels its turns with, when it has any.
    *
@@ -102,6 +127,7 @@ export interface SummaryResult {
     questions: string[]
     people: string[]
     lastTime?: string
+    answers?: { id: string; answer: string }[]
   }
   costUsd?: number | null
 }
@@ -168,6 +194,48 @@ function instruction(request: SummaryRequest): string {
   const marks =
     'A line like "[14:32] (skärmbild)" marks a screenshot the user pasted at that moment, and "[14:32] ..." marks something they typed then. You cannot see the screenshots - never describe what one showed. Treat them only as evidence that the moment mattered.'
 
+  /*
+   * The note's own questions, asked as a second job in the same call.
+   *
+   * One call rather than two because the transcript is what this costs - sending
+   * it twice to ask a second thing about the same words doubles the bill - and
+   * because the two halves of the answer should agree with each other, which two
+   * independent calls cannot promise.
+   *
+   * The line is the unit, and that took being told. A prompt in the 1-1 template
+   * holds two questions and has one place for an answer, so answering "per
+   * question" would put two half-answers where a person asks one thing. The id
+   * is what carries that: it addresses the line, not the words in it.
+   *
+   * Four rules, and each one is a failure that would otherwise happen. Leave a
+   * question out rather than answering it from what a good answer would be -
+   * these are questions the user chose to ask, and a plausible invention under
+   * one that never came up is worse than a blank, because a blank is readable as
+   * "we did not get to it". Do not restate what they already wrote there; they
+   * can see it. And answer about the OTHER person: a 1-1's questions are asked
+   * of them, so the answer is what they said, not what the user said back.
+   */
+  const questions =
+    request.prompts === undefined || request.prompts.length === 0
+      ? ''
+      : [
+          '',
+          '--- THE QUESTIONS THIS NOTE CAME WITH ---',
+          'The note was started from a template whose prompts are the questions the user meant to ask. Answer them in `answers`, one entry per prompt below, keyed by its id.',
+          'A prompt is one LINE and usually holds several questions. Answer the whole line as one short paragraph rather than question by question - that is how it was asked.',
+          'These questions are asked OF THE OTHER PERSON, so the answer is what that person said about it. Not what the user replied.',
+          'Leave a prompt out unless the conversation actually answered it. Silence is honest; an invention is not, and this is the half of the note that gets read back in six months.',
+          'Where something is already written under a prompt, that is their own judgement made while it was happening and it stands. Add what the conversation adds and do not repeat what is there. If it adds nothing, leave the prompt out.',
+          '',
+          ...request.prompts.map((prompt) => {
+            const wrote = prompt.existing.trim()
+            return (
+              `[${prompt.id}] under "${prompt.heading}": ${prompt.question}` +
+              (wrote.length > 0 ? `\n    already written there: ${wrote.replace(/\n/g, ' / ')}` : '')
+            )
+          })
+        ].join('\n')
+
   return [
     `You are reading a transcript of a meeting the user was in. Answer in ${language}, in their voice - plain, specific, no filler.`,
     '',
@@ -191,6 +259,8 @@ function instruction(request: SummaryRequest): string {
     request.previous !== undefined && request.previous.length > 0
       ? `--- THE PREVIOUS MEETING ---\n${request.previous}\n`
       : '',
+    questions,
+    '',
     '--- TRANSCRIPT ---',
     request.transcript
   ].join('\n')

@@ -34,6 +34,15 @@ export const SUMMARY_MODELS = [
 interface SummaryPanelProps {
   /** How many transcripts the note holds - 0 hides that choice entirely. */
   transcripts: number
+  /**
+   * How many questions the note came with, when it came from a template.
+   *
+   * Said out loud because the summary will write into the note's own sections,
+   * which is the one thing this button does that is not confined to the block it
+   * adds at the top. A press that edits six places in a note you wrote should
+   * announce that before it happens, not in a footnote afterwards.
+   */
+  prompts: number
   model: string
   onModel: (model: string) => void
   onRun: (source: SummarySource) => void
@@ -42,6 +51,7 @@ interface SummaryPanelProps {
 
 export function SummaryPanel({
   transcripts,
+  prompts,
   model,
   onModel,
   onRun,
@@ -93,6 +103,16 @@ export function SummaryPanel({
           ? 'Vad som sades, plus det du själv skrev. Beslut, åtgärdspunkter och frågor du inte ställde.'
           : 'Allt i noteringen, sammanfattat som text - inte som ett möte.'}
       </p>
+
+      {/* Only for a transcript, and only when the note has questions of its own.
+          Summarising the note itself cannot answer them - the answer would come
+          out of the same text the questions are sitting in. */}
+      {source === 'transcripts' && prompts > 0 && (
+        <p className="record-hint">
+          Fyller också i {prompts === 1 ? 'noteringens egna fråga' : `noteringens ${prompts} egna frågor`}{' '}
+          där samtalet besvarar {prompts === 1 ? 'den' : 'dem'}. Det du skrivit själv står kvar.
+        </p>
+      )}
 
       <div className="record-actions">
         <button type="button" className="record-cancel" onClick={onClose}>

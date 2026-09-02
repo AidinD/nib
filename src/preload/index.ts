@@ -98,6 +98,8 @@ const api = {
     previous?: string
     /** The names the transcript labels its turns with, when it has any. */
     speakers?: { mine: string; theirs: string }
+    /** The note's own questions, one per prompt line, when it came from a template. */
+    prompts?: { id: string; heading: string; question: string; existing: string }[]
     language: 'sv' | 'en'
     model: string
   }): Promise<{
@@ -112,6 +114,7 @@ const api = {
       questions: string[]
       people: string[]
       lastTime?: string
+      answers?: { id: string; answer: string }[]
     }
   }> => ipcRenderer.invoke('summary:run', request),
 
