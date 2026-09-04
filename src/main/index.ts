@@ -22,7 +22,7 @@ import {
   sweepRecordings
 } from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
-import { summarise } from './summary'
+import { readGlossary, summarise } from './summary'
 import type { SummaryRequest } from './summary'
 import { NoteStorage } from './storage'
 import {
@@ -286,7 +286,16 @@ function registerIpc(): void {
    * Through keel, which borrows Claude Code's own sign-in - so there is no second
    * credential to store and the spend is the one the user already has.
    */
-  ipcMain.handle('summary:run', (_event, request: SummaryRequest) => summarise(request))
+  /*
+   * The glossary is read here rather than in the renderer, because it is a file
+   * beside the notebook and this is the side that knows where that is.
+   *
+   * Read per call, so editing `glossary.txt` takes effect on the next press
+   * instead of on the next restart.
+   */
+  ipcMain.handle('summary:run', (_event, request: SummaryRequest) =>
+    summarise({ ...request, glossary: readGlossary(resolveDataDir()) })
+  )
 
   /*
    * Turning a recording into text.

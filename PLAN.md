@@ -255,6 +255,33 @@ Every requirement on the original list is now built. What is left is smaller:
    work is minutes of GPU time and the reason to start it is to walk away, so
    landing it in the right place was the whole requirement.
 
+   **A glossary corrects misheard terms on the way into the summary**, as of
+   2026-09-04. Speech recognition gets technical terms and proper nouns wrong -
+   the words that carry the meaning - and three instances in one week all had
+   that shape, including a KPI attributed to a product name that does not exist.
+   The summary is where it matters, because a transcript LOOKS unreliable and a
+   summary does not: a mishearing that reaches clean confident prose is laundered
+   into something that reads as fact.
+
+   `glossary.txt` beside the notebook, one term per line, hand-edited, read fresh
+   on every summary. The transcript is never rewritten - it is the record of what
+   was heard - and the corrections that were applied are stated in the note so a
+   reader can see why the two layers disagree. Meetings only: a note summarised
+   as a note is the author's own typing.
+
+   The seed in the source holds public names only, because the repository is
+   public and its own pre-push hook refuses the client and product names that
+   caused all three instances. Those live in the glossary file, which is not
+   version-controlled. See DECISIONS.
+
+   **The follow-up is decided and not started:** giving whisper the same list as
+   an initial prompt, which PREVENTS the error rather than correcting it. Its
+   precondition is now resolved - `whisper-cli.exe --help` does offer
+   `--prompt PROMPT`, capped at `n_text_ctx/2` tokens, and the binary is found
+   through the `WHISPER_DIR` user variable. That cap is the design question: the
+   whisper half may need a marked subset of the file rather than all of it, since
+   the two halves must not become two copies of the list.
+
    **And the same mistake in the summary, found an hour later and worse.** A
    summary started on one 1-1 was pasted at the TOP of another note, because
    `summarise` held the body element itself rather than a child of it - and the

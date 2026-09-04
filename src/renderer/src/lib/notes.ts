@@ -1302,6 +1302,7 @@ export function summaryHtml(
     questions: string[]
     people: string[]
     lastTime?: string
+    corrections?: { heard: string; meant: string }[]
   }
 ): string {
   const escape = (text: string): string =>
@@ -1357,6 +1358,37 @@ export function summaryHtml(
 
   if (value.people.length > 0) {
     parts.push(`<p><em>Nämnda: ${value.people.map(escape).join(', ')}</em></p>`)
+  }
+
+  /*
+   * Where this summary knowingly disagrees with its own transcript.
+   *
+   * Speech recognition mishears technical terms and proper nouns, which is
+   * exactly the vocabulary that carries the meaning, and the summary is the
+   * layer people read - so a mishearing that reaches it gets laundered from
+   * obviously broken text into something that reads as fact. Correcting it here
+   * is the fix; saying so is what keeps the fix honest.
+   *
+   * The transcript is not touched, and the line says that out loud. Without it a
+   * reader who goes to the transcript for the exact words finds a different name
+   * and cannot tell which layer is wrong - and the whole point of this note
+   * format is keeping what was SAID apart from what was inferred.
+   *
+   * Above the provenance rather than below, because it is a fact about the words
+   * in front of you rather than a footnote about the machinery. And it doubles as
+   * the only feedback a glossary can give: a term that never appears here is a
+   * term the file is missing.
+   */
+  const corrections = (value.corrections ?? []).filter(
+    (fix) => fix.heard.trim().length > 0 && fix.meant.trim().length > 0
+  )
+  if (corrections.length > 0) {
+    const pairs = corrections
+      .map((fix) => `”${escape(fix.heard.trim())}” → ${escape(fix.meant.trim())}`)
+      .join(' · ')
+    parts.push(
+      `<p data-heard="1"><em>Rättat mot ordlistan: ${pairs}. Transkriptet är oförändrat.</em></p>`
+    )
   }
 
   /*
@@ -1871,6 +1903,7 @@ export function insertSummary(
     people: string[]
     lastTime?: string
     answers?: { id: string; answer: string }[]
+    corrections?: { heard: string; meant: string }[]
   }
 ): number {
   const filled = fillAnswers(root, value.answers ?? [])

@@ -3472,6 +3472,21 @@ body.is-resizing .splitter-grip {
 }
 
 /*
+ * Which words this summary corrected against the glossary.
+ *
+ * Dimmed but at full size, unlike the provenance line beneath it. It is not
+ * machinery-metadata: it is the one place the note admits that the summary and
+ * the transcript disagree on purpose, and a reader who goes looking for the
+ * exact words needs to see it rather than find it. Shrinking it to eleven pixels
+ * would file it with the cost of the API call, which is not the same kind of
+ * fact at all.
+ */
+.doc-body [data-heard] {
+  margin-top: 10px;
+  color: var(--text-dim);
+}
+
+/*
  * ---------- a question and its answer ----------
  *
  * The first version marked only the answer, with a rule in `--accent-soft` down

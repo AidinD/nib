@@ -3,6 +3,93 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-04 - A glossary, applied to the summary and never to the transcript
+
+**Decided.** The summariser is given the words this notebook uses, corrects a
+plausible mishearing of one of them on the way into the summary, and says which
+corrections it applied. The transcript is not touched.
+
+**What it is for.** Speech recognition reliably mishears technical terms and
+proper nouns, which is exactly the vocabulary carrying the meaning. Three
+confirmed instances in one week, all of that shape: a level in the career ladder
+heard as two ordinary words, twice in one 1-1; and two product names wrong
+throughout another note, including in its own decisions and in a KPI.
+
+**Why the summary is the place to fix it.** A transcript LOOKS unreliable - it is
+choppy, it mislabels speakers, it drops words - so it is read with suspicion. A
+summary does not look like that. It is clean, coherent, confident prose, and a
+mishearing that reaches it is laundered: it goes from obviously broken text into
+something that reads as fact. Someone opening the note in six months sees a KPI
+of 32 daily users for a product whose name does not exist, and never connects it
+to the one that does. The summary is also the layer people actually read.
+
+**The transcript is not rewritten, and this is the hard constraint.** It is the
+record of what was HEARD. Editing a record is a different and worse kind of
+damage than leaving it wrong, and it would destroy the one thing the transcript
+is for - being the place you go when the summary is not enough. Verified byte
+for byte in the running app, before and after a real call.
+
+**What was corrected is stated in the note.** A summary that silently diverges
+from its own transcript blurs the line between what was said and what was
+inferred, which is the single distinction this note format exists to keep. So a
+line reads `"heard" -> meant`, and ends by saying the transcript was left alone -
+without that clause a reader who checks the transcript finds a different name and
+cannot tell which layer is wrong. It sits above the provenance rather than below,
+because it is a fact about the words in front of you and not a footnote about the
+machinery, and it is dimmed at full size rather than shrunk to eleven pixels for
+the same reason.
+
+It doubles as the only feedback a glossary can give: a term that never appears on
+that line is a term the file is missing.
+
+**Only a mishearing, and the model is told so twice.** A glossary term is not
+permission to replace a word that is simply a different word - "Meta" in the list
+must not turn every "better" into it. Checked with that exact control planted in
+the transcript.
+
+**Data in a file, and the seed in the source is short for a reason that is not
+about taste.** The glossary is `glossary.txt` beside the notebook, one term per
+line, `#` for comments - a text file rather than JSON because it is edited by
+hand and JSON punishes that. It is read fresh on every summary, so an edit takes
+effect on the next press rather than the next restart.
+
+The seed compiled into the app holds public names only. This repository is public
+and has a pre-push hook that refuses private terms, so the client and product
+names that caused all three instances CANNOT live in the source at all. They live
+in the glossary itself, which is the user's own file and not version-controlled -
+which is where colleague names belong anyway. The seeded header is what says so.
+
+Deriving names from Tend's role map would be nicer and is deliberately not done:
+Tend reads Nib, not the other way round, and this is not the change that should
+invent a dependency in the other direction.
+
+**Meetings only.** A note summarised as a note is mostly the user's own typing,
+and correcting a man's spelling of his own project back at him is not what this
+is for. All three reported instances came out of a microphone.
+
+**The directory is a parameter.** `readGlossary(dir)` rather than resolving the
+data directory inside `summary.ts`, so that module still knows nothing about
+where the notebook lives - the same reason every other input arrives on the
+request. It also let the tests hand over a scratch directory, and it is what made
+them runnable at all: Node's type stripping cannot resolve an extensionless
+relative import, so the first version failed to load.
+
+**Not this change, and it is decided as the follow-up.** Giving whisper the same
+list as an initial prompt PREVENTS the error where this only CORRECTS it. Its
+blocking precondition is now resolved rather than open: `whisper-cli.exe` is on
+this machine, found through the `WHISPER_DIR` user variable, and its own `--help`
+does list `--prompt PROMPT` with a `max n_text_ctx/2 tokens` limit. That limit is
+the real design question for that half - the list may need to be a marked subset
+rather than the whole file.
+
+**Verified with a real call.** A seeded transcript carrying both a misheard
+technical term and a misheard product name, a scratch glossary holding the right
+spellings, and a control word that merely resembles a third term. The summary used
+both correct spellings, stopped repeating either misheard phrase, left the control
+alone, stated both corrections with the transcript-unchanged clause, and the
+transcript came out byte-identical - on screen and on disk. Eleven unit tests over
+the reader and the line, including escaping and the empty cases.
+
 ## 2026-09-02 - Two rows: what you owe, and what you are practising
 
 **Decided.** The flags split into two sidebar rows - "Needs you" and

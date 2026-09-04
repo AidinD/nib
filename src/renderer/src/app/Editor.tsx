@@ -2473,9 +2473,13 @@ export function Editor({
                 if (candidate.closest('[data-transcript], [data-recording]') !== null) {
                   return false
                 }
+                // `data-heard` joins them: the line saying which words were
+                // corrected against the glossary is a note about the summary,
+                // the same as the provenance, and not something owed to anybody.
                 if (
                   candidate.dataset.provenance !== undefined ||
-                  candidate.dataset.flagAll !== undefined
+                  candidate.dataset.flagAll !== undefined ||
+                  candidate.dataset.heard !== undefined
                 ) {
                   return false
                 }

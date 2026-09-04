@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { ask } from 'keel/claude'
 
 /*
@@ -16,6 +19,109 @@ import { ask } from 'keel/claude'
  * a button rather than a step: the audio never leaves it at all - it is recorded,
  * transcribed and deleted here - and this sends text the user can read first.
  */
+
+/* --------------------------------------------------- the glossary -- */
+
+/*
+ * The words whisper gets wrong, and why correcting them here is the fix.
+ *
+ * Whisper mishears technical terms and proper nouns - which is precisely the
+ * vocabulary that carries the meaning. Three confirmed instances in one week:
+ * "easy level" for IC-level, twice in one 1-1; and two product names wrong
+ * throughout another note, including in the summary's own decisions and its KPI.
+ *
+ * ## Why the summary is a separate injury, and the argument for fixing it here
+ *
+ * A transcript LOOKS unreliable. It is choppy, it mislabels speakers, it drops
+ * words, so it is read with suspicion. A summary does not look like that: it is
+ * clean, coherent, confident prose. A mishearing that passes into it is
+ * laundered - it goes from obviously broken text into something that reads as
+ * fact. Someone reading the note in six months sees a KPI of 32 daily users for
+ * a product whose name does not exist, and never connects it to the one that
+ * does.
+ *
+ * ## The transcript is NOT rewritten
+ *
+ * The hard constraint. It is a record of what was HEARD, and editing a record is
+ * a different and worse kind of damage than leaving it wrong. Only the summary
+ * changes, and it says so - see `corrections`.
+ *
+ * ## Data in a file, not a constant here
+ *
+ * Because the list is his, it grows, and it holds colleague and client names.
+ * That last part is why the seed below is short: this repository is public and
+ * has a pre-push hook that refuses private names, so the terms that matter most
+ * cannot live in this file at all. They go in the glossary itself, which is in
+ * the notebook's own directory and is not version-controlled.
+ *
+ * Deriving names from Tend's role map would be nicer and is deliberately not
+ * done: Tend reads Nib, not the other way round, and this is not the change that
+ * should invent a dependency in the other direction.
+ */
+
+/** The file, beside the notebook, one term per line. */
+const GLOSSARY_FILE = 'glossary.txt'
+
+/**
+ * What a fresh notebook starts with.
+ *
+ * Public names only, and that is a constraint rather than a judgement about what
+ * is worth correcting - see above. The header written with it is what tells him
+ * where to add the rest.
+ */
+const SEED = ['Roblox', 'Meta', 'Jot', 'Nib', 'Tend', 'Helm']
+
+const HEADER = [
+  '# Words this notebook uses, one per line.',
+  '#',
+  '# The summary corrects the transcript against this list where what was heard',
+  '# is a plausible mishearing of one of these - the way "easy level" is what a',
+  '# transcriber makes of "IC-level". It says which corrections it applied, so',
+  '# you can see whether a term is missing from this file.',
+  '#',
+  '# The transcript itself is never rewritten. It is the record of what was heard.',
+  '#',
+  '# Add your own project, product and colleague names here. They belong in this',
+  '# file rather than in the app, which is open source: this file is yours and is',
+  '# not part of it.',
+  '#',
+  '# Lines starting with # are ignored.',
+  ''
+]
+
+/**
+ * The glossary, seeded on first read.
+ *
+ * Read on every summary rather than cached, so editing the file takes effect on
+ * the next press instead of on the next restart - which is the difference
+ * between a list he maintains and a list he gives up on.
+ *
+ * Never throws. A glossary that cannot be read is a summary without corrections,
+ * which is exactly what happened before this existed; failing the whole call over
+ * it would trade a small loss for the entire feature.
+ *
+ * The directory is a parameter rather than resolved here, so this module knows
+ * nothing about where the notebook lives - the same reason every other input to
+ * this file arrives on the request. It is also what lets a test hand over a
+ * scratch directory instead of reaching for the real notebook.
+ */
+export function readGlossary(dir: string): string[] {
+  const path = join(dir, GLOSSARY_FILE)
+  try {
+    if (!existsSync(path)) {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path, [...HEADER, ...SEED, ''].join('\n'), 'utf8')
+    }
+    return readFileSync(path, 'utf8')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'))
+      // A cap, so a pasted document cannot become the whole prompt.
+      .slice(0, 200)
+  } catch {
+    return []
+  }
+}
 
 /** What the model must answer with. A schema, so the reply is data rather than prose to parse. */
 const SCHEMA = {
@@ -80,6 +186,20 @@ const SCHEMA = {
           }
         }
       }
+    },
+    corrections: {
+      type: 'array',
+      description:
+        'Only the glossary corrections actually applied to this summary. Empty when none were. Never a term you did not use.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['heard', 'meant'],
+        properties: {
+          heard: { type: 'string', description: 'The words as the transcript has them.' },
+          meant: { type: 'string', description: 'The glossary term written instead.' }
+        }
+      }
     }
   }
 } as const
@@ -96,6 +216,13 @@ export interface SummaryRequest {
   notes: string
   /** The previous meeting with the same person, when there is one. */
   previous?: string
+  /**
+   * The words this notebook uses, so a mishearing does not reach the summary.
+   *
+   * Passed in rather than read here, so the caller decides which notebook - and
+   * so a test can hand over a list without a data directory existing.
+   */
+  glossary?: string[]
   /**
    * The note's own questions, when it was started from a template that has any.
    *
@@ -128,6 +255,7 @@ export interface SummaryResult {
     people: string[]
     lastTime?: string
     answers?: { id: string; answer: string }[]
+    corrections?: { heard: string; meant: string }[]
   }
   costUsd?: number | null
 }
@@ -236,6 +364,43 @@ function instruction(request: SummaryRequest): string {
           })
         ].join('\n')
 
+  /*
+   * The words this notebook uses, and the licence to fix them - which is narrow
+   * on purpose.
+   *
+   * Three rules, and each one is a way this goes wrong. Only a plausible
+   * MISHEARING: a glossary term is not permission to replace a word that is
+   * simply a different word, and "Meta" in the list must not turn every
+   * "better" into it. Only the summary: the transcript is a record of what was
+   * heard and rewriting a record is worse than leaving it wrong, so the model is
+   * told plainly that it is not editing one. And report what was applied, so a
+   * summary that diverges from its own transcript says why - the whole point of
+   * this note format is keeping "what was said" apart from "what was inferred",
+   * and a silent correction is exactly the kind of thing that blurs it.
+   *
+   * Reporting also does a second job: it is how he finds out the list is missing
+   * a term, which is the only feedback a glossary can give.
+   *
+   * Meetings only, and deliberately. A note summarised as a note is mostly HIS
+   * OWN typing, and correcting a man's spelling of his own project back at him
+   * is not what this is for - the damage reported was all in meeting summaries,
+   * where the words came out of a microphone rather than off a keyboard.
+   */
+  const glossary =
+    request.glossary === undefined || request.glossary.length === 0
+      ? ''
+      : [
+          '',
+          '--- THE WORDS THIS NOTEBOOK USES ---',
+          'The transcript comes from speech recognition, which reliably mishears technical terms and proper nouns - the exact words that carry the meaning. These are the spellings this notebook uses:',
+          request.glossary.map((term) => `  ${term}`).join('\n'),
+          '',
+          'Where the transcript has something that is a plausible MISHEARING of one of these, write the glossary spelling in your answer instead. "easy level" for IC-level is the shape of it: same sounds, wrong words.',
+          'Only a mishearing. A word that merely resembles a glossary term, or that you would have phrased differently, is left exactly as it is - this is not a find-and-replace and not licence to tidy anybody\'s wording.',
+          'You are not editing the transcript. It stays as it is, wrong words and all, because it is the record of what was heard. Only your answer is corrected.',
+          'List every correction you actually applied in `corrections`, as heard and meant. Nothing you did not use, and an empty list when you corrected nothing.'
+        ].join('\n')
+
   return [
     `You are reading a transcript of a meeting the user was in. Answer in ${language}, in their voice - plain, specific, no filler.`,
     '',
@@ -259,6 +424,7 @@ function instruction(request: SummaryRequest): string {
     request.previous !== undefined && request.previous.length > 0
       ? `--- THE PREVIOUS MEETING ---\n${request.previous}\n`
       : '',
+    glossary,
     questions,
     '',
     '--- TRANSCRIPT ---',

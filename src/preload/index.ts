@@ -115,6 +115,8 @@ const api = {
       people: string[]
       lastTime?: string
       answers?: { id: string; answer: string }[]
+      /** The glossary corrections applied on the way into this summary. */
+      corrections?: { heard: string; meant: string }[]
     }
   }> => ipcRenderer.invoke('summary:run', request),
 
