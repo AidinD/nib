@@ -1011,6 +1011,90 @@ textarea {
   cursor: pointer;
 }
 
+/* ---------- columns ---------- */
+
+/*
+ * A row of two or three columns, each holding ordinary blocks.
+ *
+ * Addressed by `data-cols` and `data-col` rather than by a class, unlike the
+ * drawing block. The class on a drawing is put back by JavaScript after every
+ * load because the sanitiser keeps no classes - and a row needs none of that: the
+ * two data attributes it is made of survive, so this lays out in a sticky window,
+ * with no code running at all, exactly as it does in the editor.
+ *
+ * A grid of independent cells rather than `column-count`. Flowing columns move
+ * their own content, so the line under "Finished" climbs into the next column as
+ * the one above it grows - which is the opposite of what a column of a note is
+ * for.
+ */
+[data-cols] {
+  display: grid;
+  gap: 16px;
+  /* Tops aligned, heights their own. Stretching every column to the tallest one
+     draws three boxes of empty space; a column is as long as what is in it. */
+  align-items: start;
+  margin: 14px 0;
+}
+
+/* `minmax(0, 1fr)` and not `1fr`: a long word or a wide image in one column
+   would otherwise push its track past its share and squeeze the others. */
+[data-cols='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-cols='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+[data-col] {
+  min-width: 0;
+  /* An empty column is still somewhere to click. */
+  min-height: 2.4em;
+  /*
+   * The column's own flag gutter, and the rule that says where the column
+   * starts. The width matches ALERT_GUTTER in the editor, which is what decides
+   * whether a click counted as a click in the margin.
+   */
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+
+/* The first line of a column sits level with the first line of its neighbours,
+   whatever block it is - a heading's own top margin would drop it. */
+[data-col] > :first-child {
+  margin-top: 0;
+}
+
+[data-col] > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Below a certain width the columns stack.
+ *
+ * Three columns in a 300px sticky window are three words wide, which is not a
+ * layout - it is the text one letter per line. A container query rather than a
+ * media query because what matters is the width of the note, not of the screen:
+ * the same note is read in a wide editor and in a small always-on-top window,
+ * and the editor's own measure is adjustable besides.
+ */
+.doc-body,
+.sticky-body {
+  container-type: inline-size;
+}
+
+@container (max-width: 460px) {
+  [data-cols] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked, the rule down the left of each cell reads as a quote rather than as
+     a column, so it goes and the gutter stays. */
+  [data-col] {
+    border-left: 0;
+  }
+}
+
 /* Floating toolbar for a selected image. */
 .image-toolbar {
   position: sticky;
@@ -1029,6 +1113,17 @@ textarea {
 .image-toolbar button {
   padding: 3px 8px;
   border-radius: 5px;
+  font-size: 11px;
+}
+
+/* The same strip, for the row of columns the caret is in. */
+.columns-toolbar {
+  align-items: center;
+}
+
+.columns-label {
+  padding: 0 4px;
+  color: var(--text-dim);
   font-size: 11px;
 }
 
@@ -1952,6 +2047,122 @@ body.is-sticky-window {
 .doc-body [data-alert='done']::after {
   background: var(--green);
   opacity: 0.45;
+}
+
+/*
+ * A column's lines carry the same flag, in the column's own margin.
+ *
+ * The rules above are written against the body's direct children, and a line
+ * inside a column is not one. Without these, a flag set on such a line - from the
+ * slash menu, or Ctrl+Shift+A - would be in `index.json` and in "Needs you" with
+ * nothing marked in the note to go back to. That is the same phantom the
+ * transcript guard exists for, and the cheapest way not to have it is for a
+ * column to be a place a flag can be drawn.
+ *
+ * The offset is smaller than the body's, because a column's gutter is: 20px of
+ * padding, and the flag drawn 14px into it.
+ */
+.doc-body [data-col] > p,
+.doc-body [data-col] > h1,
+.doc-body [data-col] > h2,
+.doc-body [data-col] > h3,
+.doc-body [data-col] > h4,
+.doc-body [data-col] > blockquote {
+  position: relative;
+}
+
+.doc-body [data-col] > p::before,
+.doc-body [data-col] > h1::before,
+.doc-body [data-col] > h2::before,
+.doc-body [data-col] > h3::before,
+.doc-body [data-col] > h4::before,
+.doc-body [data-col] > blockquote::before {
+  content: '⚑';
+  position: absolute;
+  left: -14px;
+  top: 0;
+  width: 14px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: inherit;
+  text-align: center;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 100ms ease;
+}
+
+/* And a list item's flag back out past its bullet, one level at a time - the
+   body's own rule pushes it 24px out, which in a column lands in the column
+   beside it. */
+.doc-body [data-col] li::before {
+  left: calc(-14px - var(--list-indent));
+}
+
+.doc-body [data-col] li li::before {
+  left: calc(-14px - 2 * var(--list-indent));
+}
+
+.doc-body [data-col] li li li::before {
+  left: calc(-14px - 3 * var(--list-indent));
+}
+
+.doc-body [data-col] li[data-alert]::after {
+  left: calc(2px - var(--list-indent));
+}
+
+.doc-body [data-col] [data-alert]::after {
+  left: -4px;
+}
+
+.doc-body [data-col] > p:empty::before,
+.doc-body [data-col] > p:has(br:only-child)::before {
+  display: none;
+}
+
+.doc-body:hover [data-col] > p::before,
+.doc-body:hover [data-col] > h1::before,
+.doc-body:hover [data-col] > h2::before,
+.doc-body:hover [data-col] > h3::before,
+.doc-body:hover [data-col] > h4::before,
+.doc-body:hover [data-col] > blockquote::before {
+  opacity: 0.25;
+}
+
+.doc-body [data-col] > p:hover::before,
+.doc-body [data-col] > h1:hover::before,
+.doc-body [data-col] > h2:hover::before,
+.doc-body [data-col] > h3:hover::before,
+.doc-body [data-col] > h4:hover::before,
+.doc-body [data-col] > blockquote:hover::before {
+  opacity: 0.6;
+}
+
+/*
+ * And flagged, in a column, is the alert colour and stays put.
+ *
+ * Spelled out again rather than left to the document-wide rule above, and this is
+ * a specificity fight rather than a style choice: `[data-col] > p` is one step
+ * more specific than a bare `[data-alert]`, so the plain rule lost and a flagged
+ * line inside a column carried an invisible grey flag - the flag was in the file,
+ * in the index and in "Needs you", with nothing showing in the note. Measured in
+ * the running app before this rule existed: `opacity: 0`.
+ *
+ * Matched on the attribute rather than on the tag for the same arithmetic - two
+ * attributes outrank an attribute and a tag - and listed a second time under
+ * `:hover` because the reveal-on-hover rule above outranks it otherwise, which is
+ * the trap the document-wide flag rules already document.
+ */
+.doc-body [data-col] > [data-alert]::before,
+.doc-body:hover [data-col] > [data-alert]::before {
+  opacity: 1;
+  color: var(--alert);
+}
+
+.doc-body [data-col] > [data-alert='done']::before,
+.doc-body:hover [data-col] > [data-alert='done']::before {
+  content: '✓';
+  color: var(--green);
+  opacity: 1;
 }
 
 /* A sticky window shows the same marks, without the click target. */

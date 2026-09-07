@@ -3,6 +3,7 @@ import { STICKY_TINTS } from '@shared/types'
 import { useNib } from '../lib/useNib'
 import { applyPrefs, readPrefs } from '../lib/prefs'
 import {
+  applyColumnBlocks,
   applyImageWidths,
   bodyHasDrawing,
   bodyHasImage,
@@ -63,6 +64,10 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       }
       bodyRef.current.innerHTML = sanitizeHtml(doc?.html ?? '')
       applyImageWidths(bodyRef.current)
+      // A row of columns lays itself out from its own attributes, so a sticky
+      // window needs nothing put back - only the repairs, for a cell that has
+      // been left with nothing the caret can sit in.
+      applyColumnBlocks(bodyRef.current)
       titleRef.current = doc?.title ?? ''
       setTitle(titleRef.current)
       loadedEdited.current = doc?.edited ?? 0
@@ -96,6 +101,10 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
       }
       bodyRef.current.innerHTML = sanitizeHtml(doc.html)
       applyImageWidths(bodyRef.current)
+      // A row of columns lays itself out from its own attributes, so a sticky
+      // window needs nothing put back - only the repairs, for a cell that has
+      // been left with nothing the caret can sit in.
+      applyColumnBlocks(bodyRef.current)
       titleRef.current = doc.title
       setTitle(doc.title)
       loadedEdited.current = doc.edited

@@ -32,9 +32,10 @@ From the author's own list, with where each one stands.
 | Sticky notes | Done - a window per pinned note |
 | Canvas drawing with a pressure-sensitive stylus (stretch goal) | Done - drawn, stored and shown; not yet tried with a real stylus |
 | **Alerts** - mark a note as an action point and see them in one "needs you" view | Done - block-level flags, a strip and two review rows |
+| **Columns** - two or three side by side inside a note | Done - a block, with a flag gutter of its own per column |
 
-Alerts arrived in the Jot task list after the design spec was written, so the spec
-does not cover them; the design is recorded in DECISIONS instead. A flag sits on a
+Alerts and columns both arrived after the design spec was written, so the spec
+does not cover them; their design is recorded in DECISIONS instead. A flag sits on a
 block inside a note, a note counts as flagged when it holds one, and the flags
 show up in two places: an ambient strip under the header and a "Needs you" row in
 the sidebar for working through them.
@@ -58,6 +59,7 @@ cosmetic.
 - **Data directory** in [src/main/data-dir.ts](src/main/data-dir.ts): `userData` by default, `NIB_DATA_DIR` to relocate, one-time migration across.
 - **Main window**: header with wordmark, version and a search field - `Ctrl+Shift+F` reaches it from anywhere in the window, Escape or its × clears it; 210px sidebar with smart rows, the scope filter, categories, sub-categories, inline rename and the dashed add fields; 280px note list with previews, crumbs, relative times, pin and delete; the editor panel with the toolbar, title, metadata row and the document body.
 - **Editor**: headings, body, bold/italic/underline/strike, inline code, bullet and numbered lists, quote, divider, image insert, 600ms debounced autosave with a Saved/Saving indicator, `Ctrl+Enter` to save now, `Ctrl+Shift+8` for a bullet list, paste and drop of images, and the floating Smaller/Larger/Remove toolbar on a selected image.
+- **Columns** in [notes.ts](src/renderer/src/lib/notes.ts) and the editor: a row of two or three, from the toolbar or `/columns`, with Tab between them, a strip on the row to change the count or take it apart, a flag gutter per column, and a load-time repair that believes the cells rather than the count. Laid out by the stylesheet from `data-cols` and `data-col` alone, so a sticky window shows the same row with no code running over it - see DECISIONS 2026-09-07.
 - **Sticky windows**: 280x320, frameless, always on top, tint swatches, editable in place, footer trail. Bound to the pinned note, editing the same file the main window edits.
 - **Archive** in [selection.ts](src/renderer/src/lib/selection.ts): an `archived` flag on the note, filtered out in `allNotes` so the lists, the counts and the alert strip all drop it at once, plus an Archive smart row that appears only when there is something in it and an archive/restore action on every card. Archiving lets go of the pin. Search leaves the archive alone until a line above the cards - offered only when the archive actually holds matches the search is not showing - is clicked. Categories and sub-categories are unchanged: they delete.
 - **Settings**: a popover in the header for the accent colour, the serif body and the measure - the three things the mock left adjustable. Per machine, not synced.

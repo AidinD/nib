@@ -3,6 +3,78 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - Columns are a block in the note, and there are two or three of them
+
+**Decided.** A row of two or three independent columns, inserted where the caret
+is, filled like any other part of the note, and taken apart again with a control
+that keeps every line. The count is changed on the row itself; Tab moves between
+the columns; each column carries its own flag gutter.
+
+**A block, not a setting on the note.** "This note is in three columns" would put
+the whole body in them - the title's metadata row, every paragraph typed six
+months later - and what is actually wanted is one row of side-by-side lists with
+prose above and below it. As a block it composes: a note that IS three columns is
+a note whose first block is a row, and nothing else had to learn about columns to
+allow that.
+
+**Independent cells, not flowing text.** CSS can put a block into columns with
+`column-count`, and that is a different feature: it moves its own content, so the
+line written under "Finished" climbs into the next column as the one above it
+grows. A column of a note is a place you put things, and it has to stay where it
+was put. A table was the other candidate and loses for the opposite reason: a
+table cell is for a value, it brings borders and a header row with it, and a
+heading, a bullet list or an image inside one reads as a spreadsheet holding
+prose.
+
+**Two or three, and no fourth.** The editor's measure tops out at 1000px, so a
+fourth column is around thirty characters wide - narrower than the text it would
+hold. The limit is a pair of constants rather than a number typed in four places,
+and a test asserts them, because the toolbar, the slash menu and the stylesheet
+each spell the numbers out separately.
+
+**Marked with data attributes and laid out from them, with no JavaScript.** A row
+is a `div` with `data-cols`, holding cells with `data-col`, and the stylesheet
+addresses those attributes rather than a class. The drawing block does it the
+other way round - its class is re-applied on every load, because the sanitiser
+keeps no classes - and a row needs none of that: the attributes survive the
+sanitiser, so a note with columns lays out identically in a sticky window, where
+no code runs over the body at all. Verified in a 280px sticky window, where the
+same row renders and the columns stack.
+
+**The cells are believed, never the count.** `data-cols` is what the stylesheet
+lays out and the cells are where the text actually is, so on load the count is
+corrected to the cells. Trusting the attribute instead is what would lose text: a
+row that says two and holds three would be laid out as two, and the third column
+drawn off the side of a note that has no horizontal scroll. A row left with fewer
+than two cells is taken apart rather than shown as one narrow column with two
+thirds of the note empty beside it. Neither state can be produced by typing; both
+can arrive in a note file written by something else.
+
+**Backspace at the top of a column, and Delete at the bottom, do nothing.**
+Chromium's answer to either is to merge the cell into what sits beside it, which
+takes the column with it - one keystroke and a row of three is a paragraph with
+the other columns' text run together. Both keys still work everywhere else inside
+the column, including on an image or a divider. The way out of a row is the
+Remove control, which lifts every line out in order and drops only the empty
+ones.
+
+**Every column has its own flag gutter, and this was not optional.** An action
+point is an attribute on a line, and `Ctrl+Shift+A` or the slash menu will set
+one on a line anywhere - including inside a column. The document-wide flag rules
+are written against the body's direct children, which a line in a column is not,
+so the first working version had a flagged line whose flag was invisible: an
+entry in `index.json`, a chip under "Needs you", and nothing marked in the note to
+go back to. That is the same phantom the transcript guard exists for. Measured as
+`opacity: 0` in the running app, and fixed by rules specific enough to win against
+the reveal-on-hover ones, which is the arithmetic the existing flag rules already
+document.
+
+**And the body's own gutter deliberately cannot reach into a row.** It runs the
+whole height of the note's left margin, so a click level with a row would
+otherwise have to guess which of the two or three lines beside it was meant - and
+the existing rule takes the last match, which is the line furthest right. Beside
+a row, the body's gutter now flags nothing.
+
 ## 2026-09-04 - A glossary, applied to the summary and never to the transcript
 
 **Decided.** The summariser is given the words this notebook uses, corrects a

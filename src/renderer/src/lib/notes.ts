@@ -394,6 +394,192 @@ export function applyCanvasBlocks(root: HTMLElement): void {
   }
 }
 
+/*
+ * ---------- columns ----------
+ *
+ * A row of two or three columns, holding ordinary blocks.
+ *
+ * A BLOCK in the document rather than a setting on the note. "This note is in
+ * three columns" would put the whole body in them - every heading, every
+ * paragraph typed six months later - and the thing actually wanted is one row of
+ * side-by-side lists with prose above and below it. A block also composes: a note
+ * that IS three columns is a note whose first block is a row.
+ *
+ * Independent cells, not CSS `column-count`. Flowing columns move their own
+ * content: the line you put under "Finished" climbs into the next column as the
+ * one above it grows, which is the opposite of what a column of a note is for.
+ *
+ * Marked with `data-cols` on the row and `data-col` on each cell, since data
+ * attributes are what survive the sanitiser - see `applyImageWidths` - and
+ * addressed in the stylesheet by those attributes rather than by a class, so a
+ * row lays out the same in a sticky window with no JavaScript putting anything
+ * back.
+ */
+
+/**
+ * How many columns a row may have.
+ *
+ * Two or three. The editor's own measure tops out at 1000px, so a fourth cell is
+ * about 30 characters wide - narrower than the text it would hold.
+ */
+export const COLS_MIN = 2
+export const COLS_MAX = 3
+
+/** The cells of a row, in document order. */
+export function columnCells(row: HTMLElement): HTMLElement[] {
+  return Array.from(row.children).filter(
+    (child): child is HTMLElement => child instanceof HTMLElement && 'col' in child.dataset
+  )
+}
+
+/** An empty paragraph: the smallest thing a caret can sit in. */
+function emptyLine(): HTMLElement {
+  const paragraph = document.createElement('p')
+  paragraph.appendChild(document.createElement('br'))
+  return paragraph
+}
+
+/**
+ * A line with nothing in it.
+ *
+ * What "nothing" means here is nothing a reader would miss: an empty paragraph,
+ * or one holding only the `br` that gives an empty paragraph its height. A
+ * paragraph holding an image is not empty even though its text is.
+ */
+export function isBlankLine(node: Node): boolean {
+  return (
+    node instanceof HTMLElement &&
+    node.tagName === 'P' &&
+    (node.textContent ?? '').trim().length === 0 &&
+    node.querySelector('img') === null
+  )
+}
+
+/** One empty column. */
+export function columnCell(): HTMLElement {
+  const cell = document.createElement('div')
+  // No value: the attribute IS the marker, and a number in it would be a second
+  // copy of the cell's own position - one more thing that can disagree with the
+  // document once a column is taken away.
+  cell.dataset.col = ''
+  cell.appendChild(emptyLine())
+  return cell
+}
+
+/** A fresh row of `count` empty columns. */
+export function columnsRow(count: number): HTMLElement {
+  const columns = Math.min(Math.max(count, COLS_MIN), COLS_MAX)
+  const row = document.createElement('div')
+  row.dataset.cols = String(columns)
+  for (let index = 0; index < columns; index += 1) {
+    row.appendChild(columnCell())
+  }
+  return row
+}
+
+/**
+ * What to do with a row that has `cells` cells.
+ *
+ * The count in `data-cols` is what the stylesheet lays out, and the cells are
+ * what the text is actually in - so the cells are believed and the count is
+ * corrected to them, never the other way round. A row left with fewer than two
+ * cells is not a row any more and is taken apart; extra cells past the third are
+ * kept and wrap onto a second line, because losing one would lose what is
+ * written in it.
+ *
+ * Neither case can be produced by typing. Both can arrive from a note file
+ * written by something else, which is the only reason this is a repair and not an
+ * assertion.
+ */
+export function columnFix(cells: number): { unwrap: boolean; cols: number } {
+  if (cells < COLS_MIN) {
+    return { unwrap: true, cols: 0 }
+  }
+  return { unwrap: false, cols: Math.min(cells, COLS_MAX) }
+}
+
+/**
+ * Take a row apart, leaving everything written in it behind as ordinary blocks.
+ *
+ * Column by column, in order, which is the order the text reads in everywhere
+ * else already - the preview, the word count, the summariser and the action
+ * points all walk the document. Empty lines are dropped, or removing a row of
+ * three half-filled columns would leave a stack of blank paragraphs behind it.
+ */
+export function unwrapColumns(row: HTMLElement): HTMLElement | null {
+  const blocks: ChildNode[] = []
+  for (const child of Array.from(row.childNodes)) {
+    const cell = child instanceof HTMLElement && 'col' in child.dataset ? child : null
+    for (const node of cell === null ? [child] : Array.from(cell.childNodes)) {
+      if (isBlankLine(node)) {
+        continue
+      }
+      blocks.push(node)
+    }
+  }
+  if (blocks.length === 0) {
+    blocks.push(emptyLine())
+  }
+  const first = blocks[0]
+  row.replaceWith(...blocks)
+  return first instanceof HTMLElement ? first : null
+}
+
+/**
+ * Put the column rows in a note body back in order after a load.
+ *
+ * Only repairs, because the layout itself needs no help: `data-cols` and
+ * `data-col` come off disk intact and the stylesheet works from them. What can
+ * arrive wrong is a row whose count no longer matches its cells, and a cell with
+ * nothing in it at all - which in a contenteditable is a cell you cannot put the
+ * caret into, so the column would be unreachable rather than empty.
+ */
+export function applyColumnBlocks(root: HTMLElement): void {
+  for (const row of Array.from(root.querySelectorAll<HTMLElement>('[data-cols]'))) {
+    const cells = columnCells(row)
+    const fix = columnFix(cells.length)
+    if (fix.unwrap) {
+      unwrapColumns(row)
+      continue
+    }
+    if (row.dataset.cols !== String(fix.cols)) {
+      row.dataset.cols = String(fix.cols)
+    }
+    for (const cell of cells) {
+      if (cell.childNodes.length === 0) {
+        cell.appendChild(emptyLine())
+      }
+    }
+  }
+}
+
+/**
+ * Whether there is nothing between the start of `cell` and the caret - or
+ * nothing between the caret and the end of it.
+ *
+ * This is what Backspace and Delete are refused on. Chromium's answer to
+ * Backspace at the start of a cell is to merge the cell into whatever comes
+ * before it, which takes the column with it: one keystroke at the top of a
+ * column and the row is a paragraph. The way out of a row is the Remove button,
+ * which keeps every line.
+ *
+ * An image or a divider counts as something, so the key still deletes those.
+ */
+export function nothingBeyond(cell: HTMLElement, range: Range, edge: 'start' | 'end'): boolean {
+  const probe = document.createRange()
+  probe.selectNodeContents(cell)
+  if (edge === 'start') {
+    probe.setEnd(range.startContainer, range.startOffset)
+  } else {
+    probe.setStart(range.endContainer, range.endOffset)
+  }
+  const fragment = probe.cloneContents()
+  return (
+    (fragment.textContent ?? '').length === 0 &&
+    fragment.querySelector('img, hr, [data-canvas], [data-recording]') === null
+  )
+}
+
 /**
  * Put nested lists where they belong: inside the item they hang off.
  *
@@ -424,7 +610,7 @@ export function applyCanvasBlocks(root: HTMLElement): void {
  * is unwrapped on the next load, the marker is gone, and whatever the block was
  * for silently stops working.
  */
-const OWN_BLOCKS = ['canvas', 'summary', 'recording', 'transcript']
+const OWN_BLOCKS = ['canvas', 'summary', 'recording', 'transcript', 'cols', 'col']
 
 export function normaliseBlocks(root: HTMLElement): void {
   /*
@@ -492,7 +678,18 @@ export function normaliseBlocks(root: HTMLElement): void {
    * It happens after a divider - and it is the worst kind of broken, because it
    * looks perfectly normal and nothing works on it: no alert marker, no markdown
    * shortcut, no Tab, since every one of them asks which block the caret is in.
+   *
+   * Inside a column too, and for the same reason. A cell is where blocks live
+   * exactly as the body is, so a line loose in one is loose in the note.
    */
+  adoptLooseText(root)
+  for (const cell of root.querySelectorAll<HTMLElement>('[data-col]')) {
+    adoptLooseText(cell)
+  }
+}
+
+/** Wrap the bare text nodes directly inside `container` in paragraphs. */
+function adoptLooseText(container: HTMLElement): void {
   let loose: ChildNode[] = []
   const adopt = (): void => {
     if (loose.length === 0) {
@@ -505,7 +702,7 @@ export function normaliseBlocks(root: HTMLElement): void {
     }
     loose = []
   }
-  for (const node of Array.from(root.childNodes)) {
+  for (const node of Array.from(container.childNodes)) {
     const isBlock =
       node.nodeType === Node.ELEMENT_NODE &&
       /^(P|H1|H2|H3|H4|UL|OL|BLOCKQUOTE|PRE|HR|DIV|TABLE)$/.test((node as Element).tagName)

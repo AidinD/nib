@@ -41,6 +41,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: 'quote', label: 'Quote', keywords: ['blockquote', 'citat'] },
   { id: 'code', label: 'Code', keywords: ['monospace', 'kod'] },
   { id: 'divider', label: 'Divider', keywords: ['hr', 'line', 'avdelare'] },
+  {
+    id: 'columns2',
+    label: 'Two columns',
+    keywords: ['columns', 'kolumner', 'spalter', '2', 'side'],
+    hint: 'Side by side'
+  },
+  {
+    id: 'columns3',
+    label: 'Three columns',
+    keywords: ['columns', 'kolumner', 'spalter', '3', 'side'],
+    hint: 'Side by side'
+  },
   { id: 'alert', label: 'Flag as action point', keywords: ['alert', 'todo', 'flagga'] },
   { id: 'canvas', label: 'Drawing', keywords: ['canvas', 'sketch', 'rita'] },
   { id: 'image', label: 'Image', keywords: ['picture', 'bild'] },

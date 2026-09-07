@@ -15,6 +15,15 @@ import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   applyCanvasBlocks,
+  applyColumnBlocks,
+  columnCell,
+  columnCells,
+  columnsRow,
+  isBlankLine,
+  nothingBeyond,
+  unwrapColumns,
+  COLS_MAX,
+  COLS_MIN,
   clock,
   lineSeconds,
   applyRecordingBlocks,
@@ -130,6 +139,15 @@ export function Editor({
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [words, setWords] = useState(0)
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null)
+  /*
+   * The column row the caret was last put in, if any.
+   *
+   * Held as an element, like the selected image, and for the same reason: what
+   * the toolbar above the document acts on is a thing in the document, not a
+   * copy of it. It is set by a click inside a row and cleared by a click outside
+   * one, so the controls for a row are only ever up while you are in it.
+   */
+  const [columnRow, setColumnRow] = useState<HTMLElement | null>(null)
   // The drawing currently open over the document, if any.
   const [openDrawingId, setOpenDrawingId] = useState<string | null>(null)
   /*
@@ -290,6 +308,7 @@ export function Editor({
     let cancelled = false
     loadedId.current = note.id
     setSelectedImage(null)
+    setColumnRow(null)
     setSlash(null)
     setPicker(null)
     setLinker(null)
@@ -320,6 +339,9 @@ export function Editor({
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
+      // After the unwrapping, not before: what a row needs putting right is
+      // decided from the cells it actually still has.
+      applyColumnBlocks(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
       setTranscriptCount(bodyRef.current.querySelectorAll('[data-transcript]').length)
       const loadedTitle = doc?.title ?? note.title
@@ -399,6 +421,9 @@ export function Editor({
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
+      // After the unwrapping, not before: what a row needs putting right is
+      // decided from the cells it actually still has.
+      applyColumnBlocks(bodyRef.current)
       applyNoteLinks(bodyRef.current, noteTitles(index))
       setTranscriptCount(bodyRef.current.querySelectorAll('[data-transcript]').length)
       titleRef.current = doc.title
@@ -1746,6 +1771,97 @@ export function Editor({
     })
   }, [onBodyInput, withSelection])
 
+  /*
+   * A row of two or three columns, put in at the caret.
+   *
+   * Built with DOM calls and placed as a SIBLING of the block the caret is in,
+   * for the reason the drawing block already learned: `insertHTML` unwraps a div
+   * that lands inside a paragraph and leaves the contents behind.
+   *
+   * Never nested. The caret's top-level ancestor is what the row goes after, and
+   * inside a column that ancestor is the row itself - so asking for columns from
+   * inside a row gives a second row underneath it rather than a grid inside a
+   * grid, which is a shape neither the caret nor the flag gutter has an answer
+   * for.
+   */
+  const insertColumns = useCallback(
+    (count: number) => {
+      const root = bodyRef.current
+      if (root === null) {
+        return
+      }
+      withSelection(() => {
+        const row = columnsRow(count)
+        // A paragraph after it, so there is somewhere to keep writing below the
+        // row - the last block in a note cannot be one you cannot get past.
+        const after = document.createElement('p')
+        after.appendChild(document.createElement('br'))
+
+        const current = blockAtSelection(root)
+        const anchor = current === null ? root.lastElementChild : topLevel(root, current)
+        if (anchor === null) {
+          root.appendChild(row)
+        } else {
+          anchor.after(row)
+        }
+        row.after(after)
+
+        const first = columnCells(row)[0]
+        if (first !== undefined) {
+          caretIntoCell(first)
+        }
+        setColumnRow(row)
+        onBodyInput()
+      })
+    },
+    [onBodyInput, withSelection]
+  )
+
+  /**
+   * Change how many columns a row has.
+   *
+   * Growing adds empty cells on the right. Shrinking moves what is written in the
+   * cells being dropped into the last one that stays, rather than deleting it -
+   * this is a layout control, and no layout control should be able to throw away
+   * a paragraph. Empty lines are not carried over, or going 3 -> 2 -> 3 would
+   * leave a drift of blank paragraphs in the second column.
+   */
+  const setColumns = useCallback(
+    (row: HTMLElement, count: number) => {
+      const target = Math.min(Math.max(count, COLS_MIN), COLS_MAX)
+      while (columnCells(row).length < target) {
+        row.appendChild(columnCell())
+      }
+      const cells = columnCells(row)
+      const keep = cells[target - 1]
+      for (const cell of cells.slice(target)) {
+        for (const node of Array.from(cell.childNodes)) {
+          if (isBlankLine(node)) {
+            continue
+          }
+          keep.appendChild(node)
+        }
+        cell.remove()
+      }
+      row.dataset.cols = String(target)
+      onBodyInput()
+    },
+    [onBodyInput]
+  )
+
+  /** Take a row apart, leaving its lines behind in order. */
+  const dropColumns = useCallback(
+    (row: HTMLElement) => {
+      const first = unwrapColumns(row)
+      setColumnRow(null)
+      if (first !== null) {
+        caretInto(first)
+      }
+      onBodyInput()
+    },
+    [onBodyInput]
+  )
+
   const runSlashCommand = useCallback(
     (command: SlashCommand) => {
       const root = bodyRef.current
@@ -1823,6 +1939,12 @@ export function Editor({
         case 'divider':
           addDivider()
           break
+        case 'columns2':
+          insertColumns(2)
+          break
+        case 'columns3':
+          insertColumns(3)
+          break
         case 'alert':
           toggleAlert()
           break
@@ -1846,7 +1968,16 @@ export function Editor({
           break
       }
     },
-    [caretPoint, exec, addDivider, insertCanvas, pickImage, toggleAlert, wrapInCode]
+    [
+      caretPoint,
+      exec,
+      addDivider,
+      insertCanvas,
+      insertColumns,
+      pickImage,
+      toggleAlert,
+      wrapInCode
+    ]
   )
 
   /*
@@ -2032,8 +2163,34 @@ export function Editor({
         if (root === null) {
           return
         }
-        const item = blockAtSelection(root)?.closest('li') ?? null
+        const block = blockAtSelection(root)
+        const item = block?.closest('li') ?? null
         if (item === null) {
+          /*
+           * Tab moves to the next column, Shift+Tab back to the previous one.
+           *
+           * The key is swallowed everywhere else outside a list because a tab has
+           * no meaning in prose. Inside a row it has one: three columns are three
+           * places to type, and reaching the second one with the mouse every time
+           * is what makes a row of columns tiresome to fill in.
+           *
+           * A list inside a column still nests, above - that is the older meaning
+           * and the more specific one.
+           *
+           * The caret lands at the END of the column it arrives in, so tabbing
+           * across carries on writing where each column left off instead of
+           * pushing text in front of what is already there.
+           */
+          const cell = block?.closest<HTMLElement>('[data-col]') ?? null
+          const row = cell?.closest<HTMLElement>('[data-cols]') ?? null
+          if (cell !== null && row !== null) {
+            const cells = columnCells(row)
+            const next = cells[cells.indexOf(cell) + (event.shiftKey ? -1 : 1)]
+            if (next !== undefined) {
+              caretIntoCell(next)
+              setColumnRow(row)
+            }
+          }
           return
         }
         if (event.shiftKey) {
@@ -2127,8 +2284,44 @@ export function Editor({
         removeImage()
         return
       }
+      /*
+       * Backspace at the top of a column, and Delete at the bottom of one, do
+       * nothing at all.
+       *
+       * Left to Chromium they merge the cell into whatever sits beside it, and the
+       * column goes with it: one keystroke at the top of a column turns a row of
+       * three into a paragraph with the other columns' text run together. Both
+       * keys still work everywhere inside the column, including on an image or a
+       * divider - what is refused is the one position where the target is the
+       * structure rather than the text. A row is taken apart with Remove, which
+       * keeps every line.
+       */
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        const root = bodyRef.current
+        const selection = window.getSelection()
+        if (
+          root !== null &&
+          selection !== null &&
+          selection.rangeCount > 0 &&
+          selection.isCollapsed
+        ) {
+          const cell = blockAtSelection(root)?.closest<HTMLElement>('[data-col]') ?? null
+          if (
+            cell !== null &&
+            nothingBeyond(
+              cell,
+              selection.getRangeAt(0),
+              event.key === 'Backspace' ? 'start' : 'end'
+            )
+          ) {
+            event.preventDefault()
+            return
+          }
+        }
+      }
       if (event.key === 'Escape') {
         setSelectedImage(null)
+        setColumnRow(null)
       }
     },
     [
@@ -2188,6 +2381,12 @@ export function Editor({
           <button type="button" onClick={() => exec('insertOrderedList')}>1. List</button>
           <button type="button" onClick={() => exec('formatBlock', 'blockquote')}>Quote</button>
           <button type="button" onClick={addDivider}>Divider</button>
+          {/* Two, because two is the row you reach for - the third column is one
+              press away on the row itself, and a button that asks how many
+              columns before it has made any is a dialog for a layout choice. */}
+          <button type="button" onClick={() => insertColumns(2)} title="Columns">
+            Columns
+          </button>
         </div>
         <div className="toolbar-group">
           <button type="button" onClick={pickImage}>Image</button>
@@ -2416,6 +2615,43 @@ export function Editor({
           />
         )}
 
+        {/*
+          The controls for the row the caret is in.
+
+          In the same place as the image toolbar and styled with it: both are
+          "what you are standing in", and a control that appears where the block
+          is would have to be drawn over a contenteditable and moved every time
+          the text reflows.
+        */}
+        {columnRow !== null && (
+          <div className="image-toolbar columns-toolbar">
+            <span className="columns-label">Columns</span>
+            {[2, 3].map((count) => (
+              <button
+                key={count}
+                type="button"
+                className={columnCells(columnRow).length === count ? 'is-active' : ''}
+                title={
+                  count < columnCells(columnRow).length
+                    ? 'Fewer columns - what is in the last one moves left, nothing is lost'
+                    : `${count} columns`
+                }
+                onClick={() => setColumns(columnRow, count)}
+              >
+                {count}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="danger"
+              title="Take the row apart and keep every line"
+              onClick={() => dropColumns(columnRow)}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+
         {selectedImage !== null && (
           <div className="image-toolbar">
             <button type="button" onClick={() => resizeImage(0.8)}>Smaller</button>
@@ -2442,11 +2678,33 @@ export function Editor({
           onClick={(event) => {
             const target = event.target as HTMLElement
 
-            // The marker column: flag this line, tick it off, or clear it. The
-            // click lands on the body's padding rather than on any line, so the
-            // line is the one the pointer is level with.
+            // Which row of columns the click landed in, if any - the controls
+            // above the document act on it, and a click outside every row puts
+            // them away.
+            setColumnRow(target.closest<HTMLElement>('[data-cols]'))
+
+            /*
+             * The marker column: flag this line, tick it off, or clear it. The
+             * click lands on the padding rather than on any line, so the line is
+             * the one the pointer is level with.
+             *
+             * Every column has its own marker column, beside its own text. One
+             * gutter down the left of the body cannot serve a row: the lines in
+             * the second and third column are nowhere near it, and a click level
+             * with the row would have to guess which of the three lines it meant.
+             * So the gutter is the cell's when the click is in a cell, and the
+             * body's otherwise - and the body's gutter deliberately cannot reach
+             * a line inside a column, which is what stops a stray click beside a
+             * row from flagging something in the middle of it.
+             */
             const body = bodyRef.current
-            if (body !== null && event.clientX - body.getBoundingClientRect().left <= ALERT_GUTTER) {
+            const cell = target.closest<HTMLElement>('[data-col]')
+            const gutter = cell ?? body
+            if (
+              body !== null &&
+              gutter !== null &&
+              event.clientX - gutter.getBoundingClientRect().left <= ALERT_GUTTER
+            ) {
               /*
                * The last match, not the first.
                *
@@ -2457,8 +2715,12 @@ export function Editor({
                * item last among the matches.
                */
               const candidates = Array.from(
-                body.querySelectorAll<HTMLElement>(ALERT_LINES)
+                gutter.querySelectorAll<HTMLElement>(ALERT_LINES)
               ).filter((candidate) => {
+                // A line in a column answers to its own column's gutter, above.
+                if (cell === null && candidate.closest('[data-col]') !== null) {
+                  return false
+                }
                 /*
                  * Not a line of a transcript, and not the signature.
                  *
@@ -2686,6 +2948,43 @@ export function Editor({
       </div>
     </section>
   )
+}
+
+/**
+ * The block directly under the body that `node` sits in.
+ *
+ * What a new block is placed after. Walking up rather than asking whether the
+ * caret's block is a child of the body: inside a list, and inside a column, it is
+ * not - and the answer wanted in both cases is the whole list, or the whole row,
+ * rather than the last block in the note.
+ */
+function topLevel(root: HTMLElement, node: HTMLElement): HTMLElement {
+  let current = node
+  while (current.parentElement !== null && current.parentElement !== root) {
+    current = current.parentElement
+  }
+  return current
+}
+
+/**
+ * Put the caret in a column, at the end of what is written there.
+ *
+ * At the START when that line is empty: collapsing to the end of a paragraph
+ * whose only child is a `br` puts the caret after the break, which draws it a
+ * line below the text it is supposed to be on.
+ */
+function caretIntoCell(cell: HTMLElement): void {
+  caretInto(cell.lastElementChild ?? cell)
+}
+
+/** Put the caret in a line, at the end of it - or at the start when it is empty. */
+function caretInto(line: Element): void {
+  const range = document.createRange()
+  range.selectNodeContents(line)
+  range.collapse((line.textContent ?? '').length === 0)
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
 }
 
 function escapeHtml(text: string): string {
