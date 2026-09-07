@@ -3,6 +3,40 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - The vowel changes are a list, and it says what is not on it
+
+**Decided.** Thirteen pairs of Swedish stems whose plural changes the vowel -
+`bok`/`böck`, `hand`/`händ`, `stad`/`städ` and so on - are followed in both
+directions. `böcker` finds a note that says `bok`, and `bok` finds one that says
+`böcker`. Everything else is untouched.
+
+**It cannot be a rule, and that is the whole reason this looks the way it does.**
+Taking `er` off `böcker` leaves `böck`, which is not a prefix of `bok` and never
+will be: the two forms share no ending, and the vowel change is inherited rather
+than derived. The trimming added the day before - see the entry above - handles
+everything that inflects by adding to the end, which is most of the language, and
+is powerless here. So this part is a list, and it will stay a list.
+
+**Ending-tolerant, so one entry covers a word's forms.** `böckerna` is neither the
+listed stem nor one ending away from it, so the lookup checks whether a term
+STARTS with a listed stem and what follows is an ending. Which also means
+`bokhylla` maps to nothing: it starts with `bok`, but `hylla` is not an ending, and
+mapping a compound would search for books whenever a bookshelf was mentioned.
+
+**Two pairs are left out on purpose, and a test enforces it.** Both because one
+side is a string that sits inside unrelated words, and the matching is on
+substrings. `man`/`män`: `man` is the impersonal pronoun as well as a noun, and it
+is inside `manager`, `management` and `manuell` - so searching `män` would pull
+the management shelf into a search about people. `broder`/`bröder`: the plural
+stem is `bröd`, which is the word for bread. The test says so in as many words,
+because the obvious thing for a later reader to do is add them.
+
+**Verbs are out as a class.** `tog` from `ta`, `skrev` from `skriva`, `sprang`
+from `springa` - that is not a list of thirty words, it is Swedish morphology, and
+doing it properly needs a real dictionary and the note text stemmed as well as the
+query. That is the point where a search index starts to earn its cost, and it is
+not this feature.
+
 ## 2026-09-07 - The ending comes off the search, and that is all it does
 
 **Decided.** A search of five characters or more is also tried with one common

@@ -119,32 +119,115 @@ const TRIM_FROM = 5
 const STEM_MIN = 3
 
 /**
- * What a search means: what was typed, and the same without an inflection.
+ * The words whose plural changes the vowel, as pairs of stems.
  *
- * Both, never one instead of the other. A note holding the exact word you typed
- * has to stay in the list, so the trimmed form is an addition - anything that
- * matched before this existed still matches.
+ * `bok` and `böcker` have no ending in common, so nothing that trims endings can
+ * get from one to the other: taking `er` off `böcker` leaves `böck`, which is not
+ * a prefix of `bok` and never will be. This is the only part of the language that
+ * cannot be handled by a rule - the vowel change is a closed group of words,
+ * inherited rather than derived - so it is a list, and a list is what it will
+ * stay.
+ *
+ * A curated list, and short on purpose. Anything not in it behaves exactly as it
+ * did: this only ever adds a term.
+ *
+ * TWO ARE DELIBERATELY MISSING, and both for the same reason - one side of the
+ * pair is a string that turns up inside unrelated words, and the match is on
+ * substrings.
+ *
+ *  - `man` / `män`. `man` is also the impersonal pronoun, and as a substring it
+ *    is inside `manager`, `management` and `manuell`. Searching `män` would pull
+ *    in half the management shelf.
+ *  - `broder` / `bröder`. The plural stem is `bröd`, which is the word for bread.
+ *
+ * Verbs are missing too, as a class. `tog` from `ta`, `skrev` from `skriva`,
+ * `sprang` from `springa`: that is not a list of thirty words, it is Swedish
+ * morphology, and it needs a real dictionary and the text stemmed as well as the
+ * query. See DECISIONS.
  */
-export function searchTerms(search: string): string[] {
-  const needle = search.trim().toLowerCase()
-  if (needle.length === 0) {
-    return []
+const VOWEL_SHIFTS: ReadonlyArray<readonly [string, string]> = [
+  ['bok', 'böck'],
+  ['fot', 'fött'],
+  ['rot', 'rött'],
+  ['tand', 'tänd'],
+  ['hand', 'händ'],
+  ['land', 'länd'],
+  ['natt', 'nätt'],
+  ['stad', 'städ'],
+  ['son', 'sön'],
+  ['dotter', 'döttr'],
+  ['mus', 'möss'],
+  ['lus', 'löss'],
+  ['gås', 'gäss']
+]
+
+/** Whether what is left after a stem is an ending, rather than more word. */
+function isEnding(rest: string): boolean {
+  return rest.length === 0 || ENDINGS.includes(rest)
+}
+
+/**
+ * The other side of a vowel change, if this word is one of them.
+ *
+ * Ending-tolerant, so every inflection of a listed word finds its counterpart:
+ * `böckerna` starts with `böck` and what is left is an ending, so it maps to
+ * `bok`. `bokhylla` starts with `bok` and what is left is not an ending, so it
+ * maps to nothing - a compound is a different word, and mapping it would search
+ * for books whenever a bookshelf was mentioned.
+ */
+function vowelShift(word: string): string | null {
+  for (const pair of VOWEL_SHIFTS) {
+    for (const [from, to] of [pair, [pair[1], pair[0]] as const]) {
+      if (word.startsWith(from) && isEnding(word.slice(from.length))) {
+        return to
+      }
+    }
   }
+  return null
+}
+
+/** One inflectional ending off a word, or null when there is nothing to take. */
+function trimEnding(needle: string): string | null {
   if (needle.length < TRIM_FROM) {
-    return [needle]
+    return null
   }
   for (const ending of ENDINGS) {
     if (!needle.endsWith(ending)) {
       continue
     }
     const stem = needle.slice(0, needle.length - ending.length)
-    if (stem.length >= STEM_MIN) {
-      return [needle, stem]
-    }
-    // A word this short is the base form already, whatever it ends with.
-    break
+    return stem.length >= STEM_MIN ? stem : null
   }
-  return [needle]
+  return null
+}
+
+/**
+ * What a search means: what was typed, the same without an inflection, and the
+ * other side of a vowel change when the word has one.
+ *
+ * All of them, never one instead of another. A note holding the exact word you
+ * typed has to stay in the list, so everything here is an addition - anything
+ * that matched before any of this existed still matches.
+ */
+export function searchTerms(search: string): string[] {
+  const needle = search.trim().toLowerCase()
+  if (needle.length === 0) {
+    return []
+  }
+  const terms = [needle]
+  const stem = trimEnding(needle)
+  if (stem !== null) {
+    terms.push(stem)
+  }
+  // Asked of the typed word AND of its stem, since either can be the form that
+  // is listed: `böckerna` is reached through neither on its own.
+  for (const term of [...terms]) {
+    const other = vowelShift(term)
+    if (other !== null && !terms.includes(other)) {
+      terms.push(other)
+    }
+  }
+  return terms
 }
 
 export function categoryInScope(category: Category, filter: ScopeFilter): boolean {

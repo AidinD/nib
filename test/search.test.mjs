@@ -201,3 +201,45 @@ test('the snippet quotes whichever term the note actually holds', () => {
   const snippet = snippetFor(text, searchTerms('onboardingen'))
   assert.ok(snippet.includes('onboarding'), snippet)
 })
+
+test('a vowel change is followed, in both directions', () => {
+  // `bok` and `böcker` share no ending, so no amount of trimming gets from one to
+  // the other - taking `er` off leaves `böck`. This is the closed group of words
+  // that needs a list.
+  assert.ok(searchTerms('böcker').includes('bok'), searchTerms('böcker').join(' '))
+  assert.ok(searchTerms('bok').includes('böck'))
+  assert.ok(searchTerms('händer').includes('hand'))
+  assert.ok(searchTerms('städerna').includes('stad'))
+})
+
+test('every inflection of a listed word finds its counterpart', () => {
+  // `böckerna` is neither the listed stem nor one ending away from it, so the
+  // lookup has to tolerate an ending of its own.
+  assert.ok(searchTerms('böckerna').includes('bok'))
+  assert.ok(searchTerms('boken').includes('böck'))
+})
+
+test('a compound is a different word and is left alone', () => {
+  // `bokhylla` starts with `bok`, and mapping it would search for books whenever
+  // a bookshelf was mentioned.
+  assert.ok(!searchTerms('bokhylla').includes('böck'), searchTerms('bokhylla').join(' '))
+})
+
+test('man and män are deliberately not in the list', () => {
+  // Not an oversight, and this test is here to stop it being "fixed". `man` is
+  // the impersonal pronoun as well as a noun, and as a substring it sits inside
+  // manager, management and manuell - so the pair would pull the management shelf
+  // into a search for people.
+  assert.ok(!searchTerms('män').includes('man'))
+  assert.ok(!searchTerms('mannen').includes('män'))
+})
+
+test('the shifted term finds the note, and quotes the line', () => {
+  const notes = [note({ id: 'base' })]
+  const bodies = new Map([['base', body('vi köpte en bok om ledarskap')]])
+  assert.deepEqual(
+    selectedNotes(index(notes), ALL, 'all', 'böcker', false, bodies).map((n) => n.id),
+    ['base']
+  )
+  assert.ok(snippetFor('vi köpte en bok om ledarskap', searchTerms('böcker')).includes('bok'))
+})
