@@ -3,6 +3,50 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - An auth failure says what to do, and the busy label speaks one language
+
+**Decided.** When the summariser fails on credentials, the message leads with the
+thing to do - `claude auth login` - and keeps Claude Code's own wording in
+brackets. The mapping lives in keel, where the CLI is spawned, so every sibling
+that calls it gets the same message. And the Summarise button's busy label is
+English like its idle one.
+
+**Why the raw message was the wrong thing to show.** "Failed to authenticate:
+OAuth session expired and could not be refreshed" is accurate and useless in a
+note-taking app: it names a mechanism the reader has no relationship with, in a
+button that has nothing to do with signing in, and it reads as the app being
+broken. The machine's stored login being gone is not something Nib can fix or
+even see - which is exactly why it has to be said in a sentence that points
+somewhere.
+
+**In keel rather than here.** The knowledge that a particular string means "the
+machine is signed out" is knowledge about Claude Code, and keel is where Claude
+Code is spawned. Mapping it in Nib would have left Jot, Helm and Tend to
+rediscover the same thing, and one of them would have got it slightly different.
+
+**Two messages, not one.** A subscription session and a rejected API key both
+fail authentication and need different actions - telling somebody to log in when
+their key is wrong sends them somewhere that will not help. Anything unrecognised
+keeps the passthrough, because a reason that says "signed out" about something
+else is worse than the raw text.
+
+**And why this could not be verified against the real failure.** Every process
+spawned from inside a Claude Code session borrows that session's own
+authentication over a socket - it overrode even a deliberately invalid
+`ANTHROPIC_API_KEY`, which answered normally in 6.7 seconds. So the failure was
+driven through `KEEL_CLAUDE_BIN`, keel's own test hook, pointed at a stub that
+prints the error: main process, IPC, and the banner all carried the mapped
+message, and the button went back to `Summarise` afterwards rather than sitting
+on `Summarising…`.
+
+**The 15-minute ceiling stays.** A long transcript really can take minutes, and
+the summariser asks keel for fifteen. That is the right budget for the work and
+the wrong one for a wait that cannot succeed - but a pre-flight check on
+`claude auth status` would refuse calls that DO work, since a sibling running
+inside a Claude Code session reads as signed out while its calls authenticate
+over that socket. Left alone deliberately, and written down here because the
+next person to see a stuck button will reach for a timeout.
+
 ## 2026-09-07 - The vowel changes are a list, and it says what is not on it
 
 **Decided.** Thirteen pairs of Swedish stems whose plural changes the vowel -

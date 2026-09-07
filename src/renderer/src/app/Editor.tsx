@@ -2812,7 +2812,10 @@ export function Editor({
             onClick={() => setSummaryPanel((open) => !open)}
             disabled={note === null || summarising}
           >
-            {summarising ? 'Sammanfattar…' : 'Summarise'}
+            {/* One control, one language. The idle label is English like the
+                rest of the toolbar, and the busy one was not - which read as the
+                app having been translated halfway. */}
+            {summarising ? 'Summarising…' : 'Summarise'}
           </button>
         </div>
         </div>
