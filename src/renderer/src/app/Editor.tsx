@@ -14,6 +14,8 @@ import type { NoteChoice } from './NotePicker'
 import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
+  activeFormats,
+  readCaretMarks,
   applyCanvasBlocks,
   applyColumnBlocks,
   columnCell,
@@ -150,6 +152,38 @@ export function Editor({
    * one, so the controls for a row are only ever up while you are in it.
    */
   const [columnRow, setColumnRow] = useState<HTMLElement | null>(null)
+  /*
+   * Which formatting the caret is standing in, as toolbar button ids.
+   *
+   * So the toolbar answers "what is this line" as well as offering to change it.
+   * Without it the buttons are write-only: whether a line is a heading or a
+   * paragraph, or a word bold, has to be read off the text itself, which is
+   * exactly the question a toolbar exists to answer at a glance.
+   *
+   * Derived from the document on every selection change, never accumulated. A
+   * remembered "bold is on" is a second copy of what the note already says, and
+   * it drifts - press bold, click into a plain line, and the button is still lit
+   * over text that is not bold.
+   */
+  const [formats, setFormats] = useState<string[]>([])
+  /*
+   * Re-read the marks under the caret.
+   *
+   * The comparison is not an optimisation detail. `selectionchange` fires on
+   * every arrow key and every character, and setting state each time would
+   * re-render the whole editor panel while typing; returning the same array when
+   * nothing changed lets React stop there instead. Moving along one paragraph
+   * changes nothing, which is the common case.
+   */
+  const refreshFormats = useCallback(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    const marks = readCaretMarks(root)
+    const next = marks === null ? [] : activeFormats(marks)
+    setFormats((current) => (current.join(' ') === next.join(' ') ? current : next))
+  }, [])
   // The drawing currently open over the document, if any.
   const [openDrawingId, setOpenDrawingId] = useState<string | null>(null)
   /*
@@ -311,6 +345,7 @@ export function Editor({
     loadedId.current = note.id
     setSelectedImage(null)
     setColumnRow(null)
+    setFormats([])
     setSlash(null)
     setPicker(null)
     setLinker(null)
@@ -480,12 +515,16 @@ export function Editor({
       if (root.contains(range.commonAncestorContainer)) {
         savedRange.current = range.cloneRange()
       }
+      // The caret moved, so what it is standing in may have changed too. Same
+      // listener rather than a second one: it is the same event and the same
+      // question, and two listeners would answer it in an undefined order.
+      refreshFormats()
     }
     document.addEventListener('selectionchange', remember)
     return () => {
       document.removeEventListener('selectionchange', remember)
     }
-  }, [])
+  }, [refreshFormats])
 
   /** Run something with the caret guaranteed to be back inside the body. */
   const withSelection = useCallback((run: () => void) => {
@@ -675,8 +714,17 @@ export function Editor({
       // The highlight goes back to the top when the matches change under it.
       return { ...current, query, active: 0 }
     })
+    /*
+     * And after an edit, not only after the caret moves.
+     *
+     * A toolbar press goes through `exec`, which ends here: pressing B with the
+     * caret in a word changes what the caret is standing in without moving it, so
+     * `selectionchange` may never fire and the button would stay unlit until the
+     * next click.
+     */
+    refreshFormats()
     scheduleSave()
-  }, [scheduleSave, slashQuery])
+  }, [refreshFormats, scheduleSave, slashQuery])
 
   /**
    * Rich text through the browser's own editing commands.
@@ -2427,6 +2475,9 @@ export function Editor({
     ]
   )
 
+  /** The class that lights a toolbar button, for the formatting the caret is in. */
+  const mark = (id: string): string => (formats.includes(id) ? 'is-active' : '')
+
   if (note === null) {
     return (
       <section className="editor">
@@ -2453,22 +2504,22 @@ export function Editor({
             that gets clipped. */}
         <div className="toolbar-scroll">
         <div className="toolbar-group">
-          <button type="button" onClick={() => exec('formatBlock', 'h1')}>H1</button>
-          <button type="button" onClick={() => exec('formatBlock', 'h2')}>H2</button>
-          <button type="button" onClick={() => exec('formatBlock', 'h3')}>H3</button>
-          <button type="button" onClick={() => exec('formatBlock', 'p')}>Body</button>
+          <button type="button" className={mark('h1')} onClick={() => exec('formatBlock', 'h1')}>H1</button>
+          <button type="button" className={mark('h2')} onClick={() => exec('formatBlock', 'h2')}>H2</button>
+          <button type="button" className={mark('h3')} onClick={() => exec('formatBlock', 'h3')}>H3</button>
+          <button type="button" className={mark('body')} onClick={() => exec('formatBlock', 'p')}>Body</button>
         </div>
         <div className="toolbar-group">
-          <button type="button" onClick={() => exec('bold')}><b>B</b></button>
-          <button type="button" onClick={() => exec('italic')}><i>I</i></button>
-          <button type="button" onClick={() => exec('underline')}><u>U</u></button>
-          <button type="button" onClick={() => exec('strikeThrough')}><s>S</s></button>
-          <button type="button" onClick={wrapInCode}>code</button>
+          <button type="button" className={mark('bold')} onClick={() => exec('bold')}><b>B</b></button>
+          <button type="button" className={mark('italic')} onClick={() => exec('italic')}><i>I</i></button>
+          <button type="button" className={mark('underline')} onClick={() => exec('underline')}><u>U</u></button>
+          <button type="button" className={mark('strike')} onClick={() => exec('strikeThrough')}><s>S</s></button>
+          <button type="button" className={mark('code')} onClick={wrapInCode}>code</button>
         </div>
         <div className="toolbar-group">
-          <button type="button" onClick={() => exec('insertUnorderedList')}>Bullets</button>
-          <button type="button" onClick={() => exec('insertOrderedList')}>1. List</button>
-          <button type="button" onClick={() => exec('formatBlock', 'blockquote')}>Quote</button>
+          <button type="button" className={mark('bullets')} onClick={() => exec('insertUnorderedList')}>Bullets</button>
+          <button type="button" className={mark('numbers')} onClick={() => exec('insertOrderedList')}>1. List</button>
+          <button type="button" className={mark('quote')} onClick={() => exec('formatBlock', 'blockquote')}>Quote</button>
           <button type="button" onClick={addDivider}>Divider</button>
           {/* Two, because two is the row you reach for - the third column is one
               press away on the row itself, and a button that asks how many

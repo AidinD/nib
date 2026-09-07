@@ -926,6 +926,127 @@ export function blockAtSelection(root: HTMLElement): HTMLElement | null {
   return block !== null && root.contains(block) ? (block as HTMLElement) : null
 }
 
+/**
+ * What the caret is standing in, as far as the toolbar is concerned.
+ *
+ * Read off the document rather than remembered: the toolbar reflects the note,
+ * and a copy of "what is switched on" kept in the editor would be one more thing
+ * that can disagree with the text - which is exactly the bug the marks are meant
+ * to prevent, where the button says one thing and the line is another.
+ */
+export interface CaretMarks {
+  /** The block's tag name: P, H1, H2, H3, H4, LI, BLOCKQUOTE. Empty outside one. */
+  block: string
+  /** The nearest list around the caret: UL, OL, or empty. */
+  list: string
+  quoted: boolean
+  code: boolean
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+}
+
+/**
+ * Which toolbar buttons the caret's surroundings light up.
+ *
+ * The ids are the buttons' own - the same strings the slash menu uses - so a
+ * button asks one question about a list of names rather than each one knowing how
+ * to interrogate the document.
+ *
+ * `body` is the case worth stating: it means a plain paragraph, so it is NOT lit
+ * inside a quote or a list even though the block there is often a paragraph too.
+ * The button turns whatever the caret is in into a plain paragraph, and lighting
+ * it beside a lit Quote would say the line is both.
+ */
+export function activeFormats(marks: CaretMarks): string[] {
+  const active: string[] = []
+  if (marks.block === 'H1' || marks.block === 'H2' || marks.block === 'H3') {
+    active.push(marks.block.toLowerCase())
+  }
+  if (marks.block === 'P' && !marks.quoted && marks.list.length === 0) {
+    active.push('body')
+  }
+  if (marks.list === 'UL') {
+    active.push('bullets')
+  }
+  if (marks.list === 'OL') {
+    active.push('numbers')
+  }
+  if (marks.quoted) {
+    active.push('quote')
+  }
+  if (marks.code) {
+    active.push('code')
+  }
+  if (marks.bold) {
+    active.push('bold')
+  }
+  if (marks.italic) {
+    active.push('italic')
+  }
+  if (marks.underline) {
+    active.push('underline')
+  }
+  if (marks.strike) {
+    active.push('strike')
+  }
+  return active
+}
+
+/**
+ * Read the caret's surroundings out of the document.
+ *
+ * The inline marks come from the ancestors - a `strong`, an `em` - and not from
+ * `queryCommandState`, which answers from the computed style: inside a heading it
+ * reports bold, because a heading IS bold, and the B button would then be lit on
+ * every heading in the note while pressing it would do something visible. The
+ * tags are what the note actually holds.
+ *
+ * `queryCommandState` is still asked, for one case the tags cannot answer: the
+ * moment after B is pressed with nothing selected. Chromium holds that as a
+ * pending state with nothing in the document yet, so the button would sit unlit
+ * until the first character arrived. It is ignored for bold inside a heading,
+ * which is the reading it gets wrong.
+ */
+export function readCaretMarks(root: HTMLElement): CaretMarks | null {
+  const selection = window.getSelection()
+  const anchor = selection?.anchorNode ?? null
+  if (selection === null || anchor === null || !root.contains(anchor)) {
+    return null
+  }
+  const from = anchor instanceof HTMLElement ? anchor : anchor.parentElement
+  const block = blockAtSelection(root)
+  const heading = /^H[1-4]$/.test(block?.tagName ?? '')
+
+  /** The nearest ancestor matching `selector`, but never one outside the body. */
+  const around = (selector: string): Element | null => {
+    const found = from?.closest(selector) ?? null
+    return found !== null && root.contains(found) ? found : null
+  }
+  const pending = (command: string): boolean => {
+    if (!selection.isCollapsed) {
+      return false
+    }
+    try {
+      return document.queryCommandState(command)
+    } catch {
+      return false
+    }
+  }
+
+  return {
+    block: block?.tagName ?? '',
+    list: around('ul, ol')?.tagName ?? '',
+    quoted: around('blockquote') !== null,
+    code: around('code, pre') !== null,
+    bold: around('strong, b') !== null || (!heading && pending('bold')),
+    italic: around('em, i') !== null || pending('italic'),
+    underline: around('u') !== null || pending('underline'),
+    strike: around('s, strike, del') !== null || pending('strikeThrough')
+  }
+}
+
 export function wordCount(html: string): number {
   const text = htmlToText(html)
   return text.length === 0 ? 0 : text.split(/\s+/).length

@@ -3,6 +3,53 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - The toolbar says what the caret is standing in
+
+**Decided.** The formatting buttons light up for the line the caret is in: the
+heading level, body text, a bullet or numbered list, a quote, code, and bold,
+italic, underline and strikethrough. The same grey wash every other active
+control in the app uses.
+
+**Why it was missing is the interesting part.** The toolbar was write-only. It
+offered to make a heading and never said whether you were in one, so the only way
+to know what a line was was to look at the text and infer it - which works for a
+heading and does not for a word that is italic in a serif face, or for telling an
+H2 from an H3 in a note where no H2 sits nearby. A toolbar is the one place that
+question is supposed to be answered at a glance.
+
+**Derived from the document, never remembered.** The obvious implementation keeps
+a "bold is on" flag that the buttons toggle, and it drifts: press bold, click into
+a plain line, and the button is still lit over text that is not bold. So the marks
+are read out of the caret's ancestors on every selection change. The state in the
+editor is a cache of a question about the document, and it is thrown away and
+re-asked rather than maintained.
+
+**The inline marks come from the tags, not from `queryCommandState`.** Chromium
+answers that from the computed style, so inside a heading it reports bold -
+because a heading is bold - and the B button would have been lit on every heading
+in the notebook, while pressing it would have done something visible. A `strong`
+or a `b` in the ancestors is what the note actually holds. `queryCommandState` is
+still asked for one thing the tags cannot answer: the moment after B is pressed
+with nothing selected, which Chromium holds as a pending state with nothing in the
+document yet. It is ignored for bold inside a heading, which is the reading it
+gets wrong.
+
+**`Body` means a plain paragraph, so it is dark inside a quote and inside a list.**
+The block there is often a paragraph too, and answering "is this a paragraph" from
+the tag alone lit Body beside a lit Quote and said the line was both. The button
+turns whatever the caret is in INTO a plain paragraph, so it is lit only where
+pressing it would change nothing.
+
+**H4 lights nothing.** It exists in notes that arrived by paste and the toolbar has
+no button for it. Lighting H3 for it would be a lie about which button leaves the
+line as it is.
+
+**Re-rendered only when the answer changes.** `selectionchange` fires on every
+arrow key and every character, and setting state each time re-renders the whole
+editor panel while typing. The computed list is compared with the last one and the
+same array is returned when nothing changed, which is the common case - moving
+along one paragraph changes nothing.
+
 ## 2026-09-07 - Columns are a block in the note, and there are two or three of them
 
 **Decided.** A row of two or three independent columns, inserted where the caret
