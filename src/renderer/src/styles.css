@@ -1011,6 +1011,151 @@ textarea {
   cursor: pointer;
 }
 
+/* ---------- colour and highlight ---------- */
+
+/*
+ * A coloured word is `<span data-color="amber">`, a highlighted one
+ * `<mark data-tint="amber">`, and this is the only place a name becomes a colour.
+ *
+ * Not scoped to `.doc-body`, on purpose: the same rules paint a sticky window and
+ * anything else that shows a note body, with no code putting a class back after a
+ * load - the sanitiser keeps neither `style` nor `class`, which is what decided
+ * the whole shape of this feature.
+ *
+ * The app's own tokens rather than colours of their own. A note is meant to read
+ * as part of this window, and six unrelated hues in the middle of a paragraph is
+ * how a document starts looking like a ransom note.
+ */
+[data-color='blue'] {
+  color: var(--accent);
+}
+
+[data-color='green'] {
+  color: var(--green);
+}
+
+[data-color='amber'] {
+  color: var(--amber);
+}
+
+[data-color='violet'] {
+  color: var(--violet);
+}
+
+[data-color='red'] {
+  color: var(--danger);
+}
+
+[data-color='grey'] {
+  color: var(--text-dim);
+}
+
+/*
+ * A wash, not a fill.
+ *
+ * A highlighter on paper darkens what is under it and leaves the words readable;
+ * a solid block of the same colour on a dark surface hides them. `color-mix`
+ * keeps the token as the single source of the hue, so a palette change still
+ * lands here - and the text colour is left alone, so a highlighted word that is
+ * also coloured stays both.
+ */
+[data-tint='amber'] {
+  background: color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+[data-tint='green'] {
+  background: color-mix(in srgb, var(--green) 26%, transparent);
+}
+
+[data-tint='blue'] {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+[data-tint='violet'] {
+  background: color-mix(in srgb, var(--violet) 28%, transparent);
+}
+
+[data-tint='red'] {
+  background: color-mix(in srgb, var(--danger) 26%, transparent);
+}
+
+/*
+ * And `mark` itself, which until now had no style at all.
+ *
+ * The tag is on the sanitiser's allowed list and nothing in the app produced one,
+ * so a `mark` arriving in a paste got the browser's default - black text on a
+ * flat yellow, in the middle of a dark note. Anything painted here reads as this
+ * app's own highlight whether the app or a web page put it there.
+ */
+mark {
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+mark:not([data-tint]) {
+  background: color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+/* The swatch row, under the Colour and Highlight buttons. */
+.palette-group {
+  position: relative;
+}
+
+.palette {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 5px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/*
+ * Each swatch is a letter, not a dot.
+ *
+ * It carries the same attribute the note will carry, so the stylesheet paints the
+ * sample and the text from one rule and a swatch cannot promise a colour the
+ * words will not get. A dot could not show a highlight at all: a wash is a
+ * background, and a background with nothing on it says nothing about how the
+ * words underneath will read.
+ */
+.palette .swatch {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.palette .swatch:hover {
+  border-color: var(--text-dim);
+}
+
+.palette .swatch.is-selected {
+  border-color: var(--text);
+}
+
+.palette-none {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.palette-none:hover {
+  background: var(--surface-hover);
+}
+
 /* ---------- columns ---------- */
 
 /*

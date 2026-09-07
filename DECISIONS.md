@@ -3,6 +3,76 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - Colour and highlight: six names and five washes, never a hex value
+
+**Decided.** Words can be given one of six colours or one of five highlighter
+tints, from a swatch row behind two toolbar buttons. `Ctrl+Shift+H` highlights in
+the first tint. With nothing selected, a swatch paints the word the caret is in.
+
+**Names, not a colour picker.** This is the disagreement worth recording, because
+a picker is what was asked for. A note is the durable artefact here, and `#c8a2ff`
+written into one is a decision frozen into data: the palette can never be
+adjusted afterwards without editing every note that used it. The app is also one
+dark surface, and a colour chosen from a system picker is as likely to be
+unreadable on it as not. So the swatches are the app's own tokens, and what a note
+stores is the NAME - which is also the only thing that survives the sanitiser,
+since `style` is not on the allowed list and this feature is not a reason to add
+it. A free-form picker remains possible on top of this: it would need its own
+decision about where the hex lives and what happens to it when the theme changes.
+
+**The names are turned into colours in the stylesheet, and nowhere else.** A
+coloured run is `<span data-color="amber">`, a highlighted one
+`<mark data-tint="amber">`, and no code re-applies anything after a load - so a
+sticky window shows the same colours with nothing running over the note, the same
+way the column rows work. The cost is that a name lives in two files, so a test
+reads the stylesheet and fails if a swatch has no rule: a name with no rule is a
+button that lights, an attribute that reaches the note file, and no visible change
+anywhere.
+
+**`insertHTML` cannot carry a data attribute into the document.** Every other
+formatting command in this editor goes through `execCommand`, deliberately - it
+writes to the browser's own undo stack - so this did too, and it does not work.
+Chromium sanitises the fragment through its paste path, which DISSOLVES a `span`
+it reads as stylistic and pushes the computed style down onto the children as
+inline CSS. Painting a phrase produced `<span style="color: var(--amber)">` around
+one half and a styled `<strong>` around the other, with the attribute gone: the
+words looked right until the next save, where the sanitiser stripped the styles
+and the colour vanished. Measured in the running app. So the wrappers are built
+and placed by hand.
+
+**Which cost the undo stack, so the editor keeps a one-step undo of its own.**
+Chromium's stack holds only Chromium's own commands, and without this Ctrl+Z after
+colouring a word would skip the colour entirely and undo whatever was typed
+before it - which is worse than doing nothing. The same shape as the undo the
+removed-transcript path already keeps, and cleared by the next real edit so it can
+never answer a Ctrl+Z that meant something else. It reverses both directions:
+painting is undone by lifting the wrapper out, clearing by putting it back.
+
+**One wrapper per line, never one across several.** A `span` holding paragraphs is
+not something the parser keeps: a note is stored as HTML and read back by
+re-parsing it, and `<span><p>a</p></span>` comes back as an empty span followed by
+the paragraph. A highlight dragged over two lines would have looked right until
+the note was next opened, and then been gone. So the range is clipped to each line
+it touches and each piece gets its own wrapper.
+
+**Painting the same kind twice replaces rather than nests.** Wrappers of the same
+kind inside the new one come off, and one that encloses it and holds nothing else
+goes too. Otherwise a word recoloured three times carries three spans, of which
+only the innermost shows - and the file grows a layer every time somebody changes
+their mind. Colour and highlight are separate axes, so a word can be both.
+
+**Clearing acts on the whole run, however much of it is selected.** Clearing half
+a coloured word means splitting the wrapper and putting the halves back either
+side, and the failure mode of getting that wrong is a note carrying a stray empty
+span. Lifting the whole run out has one obvious meaning, and Ctrl+Z puts it back.
+
+**And `mark` finally has a style.** The tag was on the sanitiser's allowed list and
+nothing in the app produced one, so a `mark` arriving in a paste got the browser's
+default - black text on flat yellow, in the middle of a dark note. Anything
+highlighted now reads as this app's own highlight whether the app or a web page
+put it there. A wash rather than a fill, for the same reason a highlighter on paper
+leaves the words readable.
+
 ## 2026-09-07 - The toolbar says what the caret is standing in
 
 **Decided.** The formatting buttons light up for the line the caret is in: the

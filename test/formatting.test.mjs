@@ -24,6 +24,8 @@ function marks(over = {}) {
     list: '',
     quoted: false,
     code: false,
+    color: '',
+    tint: '',
     bold: false,
     italic: false,
     underline: false,
@@ -73,6 +75,18 @@ test('code, underline and strikethrough each light their own', () => {
   assert.deepEqual(activeFormats(marks({ code: true })), ['body', 'code'])
   assert.deepEqual(activeFormats(marks({ underline: true })), ['body', 'underline'])
   assert.deepEqual(activeFormats(marks({ strike: true })), ['body', 'strike'])
+})
+
+test('a coloured or highlighted run lights its button', () => {
+  // The button says only THAT there is a colour; which one it is belongs to the
+  // swatch row, which reads the name off the marks directly.
+  assert.deepEqual(activeFormats(marks({ color: 'amber' })), ['body', 'color'])
+  assert.deepEqual(activeFormats(marks({ tint: 'green' })), ['body', 'highlight'])
+  assert.deepEqual(activeFormats(marks({ color: 'red', tint: 'red' })), [
+    'body',
+    'color',
+    'highlight'
+  ])
 })
 
 test('outside any block, nothing is lit', () => {

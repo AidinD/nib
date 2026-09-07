@@ -15,7 +15,14 @@ import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
 import {
   activeFormats,
+  HIGHLIGHTS,
+  TEXT_COLORS,
+  paintRange,
+  paintSelector,
+  paintWrapper,
   readCaretMarks,
+  unwrap,
+  wordBounds,
   applyCanvasBlocks,
   applyColumnBlocks,
   columnCell,
@@ -70,6 +77,7 @@ import {
   sanitizeHtml,
   wordCount
 } from '../lib/notes'
+import type { CaretMarks } from '../lib/notes'
 
 /** How long after the last keystroke the note is written to disk. */
 const SAVE_DELAY = 600
@@ -165,7 +173,9 @@ export function Editor({
    * it drifts - press bold, click into a plain line, and the button is still lit
    * over text that is not bold.
    */
-  const [formats, setFormats] = useState<string[]>([])
+  const [caret, setCaret] = useState<CaretMarks | null>(null)
+  /** Which swatch row is open, if either. */
+  const [palette, setPalette] = useState<'color' | 'tint' | null>(null)
   /*
    * Re-read the marks under the caret.
    *
@@ -180,10 +190,20 @@ export function Editor({
     if (root === null) {
       return
     }
-    const marks = readCaretMarks(root)
-    const next = marks === null ? [] : activeFormats(marks)
-    setFormats((current) => (current.join(' ') === next.join(' ') ? current : next))
+    const next = readCaretMarks(root)
+    setCaret((current) =>
+      JSON.stringify(current) === JSON.stringify(next) ? current : next
+    )
   }, [])
+
+  /*
+   * The buttons the caret lights up.
+   *
+   * Derived rather than stored beside the marks: two states for one fact is how
+   * they come to disagree, and the marks are the fact - the swatch row needs the
+   * colour's NAME, not just that there is one.
+   */
+  const formats = useMemo(() => (caret === null ? [] : activeFormats(caret)), [caret])
   // The drawing currently open over the document, if any.
   const [openDrawingId, setOpenDrawingId] = useState<string | null>(null)
   /*
@@ -245,6 +265,20 @@ export function Editor({
     parent: HTMLElement | null
     before: ChildNode | null
   } | null>(null)
+  /*
+   * How to take the last paint back off, if that is still what Ctrl+Z means.
+   *
+   * A closure rather than a description of the change: painting and clearing are
+   * each other's opposite, so one field holds either. It exists because the
+   * wrappers are placed by hand - see the note on `insertHTML` in notes.ts - and
+   * Chromium's undo stack only holds Chromium's own commands. Without this,
+   * Ctrl+Z after colouring a word would skip the colour entirely and undo
+   * whatever was typed before it, which is worse than doing nothing.
+   *
+   * Cleared by the next real edit, in the `beforeinput` listener, so it can never
+   * be the answer to a Ctrl+Z that meant something else.
+   */
+  const undoPaint = useRef<(() => void) | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
     null
@@ -345,7 +379,8 @@ export function Editor({
     loadedId.current = note.id
     setSelectedImage(null)
     setColumnRow(null)
-    setFormats([])
+    setCaret(null)
+    setPalette(null)
     setSlash(null)
     setPicker(null)
     setLinker(null)
@@ -651,8 +686,10 @@ export function Editor({
     const onBeforeInput = (event: Event): void => {
       const input = event as InputEvent
       // A real edit means the browser's undo stack now holds something newer
-      // than our removed transcript, so the key belongs to it again.
+      // than our removed transcript or our last paint, so the key belongs to it
+      // again.
       undone.current = null
+      undoPaint.current = null
       const line = blockAtSelection(root)
       let handled = false
 
@@ -1924,6 +1961,122 @@ export function Editor({
     [onBodyInput]
   )
 
+  /**
+   * Colour the selection, or the word the caret is in.
+   *
+   * The wrappers are built and placed by hand rather than through `insertHTML`,
+   * which cannot carry a data attribute into the document - see the note in
+   * notes.ts, which is where the DOM work lives. What is left here is the
+   * question of WHAT to paint: the selection, or, when there is none, the word
+   * the caret is in.
+   */
+  const paint = useCallback(
+    (kind: 'color' | 'tint', name: string) => {
+      const root = bodyRef.current
+      setPalette(null)
+      if (root === null) {
+        return
+      }
+      withSelection(() => {
+        const selection = window.getSelection()
+        if (selection === null || selection.rangeCount === 0) {
+          return
+        }
+        let range = selection.getRangeAt(0)
+        if (!root.contains(range.commonAncestorContainer)) {
+          return
+        }
+        if (range.collapsed) {
+          // Nothing selected: the word the caret is in. A swatch that does
+          // nothing at all here reads as a broken button.
+          const node = range.startContainer
+          if (node.nodeType !== Node.TEXT_NODE) {
+            return
+          }
+          const { from, to } = wordBounds(node.textContent ?? '', range.startOffset)
+          if (from === to) {
+            return
+          }
+          const word = document.createRange()
+          word.setStart(node, from)
+          word.setEnd(node, to)
+          selection.removeAllRanges()
+          selection.addRange(word)
+          range = word
+        }
+        const wrappers = paintRange(root, range, kind, name)
+        if (wrappers.length === 0) {
+          return
+        }
+        // The painted words stay selected, so the next swatch changes this run
+        // rather than starting somewhere unexpected - and so it is obvious what
+        // was painted.
+        const shown = document.createRange()
+        shown.setStartBefore(wrappers[0])
+        shown.setEndAfter(wrappers[wrappers.length - 1])
+        selection.removeAllRanges()
+        selection.addRange(shown)
+        onBodyInput()
+        undoPaint.current = (): void => {
+          for (const wrapper of wrappers) {
+            if (wrapper.isConnected) {
+              unwrap(wrapper)
+            }
+          }
+        }
+      })
+    },
+    [onBodyInput, withSelection]
+  )
+
+  /**
+   * Take the colour off the run the caret is in - all of it, however much of it
+   * is selected.
+   *
+   * The whole run rather than the selected part of it, deliberately. Clearing
+   * half a coloured word means splitting the wrapper and putting the halves back
+   * either side, and the result of getting that wrong is a note carrying a stray
+   * empty span. Lifting the whole run out is one operation with one obvious
+   * meaning, and Ctrl+Z puts it back.
+   */
+  const clearPaint = useCallback(
+    (kind: 'color' | 'tint') => {
+      const root = bodyRef.current
+      setPalette(null)
+      if (root === null) {
+        return
+      }
+      withSelection(() => {
+        const selection = window.getSelection()
+        const anchor = selection?.anchorNode ?? null
+        if (selection === null || anchor === null || !root.contains(anchor)) {
+          return
+        }
+        const from = anchor instanceof HTMLElement ? anchor : anchor.parentElement
+        const painted = from?.closest<HTMLElement>(paintSelector(kind)) ?? null
+        if (painted === null || !root.contains(painted)) {
+          return
+        }
+        const name = painted.dataset.color ?? painted.dataset.tint ?? ''
+        const inside = Array.from(painted.childNodes)
+        unwrap(painted)
+        onBodyInput()
+        undoPaint.current = (): void => {
+          const again = paintWrapper(kind, name)
+          const first = inside[0]
+          if (again === null || first === undefined || !first.isConnected) {
+            return
+          }
+          first.before(again)
+          for (const node of inside) {
+            again.appendChild(node)
+          }
+        }
+      })
+    },
+    [onBodyInput, withSelection]
+  )
+
   const runSlashCommand = useCallback(
     (command: SlashCommand) => {
       const root = bodyRef.current
@@ -2352,6 +2505,21 @@ export function Editor({
        * recent thing that happened. Anything typed since hands the key back to
        * the browser, whose stack is then the one holding the answer.
        */
+      /*
+       * Ctrl+Z takes the last paint off, when that is the most recent thing that
+       * happened. Before the transcript's own undo because it is the more recent
+       * of the two by construction: whichever ref was set last is the one that
+       * survives, and a real edit clears both.
+       */
+      if (event.ctrlKey && !event.shiftKey && event.key === 'z' && undoPaint.current !== null) {
+        const undo = undoPaint.current
+        undoPaint.current = null
+        event.preventDefault()
+        undo()
+        onBodyInput()
+        return
+      }
+
       if (event.ctrlKey && !event.shiftKey && event.key === 'z' && undone.current !== null) {
         const { node, parent, before } = undone.current
         undone.current = null
@@ -2376,6 +2544,23 @@ export function Editor({
       if (event.ctrlKey && event.shiftKey && event.code === 'KeyA') {
         event.preventDefault()
         toggleAlert()
+        return
+      }
+      /*
+       * Ctrl+Shift+H highlights, in the first tint.
+       *
+       * Matched on `code` like the two shortcuts below it: on a Swedish layout
+       * the character a key produces with Shift is not the one on it, so keying
+       * off `key` makes a shortcut disappear on the author's own keyboard.
+       *
+       * Only the highlighter gets one. It is the mark you reach for while
+       * reading, mid-sentence, where letting go of the keyboard costs something;
+       * choosing among six text colours is a decision you are already looking at
+       * the toolbar for.
+       */
+      if (event.ctrlKey && event.shiftKey && event.code === 'KeyH') {
+        event.preventDefault()
+        paint('tint', HIGHLIGHTS[0])
         return
       }
       if (event.ctrlKey && event.shiftKey && event.code === 'Digit8') {
@@ -2459,6 +2644,7 @@ export function Editor({
       if (event.key === 'Escape') {
         setSelectedImage(null)
         setColumnRow(null)
+        setPalette(null)
       }
     },
     [
@@ -2466,6 +2652,7 @@ export function Editor({
       onBodyInput,
       picker,
       pickDate,
+      paint,
       removeImage,
       runSlashCommand,
       save,
@@ -2515,6 +2702,71 @@ export function Editor({
           <button type="button" className={mark('underline')} onClick={() => exec('underline')}><u>U</u></button>
           <button type="button" className={mark('strike')} onClick={() => exec('strikeThrough')}><s>S</s></button>
           <button type="button" className={mark('code')} onClick={wrapInCode}>code</button>
+        </div>
+        {/*
+          Colour and highlight, behind a swatch row rather than in the toolbar.
+          Eleven swatches on the toolbar itself would cost a whole row of height
+          on a narrow panel, permanently, for two controls that are reached for
+          occasionally.
+        */}
+        <div className="toolbar-group palette-group">
+          <button
+            type="button"
+            className={mark('color')}
+            title="Colour the selected words, or the word the caret is in"
+            onClick={() => setPalette((current) => (current === 'color' ? null : 'color'))}
+          >
+            Colour
+          </button>
+          <button
+            type="button"
+            className={mark('highlight')}
+            title="Highlight (Ctrl+Shift+H)"
+            onClick={() => setPalette((current) => (current === 'tint' ? null : 'tint'))}
+          >
+            Highlight
+          </button>
+          {palette !== null && (
+            <div className="palette">
+              {/* Each swatch is the letter A painted exactly as the note will
+                  paint it - the stylesheet does that from the same attribute the
+                  note carries, so a swatch cannot show a colour the text will
+                  not get. */}
+              {(palette === 'color' ? TEXT_COLORS : HIGHLIGHTS).map((name) =>
+                palette === 'color' ? (
+                  <button
+                    key={name}
+                    type="button"
+                    data-color={name}
+                    className={`swatch${caret?.color === name ? ' is-selected' : ''}`}
+                    title={name}
+                    onClick={() => paint('color', name)}
+                  >
+                    A
+                  </button>
+                ) : (
+                  <button
+                    key={name}
+                    type="button"
+                    data-tint={name}
+                    className={`swatch${caret?.tint === name ? ' is-selected' : ''}`}
+                    title={name}
+                    onClick={() => paint('tint', name)}
+                  >
+                    A
+                  </button>
+                )
+              )}
+              <button
+                type="button"
+                className="palette-none"
+                title="Take it off the whole run the caret is in"
+                onClick={() => clearPaint(palette)}
+              >
+                None
+              </button>
+            </div>
+          )}
         </div>
         <div className="toolbar-group">
           <button type="button" className={mark('bullets')} onClick={() => exec('insertUnorderedList')}>Bullets</button>
@@ -2822,6 +3074,9 @@ export function Editor({
             // above the document act on it, and a click outside every row puts
             // them away.
             setColumnRow(target.closest<HTMLElement>('[data-cols]'))
+            // And a click in the text is an answer of "not now" to an open
+            // swatch row.
+            setPalette(null)
 
             /*
              * The marker column: flag this line, tick it off, or clear it. The

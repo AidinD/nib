@@ -926,6 +926,197 @@ export function blockAtSelection(root: HTMLElement): HTMLElement | null {
   return block !== null && root.contains(block) ? (block as HTMLElement) : null
 }
 
+/*
+ * ---------- colour and highlight ----------
+ *
+ * A coloured run is `<span data-color="amber">`, a highlighted one
+ * `<mark data-tint="amber">`, and the stylesheet turns those attributes into
+ * colours. Nothing re-applies anything on load, so a sticky window shows the same
+ * colours with no code running over the note - the same reason the column rows are
+ * addressed by their attributes.
+ *
+ * `style` and `class` are not on the sanitiser's allowed list and this feature is
+ * not a reason to add them: allowing arbitrary CSS in from a paste is what a
+ * sanitiser is for. Which rules out `execCommand('foreColor')` and `hiliteColor`
+ * before they are tried - both write an inline style or a `font` element, and
+ * every colour set that way is gone after a reload.
+ *
+ * It also rules out `insertHTML`, which is the interesting one, because that is
+ * how every other formatting command in this editor is written and it looks like
+ * it should work. It does not: Chromium sanitises the fragment through the paste
+ * path, which DISSOLVES a `span` wrapper it reads as stylistic and pushes its
+ * computed style down onto the children as inline CSS. Painting a phrase this way
+ * produced `<span style="color: var(--amber)">` around one half and a styled
+ * `<strong>` around the other, with the data attribute gone - so the words looked
+ * right until the next save, where the sanitiser stripped the styles and the
+ * colour vanished. Measured in the running app.
+ *
+ * So the wrappers are built and placed by hand. The cost of that is Chromium's
+ * undo stack, which only holds its own commands - hence the one-step undo the
+ * editor keeps for a paint, the same way it keeps one for a removed transcript.
+ */
+
+/**
+ * The colours a word in a note can be given, and the highlighter's tints.
+ *
+ * Names, not hex. Three reasons, in order of how much they cost to get wrong.
+ * A note is the durable artefact here, and `#c8a2ff` in one is a decision frozen
+ * into data - the palette can never be adjusted afterwards without editing every
+ * note that used it. The app is one dark surface, and a colour chosen from a
+ * system picker is as likely to be unreadable on it as not. And a name survives
+ * the sanitiser as a data attribute, which is what makes the whole feature
+ * possible: `style` is not on the allowed list, on purpose.
+ *
+ * The names are also in the stylesheet, as `[data-color='amber']` and
+ * `[data-tint='amber']`, which is where each one is turned into a colour. Adding
+ * one here without adding it there gives a swatch that paints nothing, so a test
+ * guards the lists.
+ */
+export const TEXT_COLORS = ['blue', 'green', 'amber', 'violet', 'red', 'grey'] as const
+
+/**
+ * No grey among the tints.
+ *
+ * A grey wash on a dark surface is not a highlight, it is a slightly different
+ * dark surface. Grey text says "less important", which is the reason it earns a
+ * place in the other row.
+ */
+export const HIGHLIGHTS = ['amber', 'green', 'blue', 'violet', 'red'] as const
+
+export type TextColor = (typeof TEXT_COLORS)[number]
+export type Highlight = (typeof HIGHLIGHTS)[number]
+
+/** Whether a name is one this app knows how to paint. */
+export function isPaintName(kind: 'color' | 'tint', name: string): boolean {
+  const known: readonly string[] = kind === 'tint' ? HIGHLIGHTS : TEXT_COLORS
+  return known.includes(name)
+}
+
+/**
+ * An empty wrapper for a painted run, or null for a name this app does not know.
+ *
+ * The name is checked rather than trusted: a caller that gets it wrong paints
+ * nothing, instead of putting an attribute in a note file that no rule will ever
+ * match and that nothing will ever report.
+ */
+export function paintWrapper(kind: 'color' | 'tint', name: string): HTMLElement | null {
+  if (!isPaintName(kind, name)) {
+    return null
+  }
+  const wrapper = document.createElement(kind === 'tint' ? 'mark' : 'span')
+  if (kind === 'tint') {
+    wrapper.dataset.tint = name
+  } else {
+    wrapper.dataset.color = name
+  }
+  return wrapper
+}
+
+/** Lift an element's children into its place and drop the element. */
+export function unwrap(element: Element): void {
+  element.replaceWith(...Array.from(element.childNodes))
+}
+
+/**
+ * Paint a range, and hand back the wrappers put in.
+ *
+ * One wrapper per line, never one across several. A `span` holding paragraphs is
+ * not a thing the parser will keep: the note is stored as HTML and read back by
+ * re-parsing it, and `<span><p>a</p></span>` comes back as an empty span followed
+ * by the paragraph - so a highlight over two lines would look right until the note
+ * was next opened, and then be gone. Clipping the range to each line it touches
+ * costs a few lines here and cannot fail that way.
+ *
+ * Wrappers of the same kind inside the new one are taken off, and one that
+ * ENCLOSES it and holds nothing else goes too - so painting a word a second
+ * colour replaces it rather than burying it under a colour that never shows.
+ */
+export function paintRange(
+  root: HTMLElement,
+  range: Range,
+  kind: 'color' | 'tint',
+  name: string
+): HTMLElement[] {
+  if (!isPaintName(kind, name)) {
+    return []
+  }
+  const selector = paintSelector(kind)
+  const lines = Array.from(root.querySelectorAll<HTMLElement>(ALERT_BLOCKS)).filter(
+    (line) => line.querySelector(ALERT_BLOCKS) === null && range.intersectsNode(line)
+  )
+
+  const clips: Range[] = []
+  if (lines.length < 2) {
+    clips.push(range.cloneRange())
+  } else {
+    for (const line of lines) {
+      const clip = range.cloneRange()
+      if (!line.contains(range.startContainer)) {
+        clip.setStart(line, 0)
+      }
+      if (!line.contains(range.endContainer)) {
+        clip.setEnd(line, line.childNodes.length)
+      }
+      if (!clip.collapsed) {
+        clips.push(clip)
+      }
+    }
+  }
+
+  const painted: HTMLElement[] = []
+  for (const clip of clips) {
+    const wrapper = paintWrapper(kind, name)
+    if (wrapper === null) {
+      continue
+    }
+    wrapper.appendChild(clip.extractContents())
+    if (wrapper.childNodes.length === 0) {
+      continue
+    }
+    for (const inner of Array.from(wrapper.querySelectorAll<HTMLElement>(selector))) {
+      unwrap(inner)
+    }
+    clip.insertNode(wrapper)
+    const outer = wrapper.parentElement?.closest<HTMLElement>(selector) ?? null
+    if (outer !== null && (outer.textContent ?? '') === (wrapper.textContent ?? '')) {
+      unwrap(outer)
+    }
+    painted.push(wrapper)
+  }
+  return painted
+}
+
+/** What a painted run is wrapped in, so the same paint can be replaced rather than nested. */
+export function paintSelector(kind: 'color' | 'tint'): string {
+  return kind === 'tint' ? 'mark[data-tint]' : 'span[data-color]'
+}
+
+/**
+ * The word around a position in a line.
+ *
+ * What a swatch acts on when nothing is selected. A colour button that does
+ * nothing without a selection reads as broken - and the thing wanted is almost
+ * always the word the caret is in, which is what clicking into a word and
+ * pressing bold does in every other editor.
+ *
+ * Letters and digits in any language, since the notes are written in two of them,
+ * plus the apostrophes and hyphens that sit inside a word rather than between
+ * words. `from === to` means the caret was not in a word at all, and the caller
+ * does nothing.
+ */
+export function wordBounds(text: string, at: number): { from: number; to: number } {
+  const isWord = (character: string): boolean => /[\p{L}\p{N}_'\u2019-]/u.test(character)
+  let from = Math.max(0, Math.min(at, text.length))
+  let to = from
+  while (from > 0 && isWord(text[from - 1])) {
+    from -= 1
+  }
+  while (to < text.length && isWord(text[to])) {
+    to += 1
+  }
+  return { from, to }
+}
+
 /**
  * What the caret is standing in, as far as the toolbar is concerned.
  *
@@ -941,6 +1132,9 @@ export interface CaretMarks {
   list: string
   quoted: boolean
   code: boolean
+  /** The name of the colour and of the highlight around the caret, or empty. */
+  color: string
+  tint: string
   bold: boolean
   italic: boolean
   underline: boolean
@@ -978,6 +1172,12 @@ export function activeFormats(marks: CaretMarks): string[] {
   }
   if (marks.code) {
     active.push('code')
+  }
+  if (marks.color.length > 0) {
+    active.push('color')
+  }
+  if (marks.tint.length > 0) {
+    active.push('highlight')
   }
   if (marks.bold) {
     active.push('bold')
@@ -1040,6 +1240,8 @@ export function readCaretMarks(root: HTMLElement): CaretMarks | null {
     list: around('ul, ol')?.tagName ?? '',
     quoted: around('blockquote') !== null,
     code: around('code, pre') !== null,
+    color: around('span[data-color]')?.getAttribute('data-color') ?? '',
+    tint: around('mark[data-tint]')?.getAttribute('data-tint') ?? '',
     bold: around('strong, b') !== null || (!heading && pending('bold')),
     italic: around('em, i') !== null || pending('italic'),
     underline: around('u') !== null || pending('underline'),
