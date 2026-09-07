@@ -132,8 +132,15 @@ lines only inside its cells, a divider and a drawing have none at all - so the
 boundary beside one is a position no keystroke can create.
 
 Three answers, and all three were needed. **A click in the gap** opens a line
-there, but only when the boundary touches such a block: a click in the ten pixels
-between two paragraphs has to go on meaning "put the caret in the nearer one".
+there, but only where there is no line on EITHER side of the boundary. The first
+version asked whether either side was a block with no line, which is a different
+and much broader question - and it made the editor insert a blank line on any
+click in the margin around a divider, since a divider normally has an ordinary
+paragraph under it. Clicking a few times inserted a few lines, into real notes.
+Corrected the same day: a boundary with a line on one side is a boundary the caret
+can already reach, so a click near it goes on meaning "put the caret in the nearer
+line". That also makes the gesture self-limiting, since the line it opens is
+itself a line at that boundary.
 **ArrowUp from the top of a column and ArrowDown from the bottom** leave the row -
 to the block on the other side, or to a new line when there is none - because
 Chromium's own vertical movement does not reliably leave a grid, and cannot leave

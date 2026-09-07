@@ -2901,22 +2901,32 @@ export function Editor({
              * The click landed on the body itself rather than on any block, which
              * means it was in the margin between two blocks or in the empty space
              * below the last one. Usually that needs no help - Chromium puts the
-             * caret in the nearest line - but not when the boundary touches a
-             * block with no line at its edge. Above a row that starts the note,
-             * and between a row and a divider, there is nothing to put the caret
-             * in and no keystroke that makes one, which is how a deleted line
-             * became unrecoverable.
+             * caret in the nearest line - but not when there is no line on either
+             * side of the boundary. Above a row that starts the note, and between
+             * a row and a divider, there is nothing to put the caret in and no
+             * keystroke that makes one, which is how a deleted line became
+             * unrecoverable.
              *
-             * Only beside such a block, deliberately. A click in the 10px between
-             * two paragraphs must go on meaning "put the caret in the nearer one",
-             * not "insert an empty line here".
+             * BOTH sides have to be unreachable, and getting that wrong was a bug
+             * in the first version: it asked whether EITHER side was, so every
+             * click in the margin around a divider - which normally has an
+             * ordinary paragraph under it - inserted a line, and clicking a few
+             * times inserted a few. A boundary with a line on one side is a
+             * boundary the caret can already reach, and clicking near it has to go
+             * on meaning "put the caret in the nearer line".
+             *
+             * Which also makes the gesture self-limiting: the line it opens is
+             * itself a line at that boundary, so a second click there lands in it
+             * rather than making another.
              */
             if (body !== null && target === body) {
               const blocks = Array.from(body.children)
               const next = blocks.find((block) => block.getBoundingClientRect().top > event.clientY)
               const previous =
                 next === undefined ? (blocks[blocks.length - 1] ?? null) : next.previousElementSibling
-              if (isSolidBlock(previous) || isSolidBlock(next ?? null)) {
+              const deadAbove = previous === null || isSolidBlock(previous)
+              const deadBelow = next === undefined || isSolidBlock(next)
+              if (deadAbove && deadBelow) {
                 caretInto(insertLine(body, next ?? null), 'start')
                 onBodyInput()
                 return
