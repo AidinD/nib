@@ -55,6 +55,98 @@ export interface NoteText {
  */
 export const BODY_SEARCH_MIN = 2
 
+/**
+ * The endings a search may be asked without.
+ *
+ * Longest first, and exactly one comes off - this trims an inflection, it does
+ * not stem a word down to a root. Swedish and English inflections in one list
+ * because a note here is written in either and often both, and a search field
+ * cannot ask which language you meant.
+ *
+ * Which direction this fixes is worth being precise about, because it is easy to
+ * state backwards. Matching is on substrings, so a search for `möte` ALREADY
+ * finds `mötet`, `möten` and `mötesanteckningar` - Swedish inflects by adding to
+ * the end, and so the base form is a prefix of its own inflections. What fails is
+ * the other way round: you type the form that is in your head, `mötet`, and the
+ * note says `möte`. Taking the ending off the query is what closes that.
+ *
+ * Which is also why this is not a stemmer. A real one rewrites the word - `bok`
+ * to `bok` and `böcker` to `bok` - and that needs the text stemmed too, a
+ * dictionary for the vowel changes, and it takes substring matching away: `rota`
+ * would stop finding `rotavator`. This is a smaller claim that cannot break what
+ * already works, because it only ever ADDS a term.
+ */
+const ENDINGS = [
+  'erna',
+  'arna',
+  'orna',
+  'ande',
+  'ende',
+  'ade',
+  'are',
+  'ast',
+  'ing',
+  'ens',
+  'ers',
+  'ors',
+  'en',
+  'et',
+  'er',
+  'ar',
+  'or',
+  'na',
+  'ad',
+  'at',
+  'it',
+  'te',
+  'de',
+  'ns',
+  'es',
+  'ed',
+  's'
+]
+
+/**
+ * Below this many characters a search is left exactly as typed.
+ *
+ * A short word is usually already the base form - `möte`, `plan`, `plus` - so
+ * trimming it can only widen the search into words that have nothing to do with
+ * it. `plus` without its `s` is `plu`, which matches `plugin`.
+ */
+const TRIM_FROM = 5
+
+/** And what has to be left afterwards, so `huset` can become `hus` but no shorter. */
+const STEM_MIN = 3
+
+/**
+ * What a search means: what was typed, and the same without an inflection.
+ *
+ * Both, never one instead of the other. A note holding the exact word you typed
+ * has to stay in the list, so the trimmed form is an addition - anything that
+ * matched before this existed still matches.
+ */
+export function searchTerms(search: string): string[] {
+  const needle = search.trim().toLowerCase()
+  if (needle.length === 0) {
+    return []
+  }
+  if (needle.length < TRIM_FROM) {
+    return [needle]
+  }
+  for (const ending of ENDINGS) {
+    if (!needle.endsWith(ending)) {
+      continue
+    }
+    const stem = needle.slice(0, needle.length - ending.length)
+    if (stem.length >= STEM_MIN) {
+      return [needle, stem]
+    }
+    // A word this short is the base form already, whatever it ends with.
+    break
+  }
+  return [needle]
+}
+
 export function categoryInScope(category: Category, filter: ScopeFilter): boolean {
   if (filter === 'all') {
     return true
@@ -195,7 +287,20 @@ export function selectedNotes(
   if (needle.length === 0) {
     return notes
   }
-  return notes.filter((note) => matchesSearch(note, needle, bodies))
+  const terms = searchTerms(needle)
+  return notes.filter((note) => matchesSearch(note, terms, bodies))
+}
+
+/**
+ * Whether a note's title or preview answers a search.
+ *
+ * Separate from the whole question because the card asks it too: a note that
+ * matched here already shows the word on screen, so it wants no snippet.
+ */
+export function matchesMeta(note: NoteMeta, terms: string[]): boolean {
+  const title = note.title.toLowerCase()
+  const preview = note.preview.toLowerCase()
+  return terms.some((term) => title.includes(term) || preview.includes(term))
 }
 
 /**
@@ -207,16 +312,19 @@ export function selectedNotes(
  */
 export function matchesSearch(
   note: NoteMeta,
-  needle: string,
+  terms: string[],
   bodies?: Map<string, NoteText>
 ): boolean {
-  if (note.title.toLowerCase().includes(needle) || note.preview.toLowerCase().includes(needle)) {
-    return true
+  if (terms.length === 0 || matchesMeta(note, terms)) {
+    return terms.length > 0
   }
-  if (needle.length < BODY_SEARCH_MIN || bodies === undefined) {
+  // The floor is on what was TYPED, not on the trimmed form: it is about how much
+  // the person has committed to, not about how long the word ends up.
+  if (terms[0].length < BODY_SEARCH_MIN || bodies === undefined) {
     return false
   }
-  return bodies.get(note.id)?.lower.includes(needle) === true
+  const text = bodies.get(note.id)?.lower
+  return text !== undefined && terms.some((term) => text.includes(term))
 }
 
 /**
@@ -231,6 +339,24 @@ export function matchesSearch(
  * word. The ellipses say the text carries on, and are left off at whichever end
  * really is the start or the end of the note.
  */
+/**
+ * The snippet for whichever of the terms is actually in the text.
+ *
+ * The typed word first, because that is what the reader is looking for; the
+ * trimmed form only when the note does not contain what was typed. Without this
+ * a note found by its inflection showed its opening lines instead of the line it
+ * matched on, which is the thing the snippet exists to prevent.
+ */
+export function snippetFor(text: string, terms: string[], span = 140): string {
+  for (const term of terms) {
+    const snippet = searchSnippet(text, term, span)
+    if (snippet.length > 0) {
+      return snippet
+    }
+  }
+  return ''
+}
+
 export function searchSnippet(text: string, needle: string, span = 140): string {
   const at = text.toLowerCase().indexOf(needle.toLowerCase())
   if (at === -1) {

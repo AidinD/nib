@@ -24,7 +24,9 @@ import {
   BODY_SEARCH_MIN,
   matchesSearch,
   searchSnippet,
-  selectedNotes
+  searchTerms,
+  selectedNotes,
+  snippetFor
 } from '../src/renderer/src/lib/selection.ts'
 
 function note(over = {}) {
@@ -88,7 +90,7 @@ test('the title and the preview still match on their own', () => {
 
 test('the search is case-insensitive in the body too', () => {
   const bodies = new Map([['n1', body('The contractor asked about the Onboarding rota')]])
-  assert.equal(matchesSearch(note(), 'ONBOARDING'.toLowerCase(), bodies), true)
+  assert.equal(matchesSearch(note(), searchTerms('ONBOARDING'), bodies), true)
 })
 
 test('one character does not reach into the bodies', () => {
@@ -96,16 +98,16 @@ test('one character does not reach into the bodies', () => {
   // still matched from the first character, so typing widens rather than waits.
   const bodies = new Map([['n1', body('a rota nobody titled')]])
   assert.equal(BODY_SEARCH_MIN, 2)
-  assert.equal(matchesSearch(note({ title: '', preview: '' }), 'r', bodies), false)
-  assert.equal(matchesSearch(note({ title: '', preview: '' }), 'ro', bodies), true)
+  assert.equal(matchesSearch(note({ title: '', preview: '' }), searchTerms('r'), bodies), false)
+  assert.equal(matchesSearch(note({ title: '', preview: '' }), searchTerms('ro'), bodies), true)
 })
 
 test('a note whose text has not been read yet simply does not match on it', () => {
   // The bodies arrive after the first keystroke. Holding the list back until
   // they land would make every search feel slow to protect a case that resolves
   // in about thirty milliseconds.
-  assert.equal(matchesSearch(note({ title: '', preview: '' }), 'rota', undefined), false)
-  assert.equal(matchesSearch(note({ title: '', preview: '' }), 'rota', new Map()), false)
+  assert.equal(matchesSearch(note({ title: '', preview: '' }), searchTerms('rota'), undefined), false)
+  assert.equal(matchesSearch(note({ title: '', preview: '' }), searchTerms('rota'), new Map()), false)
 })
 
 test('an archived note is still only reached when the search is widened', () => {
@@ -145,4 +147,57 @@ test('the snippet keeps the case it was written in', () => {
 
 test('no match, no snippet', () => {
   assert.equal(searchSnippet('nothing of the sort', 'onboarding'), '')
+})
+
+test('the ending comes off the search, so a form finds its base', () => {
+  // The direction that was actually broken. Matching is on substrings, so `möte`
+  // already finds `mötet` - what failed was typing the form in your head and the
+  // note holding the base word.
+  // `möt`, not `möte`: the definite form of a word ending in -e adds only -t, and
+  // the list takes `et` off. The trimmed term does not have to be a word - it has
+  // to be a prefix that finds one, and `möt` finds `möte`, `möten` and
+  // `mötesanteckningar` alike.
+  assert.deepEqual(searchTerms('mötet'), ['mötet', 'möt'])
+  assert.deepEqual(searchTerms('besluten'), ['besluten', 'beslut'])
+  assert.deepEqual(searchTerms('onboardingen'), ['onboardingen', 'onboarding'])
+  assert.deepEqual(searchTerms('meetings'), ['meetings', 'meeting'])
+  assert.deepEqual(searchTerms('huset'), ['huset', 'hus'])
+})
+
+test('what was typed is always kept', () => {
+  // The trimmed form is an addition, never a replacement: a note holding the
+  // exact word has to stay in the list.
+  const notes = [note({ id: 'exact' }), note({ id: 'base' })]
+  const bodies = new Map([
+    ['exact', body('we discussed the mötet at length')],
+    ['base', body('we discussed the möte at length')]
+  ])
+  assert.deepEqual(
+    selectedNotes(index(notes), ALL, 'all', 'mötet', false, bodies).map((n) => n.id).sort(),
+    ['base', 'exact']
+  )
+})
+
+test('a short word is left exactly as typed', () => {
+  // `plus` without its s is `plu`, which matches `plugin`. A four-letter word is
+  // usually the base form already, so there is nothing to gain and noise to lose.
+  assert.deepEqual(searchTerms('plus'), ['plus'])
+  assert.deepEqual(searchTerms('möte'), ['möte'])
+  assert.deepEqual(searchTerms('rota'), ['rota'])
+})
+
+test('and nothing is trimmed down to a stub', () => {
+  // `gående` would leave `gå`, which matches half the language.
+  assert.deepEqual(searchTerms('gående'), ['gående'])
+})
+
+test('only one ending comes off', () => {
+  // Not a stemmer: `skickade` gives `skick`, and no further.
+  assert.deepEqual(searchTerms('skickade'), ['skickade', 'skick'])
+})
+
+test('the snippet quotes whichever term the note actually holds', () => {
+  const text = 'a '.repeat(60) + 'the onboarding rota' + ' b'.repeat(60)
+  const snippet = snippetFor(text, searchTerms('onboardingen'))
+  assert.ok(snippet.includes('onboarding'), snippet)
 })

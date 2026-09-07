@@ -3,6 +3,45 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - The ending comes off the search, and that is all it does
+
+**Decided.** A search of five characters or more is also tried with one common
+inflectional ending removed, Swedish and English in the same list. So `mötet`
+finds a note that says `möte`, `besluten` finds `beslut`, `onboardingen` finds
+`onboarding`, and `meetings` finds `meeting`. What was typed is always kept as
+well.
+
+**Which direction was broken, precisely.** It is easy to state backwards, and was:
+matching is on substrings, so a search for `möte` ALREADY found `mötet`, `möten`
+and `mötesanteckningar` - Swedish inflects by adding to the end, which makes the
+base form a prefix of its own inflections. The failure is the other way round.
+You type the form that is in your head, `mötet`, and the note says `möte`, and
+the search says there is nothing there.
+
+**Not a stemmer, deliberately.** A real one rewrites words to a root, needs the
+TEXT stemmed as well as the query, needs a dictionary for the vowel changes
+(`bok` and `böcker`), and takes substring matching away with it: `rota` would
+stop finding `rotavator`. This trims at most one ending off the query and adds it
+as a second term, so it cannot break anything that already matched - the only
+thing it can do is find more.
+
+**The trimmed term is not required to be a word.** `mötet` becomes `möt`, because
+the list takes `et` off and the definite form of an `-e` noun only added `-t`.
+That is not a defect: the term has to be a prefix that finds the word, and `möt`
+finds `möte`, `möten` and `mötesanteckningar` alike. Making it exact would mean
+knowing which words end in a vowel, which is the dictionary this is avoiding.
+
+**Two floors, and both were found by trying it.** Nothing under five characters is
+trimmed, because a short word is usually the base form already and `plus` without
+its `s` is `plu`, which matches `plugin`. And nothing is trimmed to fewer than
+three characters, because `gående` would leave `gå`, which matches a good part of
+the language.
+
+**The snippet follows whichever term the note actually holds** - the typed word
+first, the trimmed one only when the note does not contain what was typed.
+Otherwise a note found by its inflection would quote its opening lines instead of
+the line it matched on, which is the one thing the snippet exists to prevent.
+
 ## 2026-09-07 - Search reads the notes, and says which line it matched
 
 **Decided.** The search matches the text of every note, not only the title and

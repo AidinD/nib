@@ -26,7 +26,14 @@ import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
 import { useNoteHistory } from '../lib/useNoteHistory'
-import { archivedHits, BODY_SEARCH_MIN, searchSnippet, selectedNotes } from '../lib/selection'
+import {
+  archivedHits,
+  BODY_SEARCH_MIN,
+  matchesMeta,
+  searchTerms,
+  snippetFor,
+  selectedNotes
+} from '../lib/selection'
 import { useSearchText } from '../lib/useSearchText'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
@@ -152,23 +159,21 @@ export function App(): React.JSX.Element {
    * cost is a handful of string searches.
    */
   const snippets = useMemo(() => {
-    const needle = search.trim().toLowerCase()
+    const terms = searchTerms(search)
     const found = new Map<string, string>()
-    if (needle.length < BODY_SEARCH_MIN) {
+    if (terms.length === 0 || terms[0].length < BODY_SEARCH_MIN) {
       return found
     }
     for (const note of notes) {
-      if (
-        note.title.toLowerCase().includes(needle) ||
-        note.preview.toLowerCase().includes(needle)
-      ) {
+      // Already visible on the card: the word is in the title or the opening.
+      if (matchesMeta(note, terms)) {
         continue
       }
       const body = bodies.get(note.id)
       if (body === undefined) {
         continue
       }
-      const snippet = searchSnippet(body.text, needle)
+      const snippet = snippetFor(body.text, terms)
       if (snippet.length > 0) {
         found.set(note.id, snippet)
       }
