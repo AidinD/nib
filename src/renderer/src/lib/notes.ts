@@ -554,6 +554,49 @@ export function applyColumnBlocks(root: HTMLElement): void {
 }
 
 /**
+ * The blocks that have no line of their own at their edge.
+ *
+ * A paragraph, a heading and a list all end in a place the caret can sit, so
+ * there is always a way to get above or below one: press Enter. These do not. A
+ * row of columns has lines only INSIDE its cells, a divider and a drawing have
+ * none at all - so the boundary between two of them, or between one of them and
+ * the top of the note, is a position the caret cannot reach and no keystroke can
+ * create.
+ *
+ * That is not a theoretical gap. A row at the top of a note had nothing above it
+ * and no way to make anything; an empty line between a row and a divider, once
+ * deleted, could not be typed back, because Enter at the end of the last column
+ * makes a line inside the column. Both were reported from real notes.
+ *
+ * `table` is not here. It has the same shape of problem and no way in yet
+ * either - it can only arrive by paste - so listing it would promise a fix that
+ * the rest of the editor does not have.
+ */
+const SOLID_BLOCKS = '[data-cols], [data-canvas], [data-recording], hr'
+
+/** Whether a block is one the caret cannot sit against. */
+export function isSolidBlock(node: Element | null): boolean {
+  return node !== null && node.matches(SOLID_BLOCKS)
+}
+
+/**
+ * Put an empty line at a boundary, and hand it back.
+ *
+ * `before` is the block it goes in front of, or null to put it at the end. This
+ * is the way out of every dead end above: a click in the gap and the arrow keys
+ * both come here rather than each building a paragraph of their own.
+ */
+export function insertLine(root: HTMLElement, before: Element | null): HTMLElement {
+  const line = emptyLine()
+  if (before === null) {
+    root.appendChild(line)
+  } else {
+    root.insertBefore(line, before)
+  }
+  return line
+}
+
+/**
  * Whether there is nothing between the start of `cell` and the caret - or
  * nothing between the caret and the end of it.
  *

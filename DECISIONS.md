@@ -75,6 +75,34 @@ otherwise have to guess which of the two or three lines beside it was meant - an
 the existing rule takes the last match, which is the line furthest right. Beside
 a row, the body's gutter now flags nothing.
 
+**Getting out of a row needed its own answer, added the same day.** Two dead ends
+were reported from real notes within hours. A row that starts a note has nothing
+above it and no way to make anything: the caret has no position there, and Enter
+inside a column makes a line in the column. And the empty line between a row and
+a divider, once deleted, could not be typed back for the same reason. The general
+shape is that some blocks have no line of their own at their edge - a row has
+lines only inside its cells, a divider and a drawing have none at all - so the
+boundary beside one is a position no keystroke can create.
+
+Three answers, and all three were needed. **A click in the gap** opens a line
+there, but only when the boundary touches such a block: a click in the ten pixels
+between two paragraphs has to go on meaning "put the caret in the nearer one".
+**ArrowUp from the top of a column and ArrowDown from the bottom** leave the row -
+to the block on the other side, or to a new line when there is none - because
+Chromium's own vertical movement does not reliably leave a grid, and cannot leave
+one at all when the position it would move to does not exist. **And Backspace no
+longer merges the line below a row into the row's last column**, which is what
+turned "delete this empty line" into "move this line into the third column". An
+empty line there is removed, and one with something written on it is left alone,
+because pulling written text into a column is not something a delete key should
+be able to do.
+
+A row inserted where it would start the note also gets a line above it from the
+outset, rather than relying on the reader finding one of the three ways out.
+Auto-repairing the boundary on every load was the alternative and is worse: a line
+the author deleted on purpose would come back by itself the next time the note was
+opened.
+
 ## 2026-09-04 - A glossary, applied to the summary and never to the transcript
 
 **Decided.** The summariser is given the words this notebook uses, corrects a

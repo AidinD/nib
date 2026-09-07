@@ -19,7 +19,9 @@ import {
   columnCell,
   columnCells,
   columnsRow,
+  insertLine,
   isBlankLine,
+  isSolidBlock,
   nothingBeyond,
   unwrapColumns,
   COLS_MAX,
@@ -1805,6 +1807,18 @@ export function Editor({
           anchor.after(row)
         }
         row.after(after)
+        /*
+         * And a line ABOVE it when the row would otherwise start the note.
+         *
+         * Nothing can be written above a row that is the first block: the caret
+         * has no position there, and Enter inside a column makes a line in the
+         * column. The arrow keys and a click in the margin both open one now, but
+         * a note that starts with a row is the case where that is needed on the
+         * very first keystroke, so the line is there from the start.
+         */
+        if (row.previousElementSibling === null) {
+          insertLine(root, row)
+        }
 
         const first = columnCells(row)[0]
         if (first !== undefined) {
@@ -2157,6 +2171,48 @@ export function Editor({
         }
       }
 
+      /*
+       * Up out of the top of a column, down out of the bottom of one.
+       *
+       * A row is a grid of separate blocks, and Chromium's own vertical movement
+       * does not reliably leave one - least of all when the position it would
+       * move to does not exist, which is the case above a row that starts the
+       * note and below one that ends it. So the move is made here: to the block
+       * on the other side of the row, or to a new line when there is none, or
+       * when what is there has no line of its own to land in.
+       *
+       * Only from the very first or very last position in the cell. Anywhere else
+       * the arrow keys are moving through the column's own lines and are none of
+       * this code's business.
+       */
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        const root = bodyRef.current
+        const selection = window.getSelection()
+        const cell =
+          root === null ? null : (blockAtSelection(root)?.closest<HTMLElement>('[data-col]') ?? null)
+        const row = cell?.closest<HTMLElement>('[data-cols]') ?? null
+        const up = event.key === 'ArrowUp'
+        if (
+          root !== null &&
+          cell !== null &&
+          row !== null &&
+          selection !== null &&
+          selection.rangeCount > 0 &&
+          selection.isCollapsed &&
+          nothingBeyond(cell, selection.getRangeAt(0), up ? 'start' : 'end')
+        ) {
+          event.preventDefault()
+          const neighbour = up ? row.previousElementSibling : row.nextElementSibling
+          if (neighbour === null || isSolidBlock(neighbour)) {
+            caretInto(insertLine(root, up ? row : neighbour), 'start')
+            onBodyInput()
+          } else {
+            caretInto(neighbour, up ? 'end' : 'start')
+          }
+          return
+        }
+      }
+
       if (event.key === 'Tab') {
         event.preventDefault()
         const root = bodyRef.current
@@ -2305,17 +2361,50 @@ export function Editor({
           selection.rangeCount > 0 &&
           selection.isCollapsed
         ) {
-          const cell = blockAtSelection(root)?.closest<HTMLElement>('[data-col]') ?? null
-          if (
-            cell !== null &&
-            nothingBeyond(
-              cell,
-              selection.getRangeAt(0),
-              event.key === 'Backspace' ? 'start' : 'end'
-            )
-          ) {
+          const block = blockAtSelection(root)
+          const cell = block?.closest<HTMLElement>('[data-col]') ?? null
+          const range = selection.getRangeAt(0)
+          const back = event.key === 'Backspace'
+          if (cell !== null && nothingBeyond(cell, range, back ? 'start' : 'end')) {
             event.preventDefault()
             return
+          }
+          /*
+           * The same wall from the outside.
+           *
+           * Backspace at the start of the line under a row, left to Chromium,
+           * merges that line into the row's last column - which is how a line
+           * between a row and a divider ended up inside the column instead of
+           * being deleted. An empty line is removed, which is what the key means;
+           * a line with something on it is left alone, because pulling written
+           * text into a column is not a thing a delete key should be able to do.
+           *
+           * Removing it leaves the boundary unreachable again, so the caret is put
+           * at the near edge of the row: from there ArrowDown opens a fresh line
+           * below it, and so does a click in the margin.
+           */
+          if (block !== null && cell === null) {
+            const neighbour = back ? block.previousElementSibling : block.nextElementSibling
+            if (
+              neighbour !== null &&
+              neighbour.matches('[data-cols]') &&
+              nothingBeyond(block, range, back ? 'start' : 'end')
+            ) {
+              event.preventDefault()
+              if (isBlankLine(block)) {
+                const cells = columnCells(neighbour as HTMLElement)
+                const landing = back ? cells[cells.length - 1] : cells[0]
+                block.remove()
+                if (landing !== undefined && back) {
+                  caretIntoCell(landing)
+                } else if (landing !== undefined) {
+                  // Forward: the near edge is the TOP of the first column.
+                  caretInto(landing.firstElementChild ?? landing, 'start')
+                }
+                onBodyInput()
+              }
+              return
+            }
           }
         }
       }
@@ -2755,6 +2844,34 @@ export function Editor({
               }
             }
 
+            /*
+             * A click in a gap the caret cannot reach opens a line there.
+             *
+             * The click landed on the body itself rather than on any block, which
+             * means it was in the margin between two blocks or in the empty space
+             * below the last one. Usually that needs no help - Chromium puts the
+             * caret in the nearest line - but not when the boundary touches a
+             * block with no line at its edge. Above a row that starts the note,
+             * and between a row and a divider, there is nothing to put the caret
+             * in and no keystroke that makes one, which is how a deleted line
+             * became unrecoverable.
+             *
+             * Only beside such a block, deliberately. A click in the 10px between
+             * two paragraphs must go on meaning "put the caret in the nearer one",
+             * not "insert an empty line here".
+             */
+            if (body !== null && target === body) {
+              const blocks = Array.from(body.children)
+              const next = blocks.find((block) => block.getBoundingClientRect().top > event.clientY)
+              const previous =
+                next === undefined ? (blocks[blocks.length - 1] ?? null) : next.previousElementSibling
+              if (isSolidBlock(previous) || isSolidBlock(next ?? null)) {
+                caretInto(insertLine(body, next ?? null), 'start')
+                onBodyInput()
+                return
+              }
+            }
+
             // A link to another note goes there - the list and the sidebar
             // follow, so it is clear where you have landed.
             const link = target.closest<HTMLElement>('a[data-note]')
@@ -2977,11 +3094,18 @@ function caretIntoCell(cell: HTMLElement): void {
   caretInto(cell.lastElementChild ?? cell)
 }
 
-/** Put the caret in a line, at the end of it - or at the start when it is empty. */
-function caretInto(line: Element): void {
+/**
+ * Put the caret in a line.
+ *
+ * At the end of it by default, and at the start when asked - or when the line is
+ * empty, where collapsing to the end would put the caret after the `br` that
+ * gives an empty paragraph its height, which draws it a line lower than the text
+ * it belongs to.
+ */
+function caretInto(line: Element, edge: 'start' | 'end' = 'end'): void {
   const range = document.createRange()
   range.selectNodeContents(line)
-  range.collapse((line.textContent ?? '').length === 0)
+  range.collapse(edge === 'start' || (line.textContent ?? '').length === 0)
   const selection = window.getSelection()
   selection?.removeAllRanges()
   selection?.addRange(range)
