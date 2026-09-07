@@ -13,6 +13,8 @@ const api = {
   saveIndex: (index: NibIndex): Promise<void> => ipcRenderer.invoke('index:save', index),
 
   readNote: (id: string): Promise<NoteDoc | null> => ipcRenderer.invoke('note:read', id),
+  /** Several notes in one call. What the full-text search reads the bodies with. */
+  readNotes: (ids: string[]): Promise<NoteDoc[]> => ipcRenderer.invoke('note:read-many', ids),
   /** Returns the `edited` timestamp the main process stamped on the file. */
   writeNote: (doc: NoteDoc): Promise<number> => ipcRenderer.invoke('note:write', doc),
   deleteNote: (id: string): Promise<void> => ipcRenderer.invoke('note:delete', id),

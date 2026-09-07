@@ -26,6 +26,13 @@ interface NoteListProps {
   index: NibIndex
   selection: Selection
   notes: NoteMeta[]
+  /**
+   * The matched line, per note, when the current search found it in the body.
+   *
+   * Passed in rather than worked out here: the list renders what it is given, and
+   * the search already knows what it matched on.
+   */
+  snippets: Map<string, string>
   activeNoteId: string | null
   onOpen: (noteId: string) => void
   onAdd: (title: string, template?: Template) => void
@@ -62,6 +69,7 @@ export function NoteList({
   index,
   selection,
   notes,
+  snippets,
   activeNoteId,
   onOpen,
   onAdd,
@@ -512,7 +520,17 @@ export function NoteList({
                   ))}
                 </ul>
               ) : (
-                note.preview.length > 0 && <p className="card-preview">{note.preview}</p>
+                (() => {
+                  // The snippet wins when there is one: it is the reason this
+                  // card is in the list at all.
+                  const hit = snippets.get(note.id)
+                  if (hit !== undefined) {
+                    return <p className="card-preview is-hit">{hit}</p>
+                  }
+                  return note.preview.length > 0 ? (
+                    <p className="card-preview">{note.preview}</p>
+                  ) : null
+                })()
               )}
 
               <div className="card-meta">

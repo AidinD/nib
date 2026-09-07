@@ -825,6 +825,22 @@ function bodyElement(html: string): HTMLElement {
   for (const block of holder.querySelectorAll('[data-canvas]')) {
     block.remove()
   }
+  /*
+   * A break between the blocks, so reading the whole body as text does not run
+   * the end of one line into the start of the next.
+   *
+   * `textContent` puts nothing between `</p>` and `<p>`, which gave
+   * "the order can wait.closing the meeting" - one word where there were two.
+   * That was invisible while this only fed previews and word counts, and became
+   * visible the moment a search started quoting the line it matched.
+   *
+   * Inserted BESIDE each block rather than inside it: `buildPreview` reads each
+   * block's own text and joins them itself, and a separator within a block would
+   * turn up in the middle of a preview.
+   */
+  for (const block of holder.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, pre, tr, div')) {
+    block.before(document.createTextNode(' '))
+  }
   return holder
 }
 

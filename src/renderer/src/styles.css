@@ -543,6 +543,17 @@ textarea {
   overflow: hidden;
 }
 
+/*
+ * The line a search matched on, in place of the preview.
+ *
+ * Brighter than a preview, because it is an answer rather than context: the
+ * preview says what the note opens with, and this says why the card is in the
+ * list. Same size and same place, so the list does not reflow while you type.
+ */
+.card-preview.is-hit {
+  color: var(--text);
+}
+
 .card-meta {
   display: flex;
   align-items: center;

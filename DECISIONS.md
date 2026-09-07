@@ -3,6 +3,68 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-07 - Search reads the notes, and says which line it matched
+
+**Decided.** The search matches the text of every note, not only the title and
+the preview. The bodies are read on the first search of the session and kept, and
+a card whose match is deeper in the note shows that line in place of its preview.
+
+**What it replaced, measured.** The old search matched `title` and `preview`, and
+a preview is the first 200 characters of a note. On a real notebook - 127 notes,
+411,000 characters of text - the previews came to 24,000 of those characters, so
+the search could see about 6% of what had been written, and only the opening of
+each note. A word in the middle of a meeting note was not findable at all, which
+is the one question a notebook has to be able to answer: "I know I wrote this
+down somewhere."
+
+**Read on demand, not indexed and not loaded at startup.** Opening Nib to write
+one line should not read 127 files, and someone who never searches should never
+pay for it - so the cost lands on the keystroke that needs it, once per session.
+Two alternatives lost. A search index on disk is a second copy of the notes that
+can go stale and has to be maintained by everything that writes; and putting the
+text in `index.json` would have added 400,000 characters to the one file that
+already grows fastest, which is the file whose size is the real long-term
+constraint here.
+
+**Kept honest by the `edited` stamp.** The metadata arrives with every index
+change, so a note edited in this window, in its sticky window, or on another
+machine through the synced folder comes back with a newer stamp and is read
+again. Without that the search would answer from the text a note had when it was
+first read - and the note it would miss is the one being worked on right now.
+Verified in the app by typing a word and finding it a second later.
+
+**One character does not reach into the bodies.** With the whole notebook in
+scope, one letter matches essentially every note, and a list of everything is the
+same as no answer. The title and the preview are still matched from the first
+character, so typing widens at the second keystroke rather than being gated.
+
+**The matched line is shown on the card.** Full-text search without it answers
+with a card whose every visible word is missing the thing that was typed, which
+reads as a fault in the search rather than as a hit deeper in the note. The line
+replaces the preview only when the match is in the body: where the title or the
+preview already holds the needle, hiding the opening of the note would cost
+something and add nothing.
+
+**The batch read, which is where the time actually was.** Reading the notes one
+after another took 991ms for 130 notes and 237 kB, measured in the running app,
+against about 30ms for reading the same files synchronously in a tight loop
+outside it. The disk was never the cost: it was 130 round trips through the thread
+pool, each waiting for the last. Reading in batches of 24 brought it to 24.6ms,
+and the text extraction on top of that is 3ms. Every keystroke after the first is
+a scan of strings already in memory, which does not register on a millisecond
+clock. Batches rather than one `Promise.all` over everything, because a notebook
+is unbounded and opening every file in it at once is how a machine with a synced
+folder and an antivirus hook starts refusing handles.
+
+**And the block separator, found by reading the output.** Reading a whole body as
+text ran the end of one line into the start of the next - `textContent` puts
+nothing between `</p>` and `<p>` - so the first snippets said "the order can
+wait.closing the meeting". It had been that way for as long as previews and word
+counts have existed, where it was invisible; a search that quotes the line it
+matched made it visible immediately. The separator goes beside each block rather
+than inside it, because `buildPreview` reads each block's own text and joins them
+itself.
+
 ## 2026-09-07 - Colour and highlight: six names and five washes, never a hex value
 
 **Decided.** Words can be given one of six colours or one of five highlighter

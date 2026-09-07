@@ -26,7 +26,8 @@ import { Settings } from './Settings'
 import { Sidebar } from './Sidebar'
 import { useNib } from '../lib/useNib'
 import { useNoteHistory } from '../lib/useNoteHistory'
-import { archivedHits, selectedNotes } from '../lib/selection'
+import { archivedHits, BODY_SEARCH_MIN, searchSnippet, selectedNotes } from '../lib/selection'
+import { useSearchText } from '../lib/useSearchText'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
@@ -123,15 +124,57 @@ export function App(): React.JSX.Element {
   const [templateBody, setTemplateBody] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
+  /*
+   * The note text, once a search has asked for it.
+   *
+   * Empty until then, and `selectedNotes` behaves as it always did without it -
+   * so the list is never held back waiting for a read. The first search fills it
+   * in about thirty milliseconds and the results widen.
+   */
+  const bodies = useSearchText(index, search)
+
   const notes = useMemo(
-    () => selectedNotes(index, selection, scope, search, includeArchived),
-    [index, selection, scope, search, includeArchived]
+    () => selectedNotes(index, selection, scope, search, includeArchived, bodies),
+    [index, selection, scope, search, includeArchived, bodies]
   )
 
   const archived = useMemo(
-    () => archivedHits(index, selection, scope, search),
-    [index, selection, scope, search]
+    () => archivedHits(index, selection, scope, search, bodies),
+    [index, selection, scope, search, bodies]
   )
+
+  /*
+   * What a card shows when the search matched deeper in the note.
+   *
+   * Only then: a note whose title or preview holds the needle already shows it,
+   * and replacing the preview there would hide the beginning of the note for no
+   * gain. Built for the notes on screen rather than for the notebook, so the
+   * cost is a handful of string searches.
+   */
+  const snippets = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    const found = new Map<string, string>()
+    if (needle.length < BODY_SEARCH_MIN) {
+      return found
+    }
+    for (const note of notes) {
+      if (
+        note.title.toLowerCase().includes(needle) ||
+        note.preview.toLowerCase().includes(needle)
+      ) {
+        continue
+      }
+      const body = bodies.get(note.id)
+      if (body === undefined) {
+        continue
+      }
+      const snippet = searchSnippet(body.text, needle)
+      if (snippet.length > 0) {
+        found.set(note.id, snippet)
+      }
+    }
+    return found
+  }, [notes, bodies, search])
 
   // Clearing the search puts the archive back out of reach, so the next search
   // starts clean rather than inheriting a decision made about a different one.
@@ -438,6 +481,7 @@ export function App(): React.JSX.Element {
           index={index}
           selection={selection}
           notes={notes}
+          snippets={snippets}
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
           onAdd={(title, template) => {

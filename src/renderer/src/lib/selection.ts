@@ -32,6 +32,29 @@ export type ScopeFilter = 'all' | 'W' | 'P'
 
 const RECENT_LIMIT = 30
 
+/**
+ * A note's text, as the search holds it.
+ *
+ * Both cases of it. The match is done on `lower` so a search is
+ * case-insensitive, and the snippet is cut from `text` so what is shown reads the
+ * way it was written. Keeping both costs another 600 kB of strings on a notebook
+ * this size and saves lowercasing all of it on every keystroke.
+ */
+export interface NoteText {
+  text: string
+  lower: string
+}
+
+/**
+ * The shortest search that looks inside the notes.
+ *
+ * One character is not a search once the bodies are in scope: it matches
+ * essentially every note, and a list of everything is the same as no answer. The
+ * title and the preview are still matched from the first character, so typing
+ * does not feel gated - it widens at the second keystroke.
+ */
+export const BODY_SEARCH_MIN = 2
+
 export function categoryInScope(category: Category, filter: ScopeFilter): boolean {
   if (filter === 'all') {
     return true
@@ -77,13 +100,19 @@ export function liveNotes(category: Category, subId?: string): NoteMeta[] {
  * into every list - which is the one thing archiving is for preventing. So the
  * flag is ignored unless there is a needle, and the toggle in the UI only exists
  * while there is one.
+ *
+ * `bodies` is the note text, when it has been read. Optional because it arrives
+ * later than the first keystroke and because the lists that are not searching
+ * never need it: without it this behaves exactly as it did before there was a
+ * full-text search, which is also what the first moments of a search look like.
  */
 export function selectedNotes(
   index: NibIndex,
   selection: Selection,
   filter: ScopeFilter,
   search: string,
-  includeArchived = false
+  includeArchived = false,
+  bodies?: Map<string, NoteText>
 ): NoteMeta[] {
   const needle = search.trim().toLowerCase()
   const wide = includeArchived && needle.length > 0
@@ -166,12 +195,68 @@ export function selectedNotes(
   if (needle.length === 0) {
     return notes
   }
-  // Title and preview only. The bodies live in their own files and are not loaded
-  // for a list, so a full-text search is a later, deliberate feature.
-  return notes.filter(
-    (note) =>
-      note.title.toLowerCase().includes(needle) || note.preview.toLowerCase().includes(needle)
-  )
+  return notes.filter((note) => matchesSearch(note, needle, bodies))
+}
+
+/**
+ * Whether a note answers a search: its title, its preview, or its text.
+ *
+ * The title and the preview are metadata and always here; the text has to be
+ * read, so a note whose body has not been loaded yet simply does not match on it
+ * rather than being held back until it can.
+ */
+export function matchesSearch(
+  note: NoteMeta,
+  needle: string,
+  bodies?: Map<string, NoteText>
+): boolean {
+  if (note.title.toLowerCase().includes(needle) || note.preview.toLowerCase().includes(needle)) {
+    return true
+  }
+  if (needle.length < BODY_SEARCH_MIN || bodies === undefined) {
+    return false
+  }
+  return bodies.get(note.id)?.lower.includes(needle) === true
+}
+
+/**
+ * The line a search matched on, with a little either side of it.
+ *
+ * Shown on the card in place of the preview when the match is in the body,
+ * because otherwise a full-text search answers with a card whose every visible
+ * word is missing the thing that was typed - which reads as a bug in the search
+ * rather than as a hit deeper in the note.
+ *
+ * Cut on spaces where there is one nearby, so the snippet starts and ends at a
+ * word. The ellipses say the text carries on, and are left off at whichever end
+ * really is the start or the end of the note.
+ */
+export function searchSnippet(text: string, needle: string, span = 140): string {
+  const at = text.toLowerCase().indexOf(needle.toLowerCase())
+  if (at === -1) {
+    return ''
+  }
+  const before = Math.floor((span - needle.length) / 2)
+  let from = Math.max(0, at - before)
+  let to = Math.min(text.length, at + needle.length + before)
+
+  if (from > 0) {
+    const space = text.indexOf(' ', from)
+    // Only when the word break is close by: hunting forward for one could
+    // otherwise walk past the match itself and cut it off.
+    if (space !== -1 && space < at) {
+      from = space + 1
+    }
+  }
+  if (to < text.length) {
+    const space = text.lastIndexOf(' ', to)
+    if (space > at + needle.length) {
+      to = space
+    }
+  }
+
+  const cut = text.slice(from, to).trim()
+  return `${from > 0 ? '…' : ''}${cut}${to < text.length ? '…' : ''}`
 }
 
 /**
@@ -187,12 +272,17 @@ export function archivedHits(
   index: NibIndex,
   selection: Selection,
   filter: ScopeFilter,
-  search: string
+  search: string,
+  bodies?: Map<string, NoteText>
 ): number {
   if (search.trim().length === 0 || selection.kind === 'archive') {
     return 0
   }
-  return selectedNotes(index, selection, filter, search, true).filter((note) => note.archived).length
+  // The same bodies as the visible list, or the count would offer to widen a
+  // search into notes it had not looked inside - and then find them.
+  return selectedNotes(index, selection, filter, search, true, bodies).filter(
+    (note) => note.archived
+  ).length
 }
 
 /** Does this note still need you, as opposed to carrying only dealt-with flags? */

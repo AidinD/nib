@@ -235,6 +235,10 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('note:read', (_event, id: string) => store().readNote(id))
+  /* Several at once, for the search. See `readNotes`. */
+  ipcMain.handle('note:read-many', (_event, ids: string[]) =>
+    store().readNotes(Array.isArray(ids) ? ids : [])
+  )
   ipcMain.handle('note:write', async (_event, doc: NoteDoc) => {
     const edited = Date.now()
     await store().writeNote({ ...doc, edited })
