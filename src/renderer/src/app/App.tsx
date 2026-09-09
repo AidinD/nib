@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Category, NoteMeta } from '@shared/types'
+import type { Category, NoteMeta, Template } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { titleFrom } from '@shared/templates'
 import { TemplateModal } from './TemplateModal'
@@ -17,6 +17,7 @@ function asPlainText(html: string): string {
   return (holder.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 import { AlertStrip } from './AlertStrip'
+import { Launcher } from './Launcher'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
 import { NibMark } from './NibMark'
@@ -35,6 +36,7 @@ import {
   selectedNotes
 } from '../lib/selection'
 import { useSearchText } from '../lib/useSearchText'
+import type { LauncherRow, Standing } from '../lib/launcher'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
@@ -129,6 +131,8 @@ export function App(): React.JSX.Element {
   const [savingTemplate, setSavingTemplate] = useState<NoteMeta | null>(null)
   /** Its body, read once the dialog opens. Null while the read is in flight. */
   const [templateBody, setTemplateBody] = useState<string | null>(null)
+  /** Whether Ctrl+K is up. Never remembered - it is a keystroke, not a mode. */
+  const [launcherOpen, setLauncherOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   /*
@@ -189,6 +193,23 @@ export function App(): React.JSX.Element {
     }
   }, [search, includeArchived])
 
+  /**
+   * The folder the note list is pointing at, when it is one a note can go in.
+   *
+   * Null in every other selection - Recent, Sticky, a tag - because those are
+   * views over notes rather than places to put one, and a note has to be filed
+   * somewhere real.
+   */
+  const standing: Standing | null = useMemo(
+    () =>
+      selection.kind === 'category'
+        ? { categoryId: selection.categoryId, subId: null }
+        : selection.kind === 'sub'
+          ? { categoryId: selection.categoryId, subId: selection.subId }
+          : null,
+    [selection]
+  )
+
   const activeNote = useMemo(
     () =>
       index.categories.flatMap((category) => category.notes).find((note) => note.id === activeNoteId) ??
@@ -224,12 +245,59 @@ export function App(): React.JSX.Element {
         searchRef.current?.focus()
         searchRef.current?.select()
       }
+      /*
+       * Ctrl+K, the same key it is in Helm and for the same reasons.
+       *
+       * A toggle rather than an open, so the key that summoned it dismisses it -
+       * and preventDefault before the editor sees it, since the point is to reach
+       * this from inside a note you are typing in.
+       */
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.code === 'KeyK') {
+        event.preventDefault()
+        setLauncherOpen((open) => !open)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
+
+  /**
+   * Making a note, wherever the request came from.
+   *
+   * One function because there are now two doors into it - the list's own add
+   * field and Ctrl+K - and the awaited write below is the kind of detail that
+   * gets copied wrong the second time. It is load-bearing: opening the note while
+   * its body was still being written meant the editor read the file before it
+   * existed and drew an empty note, which came back only if you left and
+   * returned, so the template looked like it had done nothing.
+   *
+   * A template names the note and fills it in. An empty note asking you to
+   * remember the shape is an empty note, and typing the same title format every
+   * week is the other half of why it never gets written.
+   */
+  const createNote = async (
+    target: { categoryId: string; subId: string | null },
+    template: Template | undefined,
+    typed: string
+  ): Promise<string> => {
+    const named = template === undefined ? typed : titleFrom(template, typed)
+    const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
+    if (template !== undefined && template.body.length > 0) {
+      await window.nib.writeNote({
+        id,
+        categoryId: target.categoryId,
+        subId: target.subId,
+        title: named,
+        html: template.body,
+        created: Date.now(),
+        edited: Date.now()
+      })
+    }
+    setActiveNoteId(id)
+    return id
+  }
 
   const deleteNote = async (note: NoteMeta): Promise<void> => {
     ops.deleteNote(note.id)
@@ -319,6 +387,29 @@ export function App(): React.JSX.Element {
     setActiveNoteId(note.id)
   }
 
+  /**
+   * Point the sidebar and the list at a folder.
+   *
+   * The same three things `revealNote` clears, minus the note: a scope filter
+   * the folder is not in, a search that would empty the list, and a collapsed
+   * parent. Arriving at a list you cannot see is worse than not arriving.
+   */
+  const showPlace = (categoryId: string, subId: string | null): void => {
+    const category = index.categories.find((candidate) => candidate.id === categoryId)
+    if (category !== undefined && scope !== 'all' && category.scope !== scope) {
+      setScope('all')
+    }
+    if (search.trim().length > 0) {
+      setSearch('')
+    }
+    if (category !== undefined && !category.open && subId !== null) {
+      ops.setCategoryOpen(categoryId, true)
+    }
+    setSelection(
+      subId === null ? { kind: 'category', categoryId } : { kind: 'sub', categoryId, subId }
+    )
+  }
+
   /*
    * The trail of notes visited, walked with the mouse's side buttons or
    * Alt+Arrow.
@@ -359,6 +450,46 @@ export function App(): React.JSX.Element {
       ops.setPinned(noteId, false)
     })
   }, [ops])
+
+  /**
+   * What a Ctrl+K row does when it is chosen.
+   *
+   * The row is data and this is the only place that acts on it, so the palette
+   * itself has no idea how a note is made or how the sidebar is moved. Every
+   * branch ends somewhere visible: nothing selected silently.
+   */
+  const runLauncherRow = (row: LauncherRow): void => {
+    if (row.kind === 'open' && row.noteId !== undefined) {
+      const target = index.categories
+        .flatMap((category) => category.notes)
+        .find((candidate) => candidate.id === row.noteId)
+      if (target !== undefined) {
+        revealNote(target)
+      }
+      return
+    }
+    if (row.kind === 'goto') {
+      if (row.tagId !== undefined) {
+        setSelection({ kind: 'tag', tagId: row.tagId })
+        return
+      }
+      if (row.place !== undefined) {
+        showPlace(row.place.categoryId, row.place.subId)
+      }
+      return
+    }
+    if (row.kind === 'new' && row.place !== undefined) {
+      const template = index.templates.find((candidate) => candidate.id === row.templateId)
+      // The list follows the note, so the new note is not made into a folder
+      // that is nowhere on screen - which reads as nothing having happened.
+      showPlace(row.place.categoryId, row.place.subId)
+      void createNote(
+        { categoryId: row.place.categoryId, subId: row.place.subId },
+        template,
+        row.typed ?? ''
+      )
+    }
+  }
 
   const confirmDelete = async (): Promise<void> => {
     const pending = pendingDelete
@@ -420,6 +551,21 @@ export function App(): React.JSX.Element {
               </button>
             )}
           </div>
+          {/*
+            A shortcut nobody knows about is a shortcut nobody uses.
+            
+            Helm carries the same hint for the same reason, and it is a button
+            rather than a label so the discovery and the use are one click apart
+            rather than a thing you read and then have to remember.
+          */}
+          <button
+            type="button"
+            className="cmdk-hint"
+            title="Quick open: a name, a note, a folder"
+            onClick={() => setLauncherOpen(true)}
+          >
+            Ctrl+K
+          </button>
           <Settings prefs={prefs} onChange={setPrefs} />
           <div className="window-controls">
             <button type="button" onClick={() => void window.nib.minimizeWindow()} title="Minimise">
@@ -490,38 +636,9 @@ export function App(): React.JSX.Element {
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
           onAdd={(title, template) => {
-            void (async () => {
-            const target =
-              selection.kind === 'category'
-                ? { categoryId: selection.categoryId, subId: null }
-                : selection.kind === 'sub'
-                  ? { categoryId: selection.categoryId, subId: selection.subId }
-                  : null
-            if (target === null) {
-              return
+            if (standing !== null) {
+              void createNote(standing, template, title)
             }
-            // A template names the note and fills it in. An empty note asking you
-            // to remember the shape is an empty note, and typing the same title
-            // format every week is the other half of why it never gets written.
-            const named = template === undefined ? title : titleFrom(template, title)
-            const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
-            // Awaited, and that is the whole fix. Opening the note while the body
-            // was still being written meant the editor read the file before it
-            // existed and drew an empty note - which came back only if you left
-            // and returned, so the template looked like it had done nothing.
-            if (template !== undefined && template.body.length > 0) {
-              await window.nib.writeNote({
-                id,
-                categoryId: target.categoryId,
-                subId: target.subId,
-                title: named,
-                html: template.body,
-                created: Date.now(),
-                edited: Date.now()
-              })
-            }
-            setActiveNoteId(id)
-            })()
           }}
           onSaveTemplate={
             activeNote === null
@@ -644,6 +761,15 @@ export function App(): React.JSX.Element {
               tags: [...note.tags]
             })
           }}
+        />
+      )}
+
+      {launcherOpen && (
+        <Launcher
+          index={index}
+          standing={standing}
+          onRun={runLauncherRow}
+          onClose={() => setLauncherOpen(false)}
         />
       )}
 

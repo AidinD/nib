@@ -3985,3 +3985,135 @@ body.is-resizing .splitter-grip {
   font-size: 9.5px;
   line-height: 1.2;
 }
+
+/* ---------- the Ctrl+K launcher ---------- */
+
+/*
+ * Its own box rather than the modal's, because it is not one.
+ *
+ * A modal in this app asks a question and blocks until it is answered, and it is
+ * centred to say so. This is a thing you summon, type into and dismiss, so it
+ * sits near the top where the eye already is and where a growing list has room
+ * to grow downwards. The chrome is the slash menu's - surface, border, the same
+ * shadow - because both are lists you steer with the keyboard.
+ */
+.launcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.launcher {
+  width: min(560px, 84vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.launcher-input {
+  width: 100%;
+  padding: 13px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.launcher-input:focus {
+  outline: none;
+}
+
+.launcher-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.launcher-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.launcher-row.is-at {
+  background: var(--surface-hover);
+}
+
+/*
+ * The verb, first and fixed-width.
+ *
+ * Three kinds of row sit in one list and the difference between opening a note
+ * and creating one is the difference worth never getting wrong. A column that
+ * lines up is what lets it be read at a glance instead of parsed.
+ */
+.launcher-kind {
+  flex: 0 0 34px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.launcher-row.is-new .launcher-kind {
+  color: var(--accent);
+}
+
+.launcher-label {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-where {
+  flex: 0 1 auto;
+  max-width: 45%;
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-empty {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/*
+ * The hint, sized to disappear.
+ *
+ * It has to be findable once and then stop being noticed, so it is the search
+ * field's own dim grey rather than anything that asks to be looked at.
+ */
+.cmdk-hint {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.cmdk-hint:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}

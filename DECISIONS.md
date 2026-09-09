@@ -3,6 +3,72 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-09 - Ctrl+K, and the template a folder picks for itself
+
+**Decided.** A launcher on Ctrl+K. Type a folder's name and the first row makes a
+note in it, already on the right template; type a note's title and it opens;
+type anything else and it becomes the title of a note where the list is
+standing. Same key, same four keys inside it, as Helm's.
+
+**The cost it removes is the setup, not the writing.** Making a note for somebody
+takes three deliberate acts today: find their folder in the sidebar, click it,
+then reach for the template menu beside the add field. All three land at the
+moment you are least willing to spend effort - just after the conversation - which
+is the argument templates were built on. Templates only solved the second half of
+it, the remembering-the-questions half. This is the first half.
+
+**Which template, decided by the folder rather than by a default.** A template
+stamps its tags on every note made from it, so the notes in a folder are already
+a record of what that folder is for: a folder whose notes are tagged `1-1` offers
+the 1-1 template first, whatever order the catalog is in. Nothing is stored to
+make this work and nothing has to be maintained - it is read off the notes each
+time - so a folder that changes what it is for changes what it suggests without
+anybody telling it. A template with no tags of its own cannot be recognised this
+way and simply keeps its catalog position, which is honest: nothing about the
+note it made says where it came from.
+
+**A launcher, not a second search, and that line is drawn deliberately.** It
+matches titles and the names of folders and tags. It does not read the note
+bodies - Ctrl+Shift+F does that, reading every file and quoting the line it
+matched. The two answer different questions. A launcher answers "take me there"
+and has to answer between keystrokes; a search answers "where did I write that"
+and is allowed to think. Merging them would make the fast one wait for the
+thorough one, and the fast one is the whole point.
+
+**Making beats going, and that is the thumb on the scale.** A folder whose name
+you typed puts its `new` rows above its own `go to`. Typing a person's name is a
+sentence about writing something; if it were about looking, the sidebar is right
+there and is two clicks. Everything else is ordered by fit alone: an exact title
+outranks a folder that merely contains the word, so the launcher does not have to
+be told which kind of thing you meant.
+
+**Four tiers of match, twenty points apart.** Exact, prefix, word-start,
+substring, then subsequence. Subsequence is what makes it feel like a launcher -
+`val` finds `Vale` and so does `vl` - and on its own it matches far too much to
+order by, which is what the tiers above it are for. A length penalty breaks ties
+inside a tier and is capped below the gap, so a worse KIND of match can never
+outrank a better one however short the text.
+
+**One function makes a note now, called from two doors.** The list's add field
+and the launcher both go through `createNote`, because the awaited write in it is
+load-bearing and is exactly the kind of detail that gets copied wrong the second
+time: opening a note while its body is still being written meant the editor read
+the file before it existed and drew an empty one.
+
+**Helm's key, Helm's keys.** Escape closes, Up and Down move, Enter runs, and the
+mouse selects what it hovers so the highlight never lies about what Enter would
+do. Two apps in the same suite teaching two different palettes would waste the
+only advantage of having written both. Jot has no palette - its fast path is a
+global Ctrl+Alt+. capture window, which is a different thing: a place to put a
+line of text without opening the app at all.
+
+**Verified in the running app**, not only in the unit tests: the key reaching the
+window from inside a note, the note being made on the right template in the right
+folder, the list following it there, an existing note opening with its text on
+screen, and Escape leaving nothing behind. The ordering is unit-tested, because
+ordering is the feature - a launcher whose right row is fourth is one you stop
+trusting, since trusting it means pressing Enter without reading.
+
 ## 2026-09-09 - The glossary correction is finished in code, not asked for harder
 
 **The report.** A 1-1 note said a product's name correctly in its opening
