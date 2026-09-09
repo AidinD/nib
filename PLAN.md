@@ -279,6 +279,17 @@ Every requirement on the original list is now built. What is left is smaller:
    caused all three instances. Those live in the glossary file, which is not
    version-controlled. See DECISIONS.
 
+   **The correction is finished in code, as of 2026-09-09.** A model applies it
+   in the field it happens to be writing: one note said a product name right in
+   the summary paragraph and wrong four more times, under other headings, while
+   reporting the correction as applied. Two passes in
+   [summary.ts](src/main/summary.ts) close it - the corrections the model itself
+   reported are applied to every field of its answer, and a glossary term is
+   matched by sound, ignoring which vowels were heard, so a homophone that looks
+   like an ordinary word is caught too. Six-character floor, whole words only,
+   and what code changed is added to the note's own line. Swept over 135 real
+   notes it fires on three spellings and nothing else. See DECISIONS.
+
    **The follow-up is decided and not started:** giving whisper the same list as
    an initial prompt, which PREVENTS the error rather than correcting it. Its
    precondition is now resolved - `whisper-cli.exe --help` does offer

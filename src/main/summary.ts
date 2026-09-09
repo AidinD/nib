@@ -260,6 +260,244 @@ export interface SummaryResult {
   costUsd?: number | null
 }
 
+/* ------------------------------------- making a correction stick -- */
+
+/*
+ * The model corrects the word where it is looking, and only there.
+ *
+ * Found in a 1-1 note on 2026-09-09. The summary said the product's name
+ * correctly once and said it wrong four more times - in "Sedan förra gången", in
+ * the questions, in an action point - and the line at the bottom reported the
+ * correction as applied. It had been applied, to the paragraph the model
+ * happened to be writing when it decided.
+ *
+ * Two separate failures produced that, and both are fixed here rather than by
+ * asking the prompt more firmly.
+ *
+ * ## A correction the model reported but did not finish
+ *
+ * It listed three garbled variants of one product name, correctly identified,
+ * and replaced them in the summary paragraph while the other fields kept theirs.
+ * A model writing seven fields in one pass is not a find-and-replace and should
+ * not be relied on as one - but once it has DECIDED that a word is a mishearing,
+ * applying that decision to the rest of its own answer needs no judgement at
+ * all. So code does it.
+ *
+ * ## A mishearing that looks like a real word
+ *
+ * The harder half. The transcript also had a spelling that is an ordinary
+ * English word and a homophone of the term, and that one the model left alone
+ * everywhere. The instruction is why: it is told, correctly, that a word merely
+ * RESEMBLING a glossary term is not to be touched. A homophone is not a
+ * resemblance, it is the same word heard by somebody who did not know how it was
+ * spelled, and it is the most common shape this error takes - speech recognition
+ * reaches for the word that exists.
+ *
+ * Caught by comparing consonants and ignoring which vowels were heard, which is
+ * a crude stand-in for "sounds the same" and close enough for the job. It is
+ * deliberately blind - it knows no English and reads no sentences - so the length
+ * floor below is what keeps it safe rather than any cleverness.
+ *
+ * The transcript is still never touched. Only the answer, and every substitution
+ * this makes is reported on the note's own line, so a correction stays as
+ * visible as it was before code started making them.
+ */
+
+/** Vowels, Swedish included, as the thing to look past. */
+const VOWELS = 'aeiouyåäö'
+
+/**
+ * Below this many characters a term is never matched by sound.
+ *
+ * The whole safety of the approach is here. `Tend` with its vowels ignored is
+ * `T_nd`, which is `tand`, `tänd` and `tond` - and a glossary term is not licence
+ * to rewrite the Swedish language around it. Every short term in the seed is a
+ * word or a fragment of one (`Meta`, `Jot`, `Nib`, `Tend`, `Helm`), and every one
+ * of them would misfire. Six letters with the consonants and the vowel positions
+ * both fixed is specific enough that a collision is a real coincidence: `Roblox`
+ * matches `Rablex` and nothing anybody writes.
+ *
+ * Short terms are still corrected - by the model, which can read the sentence
+ * they are in. This pass is the part that cannot, so it takes only the cases
+ * where not reading is safe.
+ */
+const SOUNDS_ALIKE_MIN = 6
+
+/**
+ * What a corrected word may still be carrying.
+ *
+ * The note that prompted this had the term with a genitive `s` and again inside a
+ * hyphenated compound. The hyphen is a boundary already; the genitive and the
+ * definite forms are not, so they are listed - a term with an inflection on it is
+ * the same term.
+ */
+const CARRIED = '(?:s|es|n|en|et|ns|ar|arna|erna)?'
+
+/** Below this a reported mishearing is not applied again - see `reportedFixes`. */
+const HEARD_MIN = 4
+
+/**
+ * A term as a pattern that ignores which vowels were heard.
+ *
+ * Null for anything this must not fuzz: too short, or not a single plain word. A
+ * term with a space or a digit in it is not a word whose vowels can be
+ * generalised - `IC-level` fuzzed would match far more than it should - and those
+ * are left entirely to the model.
+ */
+function soundsLike(term: string): RegExp | null {
+  if (term.length < SOUNDS_ALIKE_MIN || !new RegExp(`^[a-z${VOWELS}]+$`, 'i').test(term)) {
+    return null
+  }
+  const runs = term.match(new RegExp(`[${VOWELS}]+|[^${VOWELS}]+`, 'gi')) ?? []
+  const body = runs
+    .map((run) => (new RegExp(`[${VOWELS}]`, 'i').test(run[0]) ? `[${VOWELS}]+` : run.toLowerCase()))
+    .join('')
+  // A letter or a digit on either side rules the match out, so a term sitting
+  // inside a longer word is left alone; a hyphen does not, because a compound
+  // built on the term is still the term.
+  return new RegExp(`(?<![\\p{L}\\p{N}])(${body})(${CARRIED})(?![\\p{L}\\p{N}])`, 'giu')
+}
+
+/** The glossary's spelling, capitalised the way the word it replaces was. */
+function cased(term: string, found: string): string {
+  const upper = found[0] === found[0].toUpperCase() && found[0] !== found[0].toLowerCase()
+  return upper ? term[0].toUpperCase() + term.slice(1) : term
+}
+
+/**
+ * The corrections the model said it applied, as patterns to apply everywhere.
+ *
+ * `heard` arrives improvised. Asked for the words as the transcript has them, it
+ * answered with three variants slashed together in one string, so the value is
+ * split rather than trusted as a literal.
+ *
+ * The floor matters here for the same reason as above but more sharply: a
+ * reported `heard` of `en` or `av` applied across a Swedish summary would be
+ * vandalism. Four characters, and whole words only.
+ */
+function reportedFixes(
+  corrections: { heard: string; meant: string }[]
+): { from: RegExp; to: string }[] {
+  const fixes: { from: RegExp; to: string }[] = []
+  for (const correction of corrections) {
+    const meant = correction.meant.trim()
+    if (meant.length === 0) {
+      continue
+    }
+    for (const piece of correction.heard.split(/[/,;]|\bor\b|\beller\b/i)) {
+      const heard = piece.trim()
+      if (heard.length < HEARD_MIN || heard.toLowerCase() === meant.toLowerCase()) {
+        continue
+      }
+      const escaped = heard.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      fixes.push({
+        from: new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu'),
+        to: meant
+      })
+    }
+  }
+  return fixes
+}
+
+/** Every field of the answer that is prose, so none of them is missed. */
+function texts(value: NonNullable<SummaryResult['value']>): string {
+  return [
+    value.summary,
+    ...value.decisions,
+    ...value.actions.map((action) => action.text),
+    ...value.questions,
+    ...value.people,
+    value.lastTime ?? '',
+    ...(value.answers ?? []).map((answer) => answer.answer)
+  ].join(' ')
+}
+
+/**
+ * The same correction in every field, and honest about the ones code made.
+ *
+ * Runs over the whole answer rather than over the paragraph the model was
+ * writing, which is the entire point: a name is right or wrong in a note, not
+ * right under one heading and wrong under the next.
+ *
+ * Order is deliberate. The model's own reported corrections go first, because
+ * those are decisions it made with the sentence in front of it; the sound match
+ * runs after and cannot undo them, since a glossary term never matches itself.
+ *
+ * Returns a new value, or the one it was given when nothing moved. Nothing is
+ * mutated.
+ */
+export function applyGlossary(
+  value: NonNullable<SummaryResult['value']>,
+  glossary: string[]
+): NonNullable<SummaryResult['value']> {
+  const reported = reportedFixes(value.corrections ?? [])
+  const terms = glossary.map((term) => term.trim()).filter((term) => term.length > 0)
+  const sound = terms
+    .map((term) => ({ term, pattern: soundsLike(term) }))
+    .filter((entry): entry is { term: string; pattern: RegExp } => entry.pattern !== null)
+  const known = new Set(terms.map((term) => term.toLowerCase()))
+
+  /** What this pass changed, so the note's own line can say so. */
+  const made = new Map<string, string>()
+
+  const fix = (text: string): string => {
+    let out = text
+    for (const { from, to } of reported) {
+      out = out.replace(from, to)
+    }
+    for (const { term, pattern } of sound) {
+      out = out.replace(pattern, (whole: string, word: string, carried: string) => {
+        // A word that is itself a glossary term is somebody else's word rather
+        // than a mishearing of this one, so two terms that rhyme cannot fight.
+        if (known.has(word.toLowerCase())) {
+          return whole
+        }
+        made.set(word, term)
+        return cased(term, word) + carried
+      })
+    }
+    return out
+  }
+
+  const before = texts(value)
+  const fixed: NonNullable<SummaryResult['value']> = {
+    ...value,
+    summary: fix(value.summary),
+    decisions: value.decisions.map(fix),
+    actions: value.actions.map((action) => ({ ...action, text: fix(action.text) })),
+    questions: value.questions.map(fix),
+    people: value.people.map(fix),
+    lastTime: value.lastTime === undefined ? undefined : fix(value.lastTime),
+    answers: value.answers?.map((answer) => ({ ...answer, answer: fix(answer.answer) }))
+  }
+  if (texts(fixed) === before) {
+    return value
+  }
+
+  /*
+   * The line at the bottom has to cover what code did too.
+   *
+   * A summary that quietly disagrees with its own transcript is the failure this
+   * whole feature exists to prevent, and it does not become acceptable because
+   * the disagreement was introduced deterministically. Only words actually
+   * replaced are added - `made` is filled by the replacement itself - and only
+   * where the model had not already reported that pair.
+   */
+  const said = new Set(
+    (value.corrections ?? []).map(
+      (correction) =>
+        `${correction.heard.trim().toLowerCase()}|${correction.meant.trim().toLowerCase()}`
+    )
+  )
+  const added = [...made]
+    .filter(([heard, meant]) => !said.has(`${heard.toLowerCase()}|${meant.toLowerCase()}`))
+    .map(([heard, meant]) => ({ heard, meant }))
+  if (added.length > 0) {
+    fixed.corrections = [...(value.corrections ?? []), ...added]
+  }
+  return fixed
+}
+
 /**
  * The instruction.
  *
@@ -397,6 +635,8 @@ function instruction(request: SummaryRequest): string {
           '',
           'Where the transcript has something that is a plausible MISHEARING of one of these, write the glossary spelling in your answer instead. "easy level" for IC-level is the shape of it: same sounds, wrong words.',
           'Only a mishearing. A word that merely resembles a glossary term, or that you would have phrased differently, is left exactly as it is - this is not a find-and-replace and not licence to tidy anybody\'s wording.',
+          'A spelling that is an ordinary word IS a mishearing when it sounds the same as the term - that is the commonest form of this, because speech recognition reaches for the word that exists. Judge it by sound, not by whether the version in the transcript looks like a real word.',
+          'Correct it in EVERY field you write, not only in the paragraph where you noticed. A name that is right in the summary and wrong in the questions is worse than one wrong throughout, because it reads as two different things.',
           'You are not editing the transcript. It stays as it is, wrong words and all, because it is the record of what was heard. Only your answer is corrected.',
           'List every correction you actually applied in `corrections`, as heard and meant. Nothing you did not use, and an empty list when you corrected nothing.'
         ].join('\n')
@@ -445,5 +685,16 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
   if (!result.ok) {
     return { ok: false, reason: result.reason }
   }
-  return { ok: true, value: result.value, model: result.model, costUsd: result.costUsd }
+  /*
+   * And then finish the corrections the model started.
+   *
+   * Meetings only, matching the instruction: a note summarised as a note is
+   * mostly his own typing, and correcting a man's spelling of his own project
+   * back at him is not what this is for.
+   */
+  const value =
+    request.kind === 'note' || result.value === undefined
+      ? result.value
+      : applyGlossary(result.value as NonNullable<SummaryResult['value']>, request.glossary ?? [])
+  return { ok: true, value, model: result.model, costUsd: result.costUsd }
 }

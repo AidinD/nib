@@ -19,7 +19,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { readGlossary } from '../src/main/summary.ts'
+import { applyGlossary, readGlossary } from '../src/main/summary.ts'
 import { summaryHtml } from '../src/renderer/src/lib/notes.ts'
 
 /** A scratch notebook directory, never the real one. */
@@ -161,4 +161,137 @@ test('the corrections sit above the provenance, not below it', () => {
     { ...base, corrections: [{ heard: 'a', meant: 'b' }] }
   )
   assert.ok(html.indexOf('data-heard') < html.indexOf('data-provenance'))
+})
+
+/*
+ * The correction has to hold across the whole answer, not just where the model
+ * was looking.
+ *
+ * Every case here is from one real 1-1 note, 2026-09-09. The product name was
+ * right in the opening paragraph and wrong four more times: under "Sedan forra
+ * gangen", in a question, in an action point, once with a genitive s and once
+ * inside a hyphenated compound. The line at the bottom reported the correction as
+ * applied, which it had been - to one paragraph.
+ *
+ * The fixture term is invented rather than borrowed. The real glossary holds
+ * colleague and client names and this repository is public.
+ */
+
+/** A term whose homophone is an ordinary word, which is the hard case. */
+const TERM = 'Moonquill'
+const HEARD = 'Munquill'
+
+const empty = {
+  summary: '',
+  decisions: [],
+  actions: [],
+  questions: [],
+  people: []
+}
+
+test('the same word is corrected in every field, not only the summary', () => {
+  const fixed = applyGlossary(
+    {
+      ...empty,
+      summary: `Vi pratade lange om ${TERM}.`,
+      lastTime: `Forra gangen bestamdes att han tar over agarskapet av ${HEARD}.`,
+      decisions: [`${HEARD} pausas till oktober.`],
+      questions: [`Vem tacker upp ${HEARD} om bada slutar?`],
+      actions: [{ text: `Ga igenom ${HEARD}s nulage med honom.`, implied: false }],
+      people: []
+    },
+    [TERM]
+  )
+
+  assert.equal(fixed.lastTime, `Forra gangen bestamdes att han tar over agarskapet av ${TERM}.`)
+  assert.deepEqual(fixed.decisions, [`${TERM} pausas till oktober.`])
+  assert.deepEqual(fixed.questions, [`Vem tacker upp ${TERM} om bada slutar?`])
+  // The genitive comes along - a term with an inflection on it is the term.
+  assert.equal(fixed.actions[0].text, `Ga igenom ${TERM}s nulage med honom.`)
+})
+
+test('a hyphenated compound is the term, and is corrected inside one', () => {
+  const fixed = applyGlossary({ ...empty, summary: `${HEARD}-statusen kom upp igen.` }, [TERM])
+  assert.equal(fixed.summary, `${TERM}-statusen kom upp igen.`)
+})
+
+test('what code corrected is reported, so the note still says what it changed', () => {
+  const fixed = applyGlossary({ ...empty, summary: `Om ${HEARD}.` }, [TERM])
+  assert.deepEqual(fixed.corrections, [{ heard: HEARD, meant: TERM }])
+})
+
+test('a correction the model reported is applied to the fields it missed', () => {
+  const fixed = applyGlossary(
+    {
+      ...empty,
+      summary: `${TERM} ar overhajpat.`,
+      questions: ['Vad hander med Munkwill sen?'],
+      decisions: ['Moonkvil ligger kvar hos honom.'],
+      // The model answered with three variants slashed into one string rather
+      // than as three corrections, so the value is split rather than trusted.
+      corrections: [{ heard: 'Munkwill / Moonkvil / Munkfill', meant: TERM }]
+    },
+    [TERM]
+  )
+  assert.deepEqual(fixed.questions, [`Vad hander med ${TERM} sen?`])
+  assert.deepEqual(fixed.decisions, [`${TERM} ligger kvar hos honom.`])
+  // Already reported, so nothing is added on top of it.
+  assert.equal(fixed.corrections?.length, 1)
+})
+
+test('a short term is never matched by sound', () => {
+  /*
+   * The floor is the whole safety of this. `Tend` with its vowels ignored is
+   * `tand` and `tand` and `tond`, and a glossary term is not licence to rewrite
+   * the language around it.
+   */
+  const kept = 'Han hade ont i en tand och vi tande ljuset.'
+  const fixed = applyGlossary({ ...empty, summary: kept }, ['Tend', 'Jot', 'Nib', 'Meta'])
+  assert.equal(fixed.summary, kept)
+  assert.equal(fixed.corrections, undefined)
+})
+
+test('a term inside a longer word is left alone', () => {
+  const kept = 'Robloxutvecklarna och munquilleriet gick bra.'
+  const fixed = applyGlossary({ ...empty, summary: kept }, [TERM, 'Roblox'])
+  assert.equal(fixed.summary, kept)
+})
+
+test('two terms that rhyme do not fight over each other', () => {
+  const kept = `Bade ${TERM} och ${HEARD} finns i ordlistan.`
+  const fixed = applyGlossary({ ...empty, summary: kept }, [TERM, HEARD])
+  assert.equal(fixed.summary, kept)
+})
+
+test('a reported mishearing too short to be a word is not applied', () => {
+  /*
+   * A `heard` of `en` loosed on a Swedish summary would be vandalism, and the
+   * model does occasionally answer with a fragment.
+   */
+  const kept = 'Han sa att en av dem ar klar.'
+  const fixed = applyGlossary(
+    { ...empty, summary: kept, corrections: [{ heard: 'en', meant: TERM }] },
+    []
+  )
+  assert.equal(fixed.summary, kept)
+})
+
+test('an answer with nothing to correct comes back untouched', () => {
+  const value = { ...empty, summary: `${TERM} rullar vidare.`, people: ['Ada'] }
+  assert.equal(applyGlossary(value, [TERM]), value, 'the same object, not a rebuilt equal one')
+})
+
+test('the answers filled in under the note prompts are corrected too', () => {
+  const fixed = applyGlossary(
+    { ...empty, answers: [{ id: 'p1', answer: `Han vill ta over ${HEARD}.` }] },
+    [TERM]
+  )
+  assert.deepEqual(fixed.answers, [{ id: 'p1', answer: `Han vill ta over ${TERM}.` }])
+})
+
+test('a name is corrected in the list of people mentioned', () => {
+  // The glossary holds people as well as products, and a name heard wrong is
+  // the case that made this feature exist.
+  const fixed = applyGlossary({ ...empty, people: ['Vandermaar', 'Ada'] }, ['Vandermeer'])
+  assert.deepEqual(fixed.people, ['Vandermeer', 'Ada'])
 })

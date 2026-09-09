@@ -3,6 +3,73 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-09 - The glossary correction is finished in code, not asked for harder
+
+**The report.** A 1-1 note said a product's name correctly in its opening
+paragraph and wrongly four more times - under "Sedan förra gången", in a question,
+in an action point, once with a genitive `s` and once inside a hyphenated compound
+- and the line at the bottom reported the correction as applied. It had been:
+to the paragraph the model was writing when it decided.
+
+**Decided.** Two passes over the answer after the model returns, in
+`applyGlossary`. The corrections the model itself reported are applied to every
+field it wrote; and each glossary term is matched by sound - same consonants,
+vowels ignored - so a spelling that is an ordinary word is caught as well. The
+transcript is still never touched, and every substitution code makes is added to
+the note's own "Rättat mot ordlistan" line.
+
+**Two failures, not one, and only the second is interesting.** The first is
+ordinary: a model writing seven fields in one pass is not a find-and-replace and
+should not be relied on as one. Once it has DECIDED a word is a mishearing,
+applying that decision to the rest of its own answer needs no judgement, so code
+does it. Its reported `heard` arrives improvised - three variants slashed into one
+string in this instance - so the value is split rather than trusted as a literal.
+
+The second is the one worth writing down. The transcript also carried a spelling
+that is a real English word and a homophone of the term, and the model left that
+one alone in every field, correctly following its own instruction: a word that
+merely RESEMBLES a glossary term is not to be touched. A homophone is not a
+resemblance. It is the same word heard by somebody who did not know how it was
+spelled, and it is the commonest shape this error takes, because speech
+recognition reaches for the word that exists. The instruction had a hole in it
+exactly where the error lives.
+
+**Matched by sound, which here means ignoring the vowels.** Crude, and enough:
+the two spellings are the same consonants in the same places. It reads no
+sentences and knows no English, so the safety is not cleverness but a floor -
+**six characters, whole words only, single plain word.** Every short term in the
+seed would misfire without it: `Tend` with its vowels ignored is `tand`, `tänd`
+and `tond`, and a glossary term is not licence to rewrite the language around it.
+Short terms are still corrected, by the model, which can read the sentence they
+are in. This pass takes only the cases where not reading is safe.
+
+**Verified by sweeping the real notebook** rather than by reasoning about it. Over
+135 notes - transcripts included, which the real pass never sees - it fires on
+three spellings and nothing else: the homophone, its lowercase form, and one
+misheard product name. Zero false positives across a notebook of Swedish prose is
+the evidence the floor is in the right place, and it is the number to re-measure
+if the floor is ever lowered.
+
+**Genitives and compounds are the same term.** The note had the misheard
+spelling once with a genitive `s` and once as the first half of a hyphenated
+compound. The hyphen is a boundary already; the inflections are not, so a short
+list of them rides along on the match.
+
+**Two lines added to the prompt as well, not instead.** The model catches the
+garbled variants that share no consonants with the term, which no vowel match can
+reach; code catches the homophone consistently across every field. They are
+complementary, so the instruction now says plainly that a spelling which is an
+ordinary word is still a mishearing when it sounds the same, and that the
+correction belongs in every field rather than in the paragraph where it was
+noticed.
+
+**Notes that were already summarised are not rewritten.** This changes the next
+summary, not the last one. Repairing existing notes in place was considered and
+declined for the same reason the transcript is left alone: a note is a record, and
+a background pass editing words inside one the author has read and filed is a
+larger licence than fixing a name is worth. Pressing Summarise again is the
+remedy, and it costs a few cents.
+
 ## 2026-09-07 - An auth failure says what to do, and the busy label speaks one language
 
 **Decided.** When the summariser fails on credentials, the message leads with the
