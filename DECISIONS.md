@@ -3,6 +3,50 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-10 - The model's own scaffolding comes off the answer
+
+**The report.** Summaries were ending in a stray closing `summary` tag. Three
+notes of a hundred and thirty-five, and two of those carry a closing `invoke`
+tag under it as well - which is what identifies the whole thing. That is the
+shape of a tool call, not of a note about a meeting: the model typed its own
+scaffolding INSIDE the field instead of around it.
+
+**Decided.** Every text field of the answer has a trailing run of orphaned
+closing tags taken off it, in `tidy`, before anything else looks at the answer.
+
+**Why nothing caught it.** The schema is enforced by the CLI, so what comes back
+is a perfectly valid string - a shape check cannot see that it ends in a tag. And
+it reaches the page because the summary is escaped on the way into the note,
+exactly as it should be, so instead of vanishing into the markup the reader gets
+it as literal text. Two things behaving correctly, and the artefact walks between
+them.
+
+**An ORPHAN, which is the whole safety of it.** A note may legitimately contain
+markup - somebody writing about HTML would - so this cannot simply delete tags.
+The test is whether the closing tag has an opening one before it in the same
+field. Real markup comes in pairs; scaffolding that leaked does not, because its
+opening half was consumed as scaffolding. That is what makes it safe to run on
+every answer rather than against a list of known tag names, and it is why nothing
+here has to be updated when the model starts leaking a token nobody has seen yet.
+
+**Measured before shipping, on the real notebook.** 9,618 blocks of prose swept
+through it: it fires on the three known cases and on nothing else. That is the
+number to re-measure if the rule is ever loosened.
+
+**Not asked for in the prompt, deliberately.** A line telling the model not to
+emit scaffolding asks it to control something it is doing by accident, in about
+two answers in a hundred, and would cost an instruction on every call for a fix
+that works most of the time. This works every time and costs nothing per call.
+
+**Every field, and both kinds of summary.** The leak lands wherever the model
+happened to stop, and a decision or a filled-in answer ending in a tag reads just
+as badly as a summary does. Unlike the glossary correction it runs for a note as
+well as for a meeting, because this is an artefact of the call rather than of
+what was being read.
+
+**The three notes that already have it are not rewritten** - the same line the
+glossary correction holds. This changes the next summary, not the last one.
+
 ## 2026-09-09 - Ctrl+K, and the template a folder picks for itself
 
 **Decided.** A launcher on Ctrl+K. Type a folder's name and the first row makes a

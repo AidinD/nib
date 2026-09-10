@@ -412,6 +412,87 @@ function texts(value: NonNullable<SummaryResult['value']>): string {
   ].join(' ')
 }
 
+/* ------------------------------------ the model's own scaffolding -- */
+
+/*
+ * A closing tag left on the end of an answer.
+ *
+ * Three notes in a hundred and thirty-five end their summary with
+ * `</summary>` and two of those with `</invoke>` under it. Neither is
+ * anything the person said and neither is anything the app wrote: they are
+ * the model's own tool-call scaffolding, typed INSIDE the field instead of
+ * around it. `</invoke>` gives it away - that is the shape of a tool call,
+ * not of a note about a meeting.
+ *
+ * It survives because the schema is enforced by the CLI, so the value that
+ * comes back is a perfectly valid string; the fact that it ends in a tag is
+ * invisible to everything that only checks the shape. And it survives being
+ * rendered because the summary is escaped before it is written into the note,
+ * exactly as it should be - so the reader gets the tag as literal text.
+ *
+ * ## Only an ORPHAN, and only at the end
+ *
+ * A note may legitimately contain markup - somebody writing about HTML would -
+ * so this cannot simply delete tags. The test is whether the closing tag has an
+ * opening one before it in the same field. Real markup comes in pairs; scaffolding
+ * that leaked does not, because its opening half was consumed as scaffolding.
+ * That distinction is what makes this safe to run on every answer rather than
+ * on a list of names, and it is why nothing has to be updated when the model
+ * starts leaking a tag nobody has seen yet.
+ *
+ * ## Not asked for in the prompt, deliberately
+ *
+ * A line telling it not to emit scaffolding asks the model to control something
+ * it is doing by accident, in about two answers in a hundred, and would cost a
+ * line of instruction on every call for a fix that works most of the time. This
+ * works every time and costs nothing per call.
+ */
+
+/** One orphaned closing tag at the very end, or null when there is none. */
+const TRAILING_TAG = /\s*<\/([a-zA-Z][\w-]*)\s*>\s*$/
+
+/** An answer field with the model's leftover scaffolding taken off the end. */
+export function tidy(text: string): string {
+  let out = text
+  for (;;) {
+    const match = TRAILING_TAG.exec(out)
+    if (match === null) {
+      break
+    }
+    const opened = new RegExp(`<${match[1]}(?:[\\s/>])`, 'i')
+    if (opened.test(out.slice(0, match.index))) {
+      // Its opening half is right there, so this is somebody's markup.
+      break
+    }
+    out = out.slice(0, match.index)
+  }
+  return out === text ? text : out.trimEnd()
+}
+
+/**
+ * The whole answer, tidied.
+ *
+ * Every field rather than the summary alone: the leak lands wherever the model
+ * happened to stop, and a decision or an answer ending in a tag reads exactly as
+ * badly. Runs for a note as well as for a meeting, because this is an artefact
+ * of the call rather than of what was being read.
+ */
+export function tidyAnswer(
+  value: NonNullable<SummaryResult['value']>
+): NonNullable<SummaryResult['value']> {
+  const fixed: NonNullable<SummaryResult['value']> = {
+    ...value,
+    summary: tidy(value.summary),
+    decisions: value.decisions.map(tidy),
+    actions: value.actions.map((action) => ({ ...action, text: tidy(action.text) })),
+    questions: value.questions.map(tidy),
+    people: value.people.map(tidy),
+    lastTime: value.lastTime === undefined ? undefined : tidy(value.lastTime),
+    answers: value.answers?.map((answer) => ({ ...answer, answer: tidy(answer.answer) }))
+  }
+  return texts(fixed) === texts(value) ? value : fixed
+}
+
 /**
  * The same correction in every field, and honest about the ones code made.
  *
@@ -686,15 +767,21 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
     return { ok: false, reason: result.reason }
   }
   /*
-   * And then finish the corrections the model started.
+   * Its own scaffolding off the end, and then the corrections it started.
    *
-   * Meetings only, matching the instruction: a note summarised as a note is
-   * mostly his own typing, and correcting a man's spelling of his own project
-   * back at him is not what this is for.
+   * The tidy runs on everything - a leaked tag is an artefact of the call, not
+   * of what was being read. The glossary is meetings only, matching the
+   * instruction: a note summarised as a note is mostly his own typing, and
+   * correcting a man's spelling of his own project back at him is not what
+   * this is for.
    */
+  const answered =
+    result.value === undefined
+      ? undefined
+      : tidyAnswer(result.value as NonNullable<SummaryResult['value']>)
   const value =
-    request.kind === 'note' || result.value === undefined
-      ? result.value
-      : applyGlossary(result.value as NonNullable<SummaryResult['value']>, request.glossary ?? [])
+    request.kind === 'note' || answered === undefined
+      ? answered
+      : applyGlossary(answered, request.glossary ?? [])
   return { ok: true, value, model: result.model, costUsd: result.costUsd }
 }

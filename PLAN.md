@@ -281,6 +281,15 @@ Every requirement on the original list is now built. What is left is smaller:
    caused all three instances. Those live in the glossary file, which is not
    version-controlled. See DECISIONS.
 
+   **And the model's own scaffolding comes off, as of 2026-09-10.** Three notes
+   ended their summary in a stray closing `summary` tag, two of them with a
+   closing `invoke` tag under it - the model typing its tool-call scaffolding
+   inside the field rather than around it. `tidy` in
+   [summary.ts](src/main/summary.ts) takes a trailing run of ORPHANED closing
+   tags off every field: real markup comes in pairs, leaked scaffolding does not,
+   so a note that legitimately contains markup keeps it. Swept over 9,618 blocks
+   of real prose it fires on the three and nothing else. See DECISIONS.
+
    **The correction is finished in code, as of 2026-09-09.** A model applies it
    in the field it happens to be writing: one note said a product name right in
    the summary paragraph and wrong four more times, under other headings, while
