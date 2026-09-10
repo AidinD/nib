@@ -3,6 +3,32 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-10 - A note with no name is titled with the day it was made
+
+**Decided.** A note created without a title gets today's date, `2026-09-10`.
+Enter on an empty add field makes one, where it used to do nothing at all.
+
+**The dead end it removes.** The add field refused an empty Enter, so the
+quickest way of writing something down was the one way that did not work - and
+that is exactly the moment it matters, when something just happened and you have
+somewhere to put it before you have decided what it is called. Naming it is what
+the note itself is for. A blank note made any other way showed as "Untitled" in
+every list, which is a note you cannot come back to.
+
+**ISO, for the reason `today` is ISO.** A list ordered by name is the one place a
+date format earns or loses its keep, and every other format loses. It is also
+the title most of these notes would have been given by hand.
+
+**Two notes on one day share a title, and that is left alone.** Everything else
+on the card tells them apart, renaming one is a click, and a title that quietly
+becomes "2026-09-10 2" is a worse surprise than two that match.
+
+**One helper, because there are two doors.** `noteTitle` sits beside `titleFrom`
+in [templates.ts](src/shared/templates.ts) and is what `createNote` calls, so the
+add field and Ctrl+K cannot disagree about what an unnamed note is called. A
+template still names its own note exactly as before - this only fills the gap
+where there is no template and nothing typed.
+
 ## 2026-09-10 - The model's own scaffolding comes off the answer
 
 **The report.** Summaries were ending in a stray closing `summary` tag. Three

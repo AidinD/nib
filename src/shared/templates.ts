@@ -156,6 +156,33 @@ export function titleFrom(template: Template, typed: string, now: number = Date.
   return rendered.length > 0 ? rendered : template.name
 }
 
+/**
+ * The title a new note gets, whether or not a template was involved.
+ *
+ * The last case is the one this exists for. A note made without a name used to
+ * get no name: the add field simply refused an empty Enter, and a blank note
+ * from anywhere else showed as "Untitled" in every list it appeared in. Neither
+ * is a note you can come back to, and both punish the fastest way of writing one
+ * down - which is the way you write when it matters, just after something
+ * happened.
+ *
+ * Today's date instead, ISO, for the reason `today` is ISO: a list ordered by
+ * name is where a date format earns or loses its keep, and every other format
+ * loses. It is also the title most of these notes would have been given by hand.
+ *
+ * Two notes on one day get the same title, and that is left alone. They are
+ * distinguishable by everything else on the card, renaming one takes a click,
+ * and a title that quietly becomes "2026-09-10 2" is a worse surprise than two
+ * that match.
+ */
+export function noteTitle(typed: string, template?: Template, now: number = Date.now()): string {
+  if (template !== undefined) {
+    return titleFrom(template, typed, now)
+  }
+  const wanted = typed.trim()
+  return wanted.length > 0 ? wanted : today(now)
+}
+
 /** One template, read defensively. */
 function normalizeTemplate(raw: any): Template {
   const kind = raw?.kind === 'story' ? 'story' : undefined

@@ -36,6 +36,7 @@ From the author's own list, with where each one stands.
 | **Colour and highlight** | Done - six named colours and five washes, stored as names |
 | **Full-text search** | Done - the bodies are read on the first search, the matched line is shown, and one inflectional ending comes off the query |
 | **Ctrl+K** | Done - a launcher over folders, notes and tags, offering the template a folder already uses |
+| **A note with no name** | Done - titled with today's date, so an empty Enter is no longer a dead end |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a

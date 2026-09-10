@@ -185,11 +185,20 @@ export function NoteList({
         <input
           className="add-note"
           placeholder={target !== null ? 'Add a note…' : 'Pick a category to add a note'}
+          title="Enter makes the note. With nothing typed it is titled with today's date."
           disabled={target === null}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && draft.trim().length > 0) {
+            /*
+             * Enter on an empty field makes a note titled with today's date.
+             *
+             * It used to do nothing at all, which made the field a dead end at
+             * exactly the moment it should be quickest: something just happened,
+             * you want somewhere to put it, and you have not decided what it is
+             * called yet. Naming it is what the note itself is for.
+             */
+            if (event.key === 'Enter') {
               onAdd(draft.trim())
               setDraft('')
               setPickingTemplate(false)

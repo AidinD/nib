@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta, Template } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
-import { titleFrom } from '@shared/templates'
+import { noteTitle } from '@shared/templates'
 import { TemplateModal } from './TemplateModal'
 
 /**
@@ -282,7 +282,7 @@ export function App(): React.JSX.Element {
     template: Template | undefined,
     typed: string
   ): Promise<string> => {
-    const named = template === undefined ? typed : titleFrom(template, typed)
+    const named = noteTitle(typed, template)
     const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
     if (template !== undefined && template.body.length > 0) {
       await window.nib.writeNote({

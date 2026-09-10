@@ -15,6 +15,7 @@ import {
   MAX_TEMPLATES,
   STORY_BODY,
   normalizeTemplates,
+  noteTitle,
   titleFrom,
   today
 } from '../src/shared/templates.ts'
@@ -106,6 +107,23 @@ describe('the title a template produces', () => {
     // afford, so the last fallback is the template's own name.
     assert.equal(titleFrom(plain, '   ', NOW), 'Story')
     assert.equal(titleFrom({ ...plain, title: '   ' }, '', NOW), 'Story')
+  })
+
+  it('gives a note with no name and no template today, in a form that sorts', () => {
+    // The case this was asked for: Enter on an empty add field. It used to do
+    // nothing at all, which made the field a dead end at exactly the moment it
+    // should be quickest.
+    assert.equal(noteTitle('', undefined, NOW), '2026-08-27')
+    assert.equal(noteTitle('   ', undefined, NOW), '2026-08-27')
+  })
+
+  it('leaves a typed name and a template exactly as they were', () => {
+    assert.equal(noteTitle('The migration week', undefined, NOW), 'The migration week')
+    assert.equal(noteTitle('  padded  ', undefined, NOW), 'padded')
+    // A template still names its own note, date pattern and all.
+    assert.equal(noteTitle('', dated, NOW), '2026-08-27 1-1')
+    assert.equal(noteTitle('Retro follow-up', dated, NOW), 'Retro follow-up')
+    assert.equal(noteTitle('', plain, NOW), 'Story')
   })
 
   it('dates in a form that sorts', () => {
