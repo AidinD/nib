@@ -3986,6 +3986,56 @@ body.is-resizing .splitter-grip {
   line-height: 1.2;
 }
 
+/* Four words over each grid of buttons, so two selections read as two questions. */
+.summary-caption {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/*
+ * What kind of conversation it was.
+ *
+ * Two rows of two rather than one row of four: the labels are words rather than
+ * the model row's single names, and four of them on one line in a panel this
+ * narrow truncates the one thing that has to be readable. Otherwise the model
+ * picker's own chrome, because it is the same kind of choice made in the same
+ * breath.
+ */
+.summary-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.summary-kind {
+  padding: 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.summary-kind.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.summary-kind-name {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.summary-kind-hint {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  line-height: 1.2;
+}
+
 /* ---------- the Ctrl+K launcher ---------- */
 
 /*

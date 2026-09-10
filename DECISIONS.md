@@ -3,6 +3,80 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-10 - The summary is told what kind of conversation it was
+
+**The report.** One summary shape was laid over every recording. After a
+fourteen-minute catch-up about one ticket, "Sedan förra gången" listed four
+unrelated open matters as things that "were not raised and need raising next
+time" - none of which had any business in a conversation about that ticket. They
+belonged in the next real 1-1, and their absence was not a miss. It read as
+findings, it was noise, and it took in both the author and a session reading the
+note back, two days running.
+
+**Decided.** The summary is told which of four kinds of conversation it is
+reading - 1-1, check-in, meeting, status update - and that decides which
+sections exist at all. The kind is chosen in the panel that already asks which
+model and which source, pre-filled by guessing from the note.
+
+**Two sections, one root.** "Sedan förra gången" only means anything for a
+RECURRING conversation with the same person: it compares against the previous
+note in the same folder, which for a one-off is a category error dressed as an
+insight. "Frågor jag inte ställde" is a coaching device for a 1-1; asked of a
+check-in about one bounded thing it produces filler, because there was nothing
+else the conversation was for.
+
+**Removed from the SCHEMA, not discouraged in the prompt.** An instruction not
+to fill a field is something a model weighs against everything else it has been
+told. A field that is not there is not. `schemaFor` builds the schema per call
+and drops what the kind does not justify - verified by capturing the actual
+`--json-schema` argument the CLI receives: a check-in's has no `lastTime` and no
+`questions`, and does not require `questions`. The prompt is trimmed to match,
+so a check-in never even receives the previous note. That is the larger half of
+it: a conversation cannot be compared against a note it was not given.
+
+The kind is ALSO stated in the instruction, and that is not redundant. Without
+it the model reaches for the missing section sideways - a check-in whose summary
+paragraph quietly does the work of the "Sedan förra gången" it no longer has a
+field for.
+
+**Chosen, and only pre-filled by guessing.** Three ways in were considered, and
+the author named all three. Guessing from length and content is the one that
+recreates the problem, because a wrong guess is invisible and this whole entry is
+about an invisible wrong assumption. Asking at the start of the recording puts a
+question in front of somebody trying to start recording. So the guess fills a
+control in a pre-flight that already exists, is already read, and is one click
+from being corrected before anything is spent.
+
+The guess is cheap and mostly right: a 1-1 comes from a template that stamps its
+tag and names the note after itself, and the tag is checked before the title
+because it is not a guess at all. When nothing matches it picks the NARROWEST
+kind rather than the richest. Too little is a quiet loss with the fix one click
+away; too much is the loud one that was reported.
+
+**And the section that spoke in his voice now says whose it is.** "Frågor jag
+inte ställde" is first person, so it reads as a list HE compiled of his own
+omissions - and it is the model's guess at what a good manager would have asked.
+Noticed on 2026-09-03 and still unmarked a week later, by which time it had been
+read as fact twice. It is now "Frågor modellen hade ställt". The heading rather
+than a note under it, because the heading is where the misreading happens: a
+disclaimer below a first-person title arrives after the reader has decided whose
+list they are looking at. Nothing else in a summary needed this - everything else
+either speaks in the machine's voice already or is lifted from the transcript
+rather than invented.
+
+**The note records which kind it was told.** On the provenance line, beside the
+model. Without it a summary cannot be read back at all: a note with no "Sedan
+förra gången" looks identical whether the model found nothing or was never
+asked. It is also how a wrong guess is caught an hour later.
+
+**Verified against what actually leaves the process.** Not by reading the code:
+keel's `KEEL_CLAUDE_BIN` hook was pointed at a stub that records the arguments
+and the prompt it is handed. A check-in sends a schema without either field and
+a prompt without the previous-meeting block, the note-questions block or the
+"good manager" line, and with the check-in's own instruction in place; a 1-1
+sends all of them and none of the check-in's. The panel's own behaviour - which
+kind is pre-selected, and what it promises - was driven in the running app.
+
 ## 2026-09-10 - A note with no name is titled with the day it was made
 
 **Decided.** A note created without a title gets today's date, `2026-09-10`.

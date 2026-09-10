@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { CONVERSATIONS } from '@shared/conversation'
+import type { ConversationKind } from '@shared/conversation'
 
 /*
  * What to summarise, and with which model.
@@ -45,8 +47,31 @@ interface SummaryPanelProps {
   prompts: number
   model: string
   onModel: (model: string) => void
+  /**
+   * What the note looks like it was, from its title and its tags.
+   *
+   * A guess, and pre-selected rather than applied: it decides which sections
+   * the summary even has, and a wrong one that nobody saw is exactly the
+   * failure this control exists to prevent - see `conversation.ts`.
+   */
+  conversation: ConversationKind
+  onConversation: (conversation: ConversationKind) => void
   onRun: (source: SummarySource) => void
   onClose: () => void
+}
+
+/** What a conversation of this kind will actually come back with. */
+function sections(conversation: ConversationKind): string {
+  const chosen = CONVERSATIONS.find((option) => option.id === conversation)
+  const parts = ['beslut', 'åtgärdspunkter']
+  if (chosen?.lastTime === true) {
+    parts.push('vad som är kvar sedan förra gången')
+  }
+  if (chosen?.questions === true) {
+    parts.push('frågor modellen hade ställt')
+  }
+  const last = parts.pop()
+  return `Vad som sades, plus det du själv skrev. Ger ${parts.join(', ')} och ${last}.`
 }
 
 export function SummaryPanel({
@@ -54,6 +79,8 @@ export function SummaryPanel({
   prompts,
   model,
   onModel,
+  conversation,
+  onConversation,
   onRun,
   onClose
 }: SummaryPanelProps): React.JSX.Element {
@@ -84,6 +111,42 @@ export function SummaryPanel({
         </div>
       )}
 
+      {/*
+        What kind of conversation it was, above the model.
+        
+        Above because it changes what you get rather than how well: the model
+        picker chooses how hard to think about the same questions, and this
+        chooses which questions are asked at all. Only for a transcript - the
+        whole notion is about a conversation, and summarising a page of notes
+        is not one.
+      */}
+      {/*
+        Two grids of the same buttons, one above the other, with a selection in
+        each - which read as one grid with two selections until they were
+        labelled. Four words is the whole fix; the alternative was giving one of
+        them chrome of its own, which would have said they were different KINDS
+        of choice when they are the same kind about different things.
+      */}
+      {source === 'transcripts' && (
+        <span className="summary-caption">Vad för slags samtal?</span>
+      )}
+      {source === 'transcripts' && (
+        <div className="summary-kinds">
+          {CONVERSATIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`summary-kind${conversation === option.id ? ' is-on' : ''}`}
+              onClick={() => onConversation(option.id)}
+            >
+              <span className="summary-kind-name">{option.label}</span>
+              <span className="summary-kind-hint">{option.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <span className="summary-caption">Hur noga?</span>
       <div className="summary-models">
         {SUMMARY_MODELS.map((option) => (
           <button
@@ -98,10 +161,15 @@ export function SummaryPanel({
         ))}
       </div>
 
+      {/*
+        What it will produce, said in terms of the sections that will exist.
+        
+        The old line promised "beslut, åtgärdspunkter och frågor du inte
+        ställde" whatever the note was, which is the promise that was being
+        broken. Now it says what this choice actually buys.
+      */}
       <p className="record-hint">
-        {source === 'transcripts'
-          ? 'Vad som sades, plus det du själv skrev. Beslut, åtgärdspunkter och frågor du inte ställde.'
-          : 'Allt i noteringen, sammanfattat som text - inte som ett möte.'}
+        {source === 'transcripts' ? sections(conversation) : 'Allt i noteringen, sammanfattat som text - inte som ett möte.'}
       </p>
 
       {/* Only for a transcript, and only when the note has questions of its own.

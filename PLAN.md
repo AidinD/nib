@@ -37,6 +37,7 @@ From the author's own list, with where each one stands.
 | **Full-text search** | Done - the bodies are read on the first search, the matched line is shown, and one inflectional ending comes off the query |
 | **Ctrl+K** | Done - a launcher over folders, notes and tags, offering the template a folder already uses |
 | **A note with no name** | Done - titled with today's date, so an empty Enter is no longer a dead end |
+| **Conversation kind** | Done - 1-1, check-in, meeting or status decides which sections the summary even has |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a
@@ -281,6 +282,19 @@ Every requirement on the original list is now built. What is left is smaller:
    public and its own pre-push hook refuses the client and product names that
    caused all three instances. Those live in the glossary file, which is not
    version-controlled. See DECISIONS.
+
+   **The summary is told what kind of conversation it was, as of 2026-09-10.**
+   One shape was laid over every recording, so a fourteen-minute catch-up about
+   one ticket got a "Sedan förra gången" listing four unrelated open matters as
+   things that went unraised. Four kinds - 1-1, check-in, meeting, status - decide
+   which sections exist, and the sections a kind does not justify are removed from
+   the SCHEMA rather than discouraged in the prompt (`schemaFor` in
+   [summary.ts](src/main/summary.ts), the table in
+   [conversation.ts](src/shared/conversation.ts)). Chosen in the summary panel,
+   pre-filled by guessing from the note's tags and title, defaulting to the
+   narrowest kind. And "Frågor jag inte ställde" is now "Frågor modellen hade
+   ställt", because the first person made the model's guess read as his own list.
+   See DECISIONS.
 
    **And the model's own scaffolding comes off, as of 2026-09-10.** Three notes
    ended their summary in a stray closing `summary` tag, two of them with a

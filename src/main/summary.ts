@@ -3,6 +3,11 @@ import { join } from 'node:path'
 
 import { ask } from 'keel/claude'
 
+// Relative rather than through the `@shared` alias, so the tests can import
+// this file directly: the node test runner resolves paths, not tsconfig.
+import { conversationOf } from '../shared/conversation.ts'
+import type { ConversationKind } from '../shared/conversation.ts'
+
 /*
  * Turning a meeting into something you can act on.
  *
@@ -204,12 +209,50 @@ const SCHEMA = {
   }
 } as const
 
+/**
+ * The fields a conversation of this kind justifies.
+ *
+ * REMOVED from the schema rather than discouraged in the prompt, which is the
+ * whole point. An instruction not to fill a field is something a model weighs
+ * against everything else it has been told; a field that is not there is not.
+ * "Sedan förra gången" after a fourteen-minute check-in listed four unrelated
+ * open matters as things that went unraised - it was told what the conversation
+ * was for, and it had a `lastTime` field to fill.
+ *
+ * Built per call. The object is small and the alternative is four frozen copies
+ * that have to be kept in step with one another.
+ */
+export function schemaFor(kind: ConversationKind | undefined): Record<string, unknown> {
+  const conversation = conversationOf(kind)
+  const properties: Record<string, unknown> = { ...SCHEMA.properties }
+  if (!conversation.lastTime) {
+    delete properties.lastTime
+  }
+  if (!conversation.questions) {
+    delete properties.questions
+  }
+  return {
+    ...SCHEMA,
+    required: SCHEMA.required.filter((name) => name in properties),
+    properties
+  }
+}
+
 /** What is being summarised, which decides both the schema and the instruction. */
 export type SummaryKind = 'meeting' | 'note'
 
 export interface SummaryRequest {
   /** A meeting has decisions and promises; a page of notes has neither. */
   kind?: SummaryKind
+  /**
+   * What kind of conversation the recording was.
+   *
+   * Chosen in the panel, pre-filled by guessing from the note - see
+   * `conversation.ts`. Absent means the narrowest kind, which is the safe way
+   * round: the reported failure was a small conversation being handed a big
+   * one's sections.
+   */
+  conversation?: ConversationKind
   /** The words, with their timestamps. */
   transcript: string
   /** What the user typed themselves during the meeting - weighted above the transcript. */
@@ -626,6 +669,8 @@ function instruction(request: SummaryRequest): string {
    * model told the labels were perfect would resolve that silently; told what
    * they actually are, it can fall back on the words.
    */
+  const conversation = conversationOf(request.conversation)
+
   const labels =
     request.speakers === undefined
       ? ''
@@ -663,7 +708,7 @@ function instruction(request: SummaryRequest): string {
    * of them, so the answer is what they said, not what the user said back.
    */
   const questions =
-    request.prompts === undefined || request.prompts.length === 0
+    !conversation.questions || request.prompts === undefined || request.prompts.length === 0
       ? ''
       : [
           '',
@@ -729,20 +774,31 @@ function instruction(request: SummaryRequest): string {
     '- Their own notes below outrank the transcript. They typed those while it was happening, which is a judgement the transcript does not contain.',
     '- An action point is something THEY committed to. "I\'ll look into it" counts, and counts as implied when the words were softer than the commitment. What the other person promised is not theirs and does not belong in that list.',
     '- Decisions are what was settled, not what was discussed.',
-    '- A question is worth listing only if a good manager would wish they had asked it.',
+    conversation.questions
+      ? '- A question is worth listing only if a good manager would wish they had asked it.'
+      : '',
     '',
+    /*
+     * What kind of conversation this was, told rather than inferred.
+     *
+     * The sections it does not justify are already gone from the schema, so this
+     * is not what stops them being written. It is what stops the model reaching
+     * for them SIDEWAYS - a check-in whose summary paragraph quietly does the
+     * work of the "Sedan förra gången" it no longer has a field for.
+     */
+    conversation.says,
     labels,
     marks,
     '',
     'Do not invent. A transcript is imperfect and a name heard wrong is worse than a name left out - if you cannot tell what was said, leave it out rather than guess.',
-    request.previous !== undefined && request.previous.length > 0
+    conversation.lastTime && request.previous !== undefined && request.previous.length > 0
       ? '\nThe previous meeting with this person is included. Say plainly what was agreed then and has not been resolved now - that is the most useful thing in this whole answer.'
       : '',
     '',
     '--- THEIR OWN NOTES ---',
     request.notes.trim().length > 0 ? request.notes : '(they wrote nothing during the meeting)',
     '',
-    request.previous !== undefined && request.previous.length > 0
+    conversation.lastTime && request.previous !== undefined && request.previous.length > 0
       ? `--- THE PREVIOUS MEETING ---\n${request.previous}\n`
       : '',
     glossary,
@@ -757,7 +813,7 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
   const result = await ask({
     prompt: instruction(request),
     model: request.model,
-    schema: SCHEMA as unknown as Record<string, unknown>,
+    schema: schemaFor(request.kind === 'note' ? 'one-to-one' : request.conversation),
     // Fifteen minutes: a long transcript on a busy machine is not a hung call,
     // and the default would give up on exactly the meetings worth summarising.
     timeoutMs: 15 * 60 * 1000
@@ -775,10 +831,27 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
    * correcting a man's spelling of his own project back at him is not what
    * this is for.
    */
+  /*
+   * The lists the schema may not have asked for.
+   *
+   * `schemaFor` removes `questions` for a conversation that does not justify
+   * it, so the answer comes back without the field - and every reader of this
+   * result spreads it. Filled in here at the boundary rather than made optional
+   * all the way down: the answer HAS no questions, which is a different
+   * statement from the answer maybe having them.
+   */
+  const received = (raw: NonNullable<SummaryResult['value']>): NonNullable<SummaryResult['value']> => ({
+    ...raw,
+    decisions: raw.decisions ?? [],
+    actions: raw.actions ?? [],
+    questions: raw.questions ?? [],
+    people: raw.people ?? []
+  })
+
   const answered =
     result.value === undefined
       ? undefined
-      : tidyAnswer(result.value as NonNullable<SummaryResult['value']>)
+      : tidyAnswer(received(result.value as NonNullable<SummaryResult['value']>))
   const value =
     request.kind === 'note' || answered === undefined
       ? answered

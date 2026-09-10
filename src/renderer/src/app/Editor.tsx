@@ -8,6 +8,8 @@ import { NotePicker, listNotes } from './NotePicker'
 import { RecordPanel, RecordingBar } from './RecordPanel'
 import { SummaryPanel, SUMMARY_MODELS } from './SummaryPanel'
 import type { SummarySource } from './SummaryPanel'
+import { conversationOf, guessConversation } from '@shared/conversation'
+import type { ConversationKind } from '@shared/conversation'
 import type { Language } from './RecordPanel'
 import type { Recorder } from '../lib/recorder'
 import type { NoteChoice } from './NotePicker'
@@ -251,6 +253,14 @@ export function Editor({
   /** Which tier to use. Per note rather than a setting: it is a judgement about
    *  this meeting, not a preference about all of them. */
   const [summaryModel, setSummaryModel] = useState<string>(SUMMARY_MODELS[0].id)
+  /**
+   * What kind of conversation the summary should assume, once it is overridden.
+   *
+   * Null until somebody picks, so the guess follows the note: switching from a
+   * 1-1 to a catch-up without touching this must not summarise the second as
+   * the first. A choice sticks only for as long as the panel that made it.
+   */
+  const [conversation, setConversation] = useState<ConversationKind | null>(null)
   /** How many transcripts the note holds - what the panel offers depends on it. */
   const [transcriptCount, setTranscriptCount] = useState(0)
   /*
@@ -1502,8 +1512,26 @@ export function Editor({
    * The result goes at the TOP. A summary under nine thousand words of transcript
    * is a summary nobody reads.
    */
+  /**
+   * What this note looks like it was, from its title and its tags.
+   *
+   * Recomputed rather than stored, so renaming a note changes what the panel
+   * offers. The tag is the strong half of it - the 1-1 template stamps one -
+   * and the title is the guess.
+   */
+  const guessed = useMemo(
+    () => (note === null ? 'check-in' : guessConversation(note.title, note.tags)),
+    [note]
+  )
+
+  // A choice belongs to the note it was made about, so opening another one
+  // goes back to that note's own guess rather than inheriting this one.
+  useEffect(() => {
+    setConversation(null)
+  }, [note?.id])
+
   const summarise = useCallback(
-    async (source: SummarySource, model: string) => {
+    async (source: SummarySource, model: string, conversationKind: ConversationKind) => {
     const root = bodyRef.current
     if (root === null || note === null || summarising) {
       return
@@ -1544,21 +1572,32 @@ export function Editor({
        * read rather than its preview: the preview is two lines and the question
        * is what was promised.
        */
-      const siblings = index.categories
-        .find((category) => category.id === note.categoryId)
-        ?.notes.filter(
-          (candidate) =>
-            candidate.subId === note.subId &&
-            candidate.id !== note.id &&
-            candidate.created < note.created
-        )
-        .sort((a, b) => b.created - a.created)
+      /*
+       * And only when the conversation is one that HAS a last time.
+       *
+       * Not fetched at all otherwise, which is the point: a file read saved is
+       * the small half, and the large half is that a check-in cannot be
+       * compared against a note it was never given.
+       */
+      const kind = conversationOf(conversationKind)
+      const siblings = kind.lastTime
+        ? index.categories
+            .find((category) => category.id === note.categoryId)
+            ?.notes.filter(
+              (candidate) =>
+                candidate.subId === note.subId &&
+                candidate.id !== note.id &&
+                candidate.created < note.created
+            )
+            .sort((a, b) => b.created - a.created)
+        : undefined
       const earlier = siblings?.[0]
       const previous =
         earlier === undefined ? undefined : (await window.nib.readNote(earlier.id))?.html
 
       const result = await window.nib.summarise({
         kind: source === 'transcripts' ? 'meeting' : 'note',
+        conversation: conversationKind,
         /*
          * Several transcripts are one conversation as far as the summary is
          * concerned, in the order they were recorded - and each one carries the
@@ -1595,7 +1634,13 @@ export function Editor({
         return
       }
 
-      const provenance = { model: result.model ?? model, costUsd: result.costUsd ?? null }
+      const provenance = {
+        model: result.model ?? model,
+        costUsd: result.costUsd ?? null,
+        // What it was told this was, recorded in the note. A summary missing a
+        // section looks the same whether nothing was found or nothing was asked.
+        conversation: source === 'transcripts' ? kind.label : undefined
+      }
 
       /*
        * Whether the note that asked for this is still the one on screen.
@@ -2947,10 +2992,12 @@ export function Editor({
             prompts={bodyRef.current === null ? 0 : notePrompts(bodyRef.current).length}
             model={summaryModel}
             onModel={setSummaryModel}
+            conversation={conversation ?? guessed}
+            onConversation={setConversation}
             onClose={() => setSummaryPanel(false)}
             onRun={(source) => {
               setSummaryPanel(false)
-              void summarise(source, summaryModel)
+              void summarise(source, summaryModel, conversation ?? guessed)
             }}
           />
         )}

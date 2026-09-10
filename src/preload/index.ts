@@ -95,6 +95,8 @@ const api = {
    */
   summarise: (request: {
     kind?: 'meeting' | 'note'
+    /** What kind of conversation it was, which decides which sections exist. */
+    conversation?: 'one-to-one' | 'check-in' | 'meeting' | 'status'
     transcript: string
     notes: string
     previous?: string

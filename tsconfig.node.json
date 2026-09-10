@@ -10,6 +10,12 @@
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "strict": true,
+    /* So the main process can import a shared module by relative path WITH its
+       .ts extension - which is what lets `node --test` resolve the same import
+       the bundler does. The alternative was a `@shared/...` alias the test
+       runner cannot see, and a duplicated copy of the table on this side. */
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,

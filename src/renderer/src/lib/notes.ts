@@ -909,7 +909,7 @@ export function extractAlerts(html: string): AlertMeta[] {
 /**
  * Whether a block is one of a generated summary's own headings.
  *
- * `Sammanfattning`, `Beslut`, `Åtgärdspunkter`, `Frågor jag inte ställde` - the
+ * `Sammanfattning`, `Beslut`, `Åtgärdspunkter`, `Frågor modellen hade ställt` - the
  * structure the summary writes, not anything anybody promised. Flagging one puts
  * 160 characters of the summary in the index as an action point, and from there
  * into Tend as a promise nobody made. It happened: the gutter runs the whole
@@ -1873,7 +1873,7 @@ export function transcriptSpeakers(
  * deserves to know the model inferred it rather than heard it.
  */
 export function summaryHtml(
-  provenance: { model: string; costUsd: number | null; filled?: number },
+  provenance: { model: string; costUsd: number | null; filled?: number; conversation?: string },
   value: {
     summary: string
     decisions: string[]
@@ -1931,7 +1931,22 @@ export function summaryHtml(
   }
 
   if (value.questions.length > 0) {
-    parts.push('<h2>Frågor jag inte ställde</h2>')
+    /*
+     * Whose questions these are, said in the heading.
+     *
+     * "Frågor jag inte ställde" is written in the first person, so it reads as
+     * a list HE compiled of his own omissions - and it is the model's guess at
+     * what a good manager would have asked. Noticed on 2026-09-03 and still
+     * unmarked a week later, by which time it had been read as fact twice.
+     *
+     * The heading rather than a note under it, because the heading is where the
+     * misreading happens: a disclaimer below a first-person title arrives after
+     * the reader has already decided whose list they are looking at. Everything
+     * else in a summary either speaks in the machine's voice already or is
+     * lifted from the transcript rather than invented; this was the only
+     * section that borrowed his.
+     */
+    parts.push('<h2>Frågor modellen hade ställt</h2>')
     parts.push(`<ul>${value.questions.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>`)
   }
 
@@ -1991,12 +2006,24 @@ export function summaryHtml(
    * one later without having been told is the moment you stop trusting which
    * words in the note are yours. One clause here is the whole remedy.
    */
+  /*
+   * And which kind of conversation it was told this was.
+   *
+   * The choice decides which sections exist at all, so a summary that does not
+   * record it cannot be read back: a note with no "Sedan förra gången" looks
+   * identical whether the model found nothing or was never asked. It is also
+   * how a wrong guess is caught, an hour after the guess.
+   */
+  const about =
+    provenance.conversation === undefined || provenance.conversation.length === 0
+      ? ''
+      : ` · som ${provenance.conversation.toLowerCase()}`
   const filled =
     provenance.filled === undefined || provenance.filled === 0
       ? ''
       : ` · besvarade ${provenance.filled} ${provenance.filled === 1 ? 'fråga' : 'frågor'} i noteringen`
   parts.push(
-    `<p data-provenance="1"><em>Sammanfattad med ${escape(provenance.model)}${cost}${filled}</em></p>`
+    `<p data-provenance="1"><em>Sammanfattad med ${escape(provenance.model)}${about}${cost}${filled}</em></p>`
   )
 
   return parts.join('')
@@ -2473,7 +2500,7 @@ export function forgetStaleTranscribing(root: HTMLElement, running: Set<string>)
  */
 export function insertSummary(
   root: HTMLElement,
-  provenance: { model: string; costUsd: number | null },
+  provenance: { model: string; costUsd: number | null; conversation?: string },
   value: {
     summary: string
     decisions: string[]
@@ -2512,7 +2539,7 @@ export function insertSummary(
  */
 export function withSummary(
   html: string,
-  provenance: { model: string; costUsd: number | null },
+  provenance: { model: string; costUsd: number | null; conversation?: string },
   value: Parameters<typeof insertSummary>[2]
 ): { html: string; filled: number } {
   const root = document.createElement('div')
