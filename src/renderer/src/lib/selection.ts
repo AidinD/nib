@@ -511,6 +511,25 @@ export function isPractice(note: Pick<NoteMeta, 'tags'>): boolean {
   return (note.tags ?? []).includes(PRACTICE_TAG)
 }
 
+/**
+ * The principles being practised right now - what the violet lane shows.
+ *
+ * Read off the FLAG every time, never kept. A principle stops being one you are
+ * working on the moment the flag is cleared in the app, and a stored list of
+ * them would start disagreeing with the gutter within a day. The tag says what
+ * the note IS; the flag says whether it is live.
+ *
+ * The note's own flag, not a flagged line inside it. A principle is a whole
+ * note - there is no sentence to quote and nothing to tick off halfway - which
+ * is also why this returns notes where `allAlerts` returns one entry per line.
+ */
+export function practising(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
+  return allNotes(index, filter)
+    .filter((note) => isPractice(note) && note.flag === 'open')
+    .slice()
+    .sort((a, b) => b.edited - a.edited)
+}
+
 export function isOutstanding(note: NoteMeta): boolean {
   return note.flag === 'open' || note.alerts.some((alert) => !alert.done)
 }

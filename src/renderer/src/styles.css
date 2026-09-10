@@ -1567,6 +1567,27 @@ body.is-sticky-window {
   border: 2px solid var(--violet);
 }
 
+/*
+ * The violet lane, which is the alert strip with one variable changed.
+ *
+ * Every rule below paints itself from `--alert`, so redefining that one token
+ * inside this lane turns the label, the chip's border and its wash violet at
+ * once - and keeps them turning together when any of it is next edited. The
+ * alternative was a parallel set of `.practice-chip` rules, which is how the two
+ * lanes would end up looking like two different apps.
+ *
+ * Violet rather than a paler orange, the same choice the rail's own marker made:
+ * a near-orange reads as a weaker version of the same thing, and a principle you
+ * are working on is not a weaker commitment.
+ *
+ * Tucked up against the row above it, because the two are one block of ambient
+ * state rather than two unrelated bars.
+ */
+.alert-strip.is-practice {
+  --alert: var(--violet);
+  padding-top: 0;
+}
+
 /* The strip sits between the header and the panes, and only exists when there
    is something in it. */
 .alert-strip {

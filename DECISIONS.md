@@ -3,6 +3,58 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-10 - A violet lane under "Needs you", for what is being practised
+
+**Decided.** A second ambient lane directly under the alert strip, holding the
+principles currently being worked on. Violet, matching the rail's own marker.
+The cards are the notes tagged as principles whose own flag is open.
+
+**Under it, not in it, and that is the load-bearing part.** "Needs you" means
+something precise - flagged action points still outstanding - and a principle in
+practice is not outstanding. Mixed into that row it would sit there permanently,
+and within a week the row would mean "stuff", which is the point at which it
+stops saying anything and gets ignored. The sidebar counts were split for
+exactly this reason once already: one number said nine when three were owed.
+
+**Why a lane rather than the rail row that already exists.** The principles were
+one click away, behind a row showing a number. A number tells you something
+exists; the lane tells you WHAT, and only the second kind changes what you do in
+a meeting an hour later. That is the whole ask.
+
+**The flag is the source, read on every render.** Nothing is stored and no list
+is kept. The flag is changed in the app, in the gutter, without announcing
+itself, so a parallel list would start disagreeing with the document within a
+day - and a reminder you have caught lying once is a reminder you stop
+believing. The tag says what a note IS; the flag says whether it is live. In the
+real notebook that is 2 of 60.
+
+**The note's own flag, not a flagged line inside it.** A principle is a whole
+note: there is nothing to quote and nothing to tick off halfway. So this returns
+notes where `allAlerts` returns one entry per line, and a principle containing an
+action point does not thereby appear here.
+
+**No tick, and the asymmetry is deliberate.** The alert lane has one because an
+action point is finished by doing it. Taking a principle off is a judgement that
+you have it now, and that belongs in the note beside what you have been writing
+about it, not behind a check mark on a strip you are walking past.
+
+**One chip, two lanes.** The chip markup was pulled out of `AlertStrip` and is
+now shared. Two copies would be two chips that drift, and a second lane sitting
+directly under the first is where that becomes visible. The colour is one
+variable: every chip rule already painted itself from `--alert`, so the lane
+redefines that token to `--violet` and the label, the border and the wash all
+turn together - and keep turning together the next time any of it is edited.
+
+**Verified by cycling the flag in the running app**, not by rendering it once.
+Clearing the flag on a principle removed its chip; flagging one that had never
+been flagged added it; clearing the last one removed the lane rather than
+leaving an empty bar. That sequence is precisely what a stored list would have
+failed.
+
+**Its sister card in Tend is deliberately separate.** Nib is where the principles
+live and are edited; Tend is where "what am I working on in myself" is asked.
+Neither reads the other's rendering.
+
 ## 2026-09-10 - The summary is told what kind of conversation it was
 
 **The report.** One summary shape was laid over every recording. After a

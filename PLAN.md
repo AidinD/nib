@@ -38,6 +38,7 @@ From the author's own list, with where each one stands.
 | **Ctrl+K** | Done - a launcher over folders, notes and tags, offering the template a folder already uses |
 | **A note with no name** | Done - titled with today's date, so an empty Enter is no longer a dead end |
 | **Conversation kind** | Done - 1-1, check-in, meeting or status decides which sections the summary even has |
+| **The Practising lane** | Done - a violet lane under Needs you, read off the flag on every render |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a

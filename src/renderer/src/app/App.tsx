@@ -18,6 +18,7 @@ function asPlainText(html: string): string {
 }
 import { AlertStrip } from './AlertStrip'
 import { Launcher } from './Launcher'
+import { PracticeStrip } from './PracticeStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
 import { NibMark } from './NibMark'
@@ -599,6 +600,16 @@ export function App(): React.JSX.Element {
         }}
         onShowAll={() => setSelection({ kind: 'alerts' })}
         onClear={(note, alertId) => void tickAlert(note, alertId)}
+      />
+
+      {/* Under the alert strip, never in it: what is owed and what is being
+          practised are different claims, and one row holding both means neither.
+          See PracticeStrip. */}
+      <PracticeStrip
+        index={index}
+        scope={scope}
+        onOpen={(note) => revealNote(note)}
+        onShowAll={() => setSelection({ kind: 'practice' })}
       />
 
       <main className="panes">
