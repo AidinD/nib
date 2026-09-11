@@ -131,6 +131,15 @@ interface EditorProps {
   focusAlertId: string | null
   onAlertFocused: () => void
   onSaved: (noteId: string, patch: Partial<NoteMeta>) => void
+  /**
+   * Something changed what is in the recordings folder.
+   *
+   * Called rather than watched. The folder only changes when this app records,
+   * transcribes away, trims, discards or moves something - all of which happen
+   * here - so a watcher for a directory only we write to is machinery that can
+   * go wrong for no gain.
+   */
+  onAudioChanged: () => void
   onTogglePin: (note: NoteMeta) => void
   onCycleFlag: (note: NoteMeta) => void
   /** Follow a link to another note - the list and the sidebar go there too. */
@@ -148,6 +157,7 @@ export function Editor({
   focusAlertId,
   onAlertFocused,
   onSaved,
+  onAudioChanged,
   onTogglePin,
   onCycleFlag,
   onOpenNote
@@ -1024,6 +1034,7 @@ export function Editor({
       }
       applyRecordingBlocks(root)
       onBodyInput()
+      onAudioChanged()
       /*
        * Scroll it into view, minimally.
        *
@@ -1056,7 +1067,7 @@ export function Editor({
         })
         .catch(() => undefined)
     },
-    [onBodyInput]
+    [onBodyInput, onAudioChanged]
   )
 
   /**
@@ -1392,8 +1403,9 @@ export function Editor({
       block.dataset.state = 'lost'
       applyRecordingBlocks(root)
       onBodyInput()
+      onAudioChanged()
     },
-    [onBodyInput]
+    [onBodyInput, onAudioChanged]
   )
 
   /**
@@ -1440,6 +1452,8 @@ export function Editor({
         applyTranscriptBlocks(root)
         applyTimeMarks(root)
         onBodyInput()
+        // A trim makes the file smaller, so the number on the card is now wrong.
+        onAudioChanged()
       } catch (error) {
         block.dataset.state = 'failed'
         block.textContent = `Recording · could not trim: ${
@@ -1447,7 +1461,7 @@ export function Editor({
         }`
       }
     },
-    [onBodyInput]
+    [onBodyInput, onAudioChanged]
   )
 
   /**
@@ -1646,6 +1660,7 @@ export function Editor({
        * the two things somebody would check for, so they are the two things it
        * says went.
        */
+      onAudioChanged()
       setMoved({
         noteId: target.note.id,
         title: target.note.title.length > 0 ? target.note.title : 'Untitled',
@@ -1664,7 +1679,7 @@ export function Editor({
         ).length
       })
     },
-    [note, onBodyInput, onSaved]
+    [note, onBodyInput, onSaved, onAudioChanged]
   )
 
   /**

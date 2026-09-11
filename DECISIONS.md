@@ -3,6 +3,69 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-11 - The audio you are keeping, where you can see it
+
+**The report.** "Sometimes I forget to clear out audio files, so I would like an
+easy way to see which cards have audio and clean them up."
+
+**Decided.** A Recordings row in the rail carrying the total size, a megabyte
+chip on every card that holds audio, and "Discard the audio" in the card's own
+menu - so clearing one out never means opening it.
+
+**It is the cost of an earlier decision, finally made visible.** The audio used
+to be deleted the moment the transcript landed. That read as tidy and meant a
+wrong word was permanent: the first real meeting came back about nine tenths
+right, with names mangled, and there was nothing left to run again. So the file
+stays until it is thrown away on purpose - and nothing in the app said what that
+was costing. A meeting is 3.8 MB a minute; the notebook that prompted this is
+holding 339 MB across four notes, one of them 149. "I will discard that later"
+had nowhere to be later.
+
+**The folder is the answer, and no note is opened to get it.** A recording's
+filename carries the id of the note that owns it - the same fact the startup
+sweep reads, and the same fact the move keeps true by renaming - so one directory
+listing answers the whole question however large the notebook is.
+
+**The chip is on every card, not only in the list.** The reason a list was needed
+at all is that a kept recording is invisible everywhere else, and a list you have
+to remember to visit is the same problem one step along. A three-figure number on
+a card is what turns the intention into a click.
+
+**Largest first, which no other list here does.** Every other one is ordered by
+when something happened, because the question is what is going on. This one is
+what is taking up room, and the answer is one meeting rather than thirty notes.
+Archived notes are included: filing a meeting away does not shrink it.
+
+**And the FOLDER decides what gets deleted, not the note.** This was found by a
+test rather than by reasoning: a file existed whose note had no block pointing at
+it, and discarding did nothing at all, because the first version read the paths
+out of the note's own HTML. Such a file is exactly the kind that accumulates -
+the startup sweep will not take it either, since the note it is named after still
+exists. Clearing a card out has to mean clearing its bytes, so the folder's list
+is what is deleted, with the note's own blocks added to it for anything pointing
+somewhere unexpected.
+
+**The block stays, marked as having lost its audio.** It says where the meeting
+was and how long it ran. A note whose recording simply vanished reads as one that
+lost something rather than one you tidied.
+
+**Counted in notes, shown in bytes.** The row's number is cards to act on - a
+meeting recorded in two halves is one card, and a row saying two would send you
+looking for a second note that does not exist - while the size beside it is what
+decides whether to act today.
+
+**Refreshed on call, not watched.** The folder changes only when this app
+records, transcribes, trims, discards or moves something, and all five happen in
+the window. A watcher for a directory nobody else writes to is machinery that can
+go wrong for no gain.
+
+**Verified with a real recording made by the app itself.** The e2e harness gives
+each run its own user-data directory, so a file seeded on disk would not be in
+the folder the app is actually reading - the recording is made through the same
+capture path a meeting uses, then the row, the chip, the list's ordering, the
+menu item, the confirm and the deletion are all driven, ending with the folder
+empty and the row gone.
+
 ## 2026-09-11 - A note with no file is empty, not missing
 
 **The report.** Moving a recording into a note said "The other note could not be

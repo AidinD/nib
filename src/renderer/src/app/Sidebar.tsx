@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Category, NibIndex, Tag } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import type { NibOps } from '../lib/useNib'
-import { categoryInScope, liveNotes, smartCounts } from '../lib/selection'
+import { audioSize, categoryInScope, liveNotes, smartCounts } from '../lib/selection'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { subCount } from '../lib/notes'
 import type { DropSlot } from '../lib/dnd'
@@ -10,6 +10,8 @@ import { DRAG_MIME, draggedItem, endDrag, readDrop, slotEquals, slotFor, startDr
 
 interface SidebarProps {
   index: NibIndex
+  /** Bytes of audio per note, read off the recordings folder. */
+  audio: Map<string, number>
   selection: Selection
   onSelect: (selection: Selection) => void
   scope: ScopeFilter
@@ -33,6 +35,7 @@ type NoteTarget = { categoryId: string; subId: string | null } | null
  */
 export function Sidebar({
   index,
+  audio,
   selection,
   onSelect,
   scope,
@@ -42,7 +45,9 @@ export function Sidebar({
   onDeleteSub,
   onDeleteTag
 }: SidebarProps): React.JSX.Element {
-  const counts = smartCounts(index, scope)
+  const counts = smartCounts(index, scope, audio)
+  /** What the whole folder comes to, which is the number that makes somebody act. */
+  const audioTotal = [...audio.values()].reduce((total, bytes) => total + bytes, 0)
   const categories = index.categories.filter((category) => categoryInScope(category, scope))
   /**
    * Tags that are actually on something, with how many notes each is on.
@@ -126,6 +131,21 @@ export function Sidebar({
         {/* Same rule: the archive is a place you go looking for something, so
             the row appears once there is something in it and stays out of the
             way otherwise. */}
+        {/*
+          Housekeeping, so it sits below the rows about what you owe people and
+          carries its SIZE rather than only its count. The count says there is
+          something to do; the size is what decides whether to do it today.
+        */}
+        {counts.audio > 0 && (
+          <SmartRow
+            label="Recordings"
+            count={counts.audio}
+            hint={audioSize(audioTotal)}
+            marker="audio"
+            active={selection.kind === 'audio'}
+            onClick={() => onSelect({ kind: 'audio' })}
+          />
+        )}
         {counts.archived > 0 && (
           <SmartRow
             label="Archive"
@@ -222,14 +242,17 @@ export function Sidebar({
 function SmartRow({
   label,
   count,
+  hint,
   active,
   marker = 'plain',
   onClick
 }: {
   label: string
   count: number
+  /** A second fact the count cannot carry - the Recordings row's size. */
+  hint?: string
   active: boolean
-  marker?: 'plain' | 'sticky' | 'alert' | 'practice' | 'archive'
+  marker?: 'plain' | 'sticky' | 'alert' | 'practice' | 'archive' | 'audio'
   onClick: () => void
 }): React.JSX.Element {
   return (
@@ -239,6 +262,7 @@ function SmartRow({
           the action points and a violet one for what is being practised. */}
       <span className={marker === 'plain' ? 'marker' : `marker marker-${marker}`} />
       <span className="row-label">{label}</span>
+      {hint !== undefined && <span className="row-hint">{hint}</span>}
       <span className="row-count">{count}</span>
     </button>
   )

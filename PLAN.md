@@ -40,6 +40,7 @@ From the author's own list, with where each one stands.
 | **Conversation kind** | Done - 1-1, check-in, meeting or status decides which sections the summary even has |
 | **The Practising lane** | Done - a violet lane under Needs you, read off the flag on every render |
 | **Moving a recording** | Done - block, transcript and marks travel together, and the audio file is renamed |
+| **Seeing the audio** | Done - a Recordings row with the total, a size chip per card, and discard from the card menu |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a

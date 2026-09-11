@@ -236,6 +236,59 @@ export async function moveRecording(
   }
 }
 
+/**
+ * Which notes are holding audio, and how much - read off the folder alone.
+ *
+ * No note is opened. A recording's filename carries the id of the note that owns
+ * it, which is the same fact the sweep reads and the same fact `moveRecording`
+ * keeps true, so the folder already knows the answer. A notebook of two hundred
+ * notes answers this by listing one directory.
+ *
+ * It exists because the audio is kept on purpose now - a transcript comes back
+ * about nine tenths right and the file is what lets you run it again - and the
+ * cost of that decision is invisible. A meeting is 3.8 MB a minute; a
+ * thirty-nine minute one is a hundred and fifty. Nothing in the app said so, so
+ * "I will discard that later" quietly became gigabytes.
+ *
+ * Orphans are reported too, under the note id nothing recognises. They are what
+ * the startup sweep removes, and between sweeps they are real bytes.
+ */
+export async function audioByNote(
+  recordingsDir: string
+): Promise<{ noteId: string; bytes: number; paths: string[] }[]> {
+  let names: string[]
+  try {
+    names = await fs.readdir(recordingsDir)
+  } catch {
+    return []
+  }
+  const totals = new Map<string, { bytes: number; paths: string[] }>()
+  for (const name of names) {
+    if (!name.endsWith('.wav')) {
+      continue
+    }
+    const noteId = name.replace(STAMP, '')
+    if (noteId === name) {
+      continue
+    }
+    try {
+      const stats = await fs.stat(join(recordingsDir, name))
+      const found = totals.get(noteId) ?? { bytes: 0, paths: [] }
+      totals.set(noteId, {
+        bytes: found.bytes + stats.size,
+        // The paths, not just a count. Clearing a note out means clearing the
+        // FOLDER, and a file nothing in the note points at is exactly the kind
+        // that accumulates - the startup sweep will not take it either, because
+        // the note it is named after still exists.
+        paths: [...found.paths, join(recordingsDir, name)]
+      })
+    } catch {
+      // Gone between the listing and the stat. Not worth failing the answer over.
+    }
+  }
+  return [...totals].map(([noteId, found]) => ({ noteId, ...found }))
+}
+
 /** Delete a recording once its transcript exists - the whole point of keeping it. */
 export async function deleteRecording(path: string): Promise<void> {
   await fs.rm(path, { force: true })

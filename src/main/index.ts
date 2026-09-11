@@ -14,6 +14,7 @@ import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
 import {
   appendSamples,
   deleteRecording,
+  audioByNote,
   isRecording,
   moveRecording,
   startRecording,
@@ -277,6 +278,9 @@ function registerIpc(): void {
   ipcMain.handle('recording:move', (_event, path: string, toNoteId: string) =>
     moveRecording(recordingsDir(), path, toNoteId)
   )
+  /* Which notes are holding audio, answered by listing one directory - the
+     filename carries the note id, so nothing has to be opened. */
+  ipcMain.handle('recording:audio', () => audioByNote(recordingsDir()))
 
   /*
    * Where the call ended, and shortening the file to it.

@@ -16,6 +16,16 @@ export type Selection =
    */
   | { kind: 'practice' }
   | { kind: 'archive' }
+  /**
+   * Every note still holding a recording, largest first.
+   *
+   * Housekeeping rather than work, and it earns a row for the reason the audio
+   * is kept at all: the file stays after transcription on purpose, so a wrong
+   * word is not permanent - and the cost of that decision was invisible. A
+   * thirty-nine minute meeting is a hundred and fifty megabytes. "I will discard
+   * that later" needs somewhere to be later.
+   */
+  | { kind: 'audio' }
   | { kind: 'category'; categoryId: string }
   | { kind: 'sub'; categoryId: string; subId: string }
   /**
@@ -287,7 +297,9 @@ export function selectedNotes(
   filter: ScopeFilter,
   search: string,
   includeArchived = false,
-  bodies?: Map<string, NoteText>
+  bodies?: Map<string, NoteText>,
+  /** Bytes of audio per note, for the Recordings list. Read off the folder. */
+  audio?: Map<string, number>
 ): NoteMeta[] {
   const needle = search.trim().toLowerCase()
   const wide = includeArchived && needle.length > 0
@@ -354,6 +366,23 @@ export function selectedNotes(
         .filter((note) => note.archived)
         .slice()
         .sort((a, b) => b.edited - a.edited)
+      break
+    /*
+     * Largest first, not newest.
+     *
+     * Every other list here is ordered by when something happened, because the
+     * question is "what is going on". This one is "what is taking up room", and
+     * the answer is one meeting rather than thirty notes - so the order is the
+     * size, and the first card is the one worth acting on.
+     *
+     * Archived notes are included, and deliberately: filing a meeting away does
+     * not shrink it, and a hundred and fifty megabytes nobody can see is exactly
+     * how this list came to be needed.
+     */
+    case 'audio':
+      notes = everyNote(index, filter)
+        .filter((note) => (audio?.get(note.id) ?? 0) > 0)
+        .sort((a, b) => (audio?.get(b.id) ?? 0) - (audio?.get(a.id) ?? 0))
       break
     case 'category': {
       const category = index.categories.find((c) => c.id === selection.categoryId)
@@ -530,6 +559,18 @@ export function practising(index: NibIndex, filter: ScopeFilter): NoteMeta[] {
     .sort((a, b) => b.edited - a.edited)
 }
 
+/**
+ * How much audio a note is holding, as a chip reads it.
+ *
+ * Whole megabytes from ten up, one decimal below - a recording is never small
+ * enough for kilobytes to be the unit, and "150 MB" is the number that makes
+ * somebody act where "149.7 MB" only asks to be read.
+ */
+export function audioSize(bytes: number): string {
+  const mb = bytes / 1_000_000
+  return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`
+}
+
 export function isOutstanding(note: NoteMeta): boolean {
   return note.flag === 'open' || note.alerts.some((alert) => !alert.done)
 }
@@ -567,6 +608,8 @@ export function selectionTitle(index: NibIndex, selection: Selection): string {
       return 'Practising'
     case 'archive':
       return 'Archive'
+    case 'audio':
+      return 'Recordings'
     case 'tag':
       return index.tags.find((tag) => tag.id === selection.tagId)?.name ?? 'Tag'
     case 'category':
@@ -623,7 +666,8 @@ function outstanding(notes: NoteMeta[]): number {
 
 export function smartCounts(
   index: NibIndex,
-  filter: ScopeFilter
+  filter: ScopeFilter,
+  audio?: Map<string, number>
 ): {
   all: number
   recent: number
@@ -631,6 +675,7 @@ export function smartCounts(
   alerts: number
   practice: number
   archived: number
+  audio: number
 } {
   const notes = allNotes(index, filter)
   return {
@@ -646,7 +691,11 @@ export function smartCounts(
     // them is the thing that made the number meaningless: it said nine when
     // three were owed.
     alerts: outstanding(notes.filter((note) => !isPractice(note))),
-    practice: outstanding(notes.filter(isPractice))
+    practice: outstanding(notes.filter(isPractice)),
+    // Counted in NOTES rather than in files: one meeting recorded in two halves
+    // is one card to act on, and a row saying two would send you looking for a
+    // second note that does not exist.
+    audio: everyNote(index, filter).filter((note) => (audio?.get(note.id) ?? 0) > 0).length
   }
 }
 

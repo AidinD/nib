@@ -6,6 +6,7 @@ import { TagPicker } from './TagPicker'
 import { dateStamp, noteReference, noteTrail, relativeTime, sameDay } from '../lib/notes'
 import type { Selection } from '../lib/selection'
 import {
+  audioSize,
   isPractice,
   selectionColor,
   selectionShowsCrumb,
@@ -33,6 +34,10 @@ interface NoteListProps {
    * the search already knows what it matched on.
    */
   snippets: Map<string, string>
+  /** Bytes of audio per note, read off the recordings folder. */
+  audio: Map<string, number>
+  /** Throw away a note's audio from the list, without opening it. */
+  onDiscardAudio: (note: NoteMeta) => void
   activeNoteId: string | null
   onOpen: (noteId: string) => void
   onAdd: (title: string, template?: Template) => void
@@ -72,6 +77,8 @@ export function NoteList({
   snippets,
   activeNoteId,
   onOpen,
+  audio,
+  onDiscardAudio,
   onAdd,
   onSaveTemplate,
   onDeleteTemplate,
@@ -589,6 +596,20 @@ export function NoteList({
                 )}
                 {note.hasImage && <span className="tag tag-image">image</span>}
                 {note.hasDrawing && <span className="tag tag-drawing">drawing</span>}
+                {/*
+                  The audio, in megabytes, on every card that is holding any.
+                  
+                  Not only in the Recordings list: the whole reason that list was
+                  needed is that a kept recording is invisible everywhere else. A
+                  meeting is 3.8 MB a minute, so this is usually a three-figure
+                  number, and a three-figure number on a card is what turns "I
+                  will discard that later" into a click.
+                */}
+                {(audio.get(note.id) ?? 0) > 0 && (
+                  <span className="tag tag-audio" title="Right-click the card to discard it">
+                    {audioSize(audio.get(note.id) ?? 0)}
+                  </span>
+                )}
               </div>
             </article>
           </div>
@@ -599,6 +620,12 @@ export function NoteList({
             at={menu.at}
             noteId={menu.note.id}
             reference={noteReference(menu.note.id, menu.note.title)}
+            audio={
+              (audio.get(menu.note.id) ?? 0) > 0
+                ? audioSize(audio.get(menu.note.id) ?? 0)
+                : undefined
+            }
+            onDiscardAudio={() => onDiscardAudio(menu.note)}
             onClose={() => setMenu(null)}
           />
         )}

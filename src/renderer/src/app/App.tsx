@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta, Template } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { noteTitle } from '@shared/templates'
@@ -31,6 +31,7 @@ import { useNoteHistory } from '../lib/useNoteHistory'
 import {
   archivedHits,
   BODY_SEARCH_MIN,
+  audioSize,
   matchesMeta,
   searchTerms,
   snippetFor,
@@ -41,6 +42,7 @@ import type { LauncherRow, Standing } from '../lib/launcher'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
+import { withoutAudio } from '../lib/notes'
 
 /** What is waiting to be confirmed, and everything needed to say it out loud. */
 type PendingDelete =
@@ -134,6 +136,33 @@ export function App(): React.JSX.Element {
   const [templateBody, setTemplateBody] = useState<string | null>(null)
   /** Whether Ctrl+K is up. Never remembered - it is a keystroke, not a mode. */
   const [launcherOpen, setLauncherOpen] = useState(false)
+  /**
+   * How much audio each note is holding, read off the recordings folder.
+   *
+   * Refreshed on launch and after anything that could change it, rather than
+   * watched: the folder only changes when this app records, discards, trims or
+   * moves something, and all four are things the window did. A watcher for a
+   * directory only we write to is machinery that can go wrong for no gain.
+   */
+  const [audio, setAudio] = useState<Map<string, number>>(new Map())
+  /**
+   * The files themselves, kept beside the sizes and used only to delete them.
+   *
+   * Separate from the sizes because everything downstream - the rail row, the
+   * chip, the ordering - wants a number, and one map of objects would make every
+   * one of those read `?.bytes ?? 0`.
+   */
+  const [audioFiles, setAudioFiles] = useState<Map<string, string[]>>(new Map())
+  const refreshAudio = useCallback(() => {
+    void window.nib.audioByNote().then((rows) => {
+      setAudio(new Map(rows.map((row) => [row.noteId, row.bytes])))
+      setAudioFiles(new Map(rows.map((row) => [row.noteId, row.paths])))
+    })
+  }, [])
+  useEffect(refreshAudio, [refreshAudio])
+
+  /** The note whose audio is waiting to be thrown away, and what it would cost. */
+  const [pendingAudio, setPendingAudio] = useState<{ note: NoteMeta; bytes: number } | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   /*
@@ -146,8 +175,8 @@ export function App(): React.JSX.Element {
   const bodies = useSearchText(index, search)
 
   const notes = useMemo(
-    () => selectedNotes(index, selection, scope, search, includeArchived, bodies),
-    [index, selection, scope, search, includeArchived, bodies]
+    () => selectedNotes(index, selection, scope, search, includeArchived, bodies, audio),
+    [index, selection, scope, search, includeArchived, bodies, audio]
   )
 
   const archived = useMemo(
@@ -492,6 +521,42 @@ export function App(): React.JSX.Element {
     }
   }
 
+  /**
+   * Throw away a note's audio without opening it.
+   *
+   * The block STAYS, marked as having lost its file. It says where the meeting
+   * was and how long it ran, and a note whose recording simply vanished reads as
+   * one that lost something rather than one you tidied.
+   *
+   * The note is read and written here rather than in the editor, because the
+   * whole point of a housekeeping list is acting on notes you are not in. When
+   * it happens to be the open one, the editor reloads it from the index change.
+   */
+  const discardAudio = async (note: NoteMeta): Promise<void> => {
+    const doc = await window.nib.readNote(note.id)
+    /*
+     * The FOLDER decides what gets deleted, not the note.
+     *
+     * A file the note has no block for is the kind that accumulates: the startup
+     * sweep will not take it either, because the note it is named after still
+     * exists. Clearing a card out has to mean clearing its bytes, so the list
+     * from the folder is the list that is deleted - and the note's own blocks
+     * are added to it, for a block left pointing somewhere unexpected.
+     */
+    const marked = doc === null ? { html: '', paths: [] } : withoutAudio(doc.html)
+    const paths = new Set([...(audioFiles.get(note.id) ?? []), ...marked.paths])
+    // The files first: a delete that failed must not leave a note claiming its
+    // audio is gone when it is still on disk and still costing the space.
+    for (const path of paths) {
+      await window.nib.deleteRecording(path)
+    }
+    if (doc !== null) {
+      const edited = await window.nib.writeNote({ ...doc, html: marked.html })
+      ops.patchNoteMeta(note.id, { edited })
+    }
+    refreshAudio()
+  }
+
   const confirmDelete = async (): Promise<void> => {
     const pending = pendingDelete
     setPendingDelete(null)
@@ -615,6 +680,7 @@ export function App(): React.JSX.Element {
       <main className="panes">
         <Sidebar
           index={index}
+          audio={audio}
           selection={selection}
           onSelect={setSelection}
           scope={scope}
@@ -644,6 +710,10 @@ export function App(): React.JSX.Element {
           selection={selection}
           notes={notes}
           snippets={snippets}
+          audio={audio}
+          onDiscardAudio={(note) =>
+            setPendingAudio({ note, bytes: audio.get(note.id) ?? 0 })
+          }
           activeNoteId={activeNoteId}
           onOpen={setActiveNoteId}
           onAdd={(title, template) => {
@@ -724,6 +794,7 @@ export function App(): React.JSX.Element {
           focusAlertId={focusAlertId}
           onAlertFocused={() => setFocusAlertId(null)}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
+          onAudioChanged={refreshAudio}
           onTogglePin={(note) => void togglePin(note)}
           onCycleFlag={(note) => ops.cycleFlag(note.id)}
           onOpenNote={(noteId) => {
@@ -781,6 +852,29 @@ export function App(): React.JSX.Element {
           standing={standing}
           onRun={runLauncherRow}
           onClose={() => setLauncherOpen(false)}
+        />
+      )}
+
+      {/*
+        The same warning the block's own control carries, because it is the same
+        act with the same cost - and the size, which is the reason somebody came
+        to this list at all.
+      */}
+      {pendingAudio !== null && (
+        <ConfirmModal
+          title="Släng ljudet?"
+          message={
+            `${audioSize(pendingAudio.bytes)} försvinner från disken och det går inte att ångra. ` +
+            'Transkriptet blir kvar, men inspelningen går inte att transkribera om. ' +
+            'Läs igenom transkriptet först: det är hela poängen med att ljudet ligger kvar.'
+          }
+          confirmLabel="Släng ljudet"
+          onConfirm={() => {
+            const note = pendingAudio.note
+            setPendingAudio(null)
+            void discardAudio(note)
+          }}
+          onCancel={() => setPendingAudio(null)}
         />
       )}
 

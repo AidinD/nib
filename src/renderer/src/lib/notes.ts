@@ -315,6 +315,38 @@ export function movedLine(moved: { transcript: boolean; marks: number }): string
 }
 
 /**
+ * Mark every recording in a note as having lost its audio, and say which files.
+ *
+ * The other half of discarding from a card rather than from inside the note:
+ * the note is very often not the one on screen - that is the point of a
+ * housekeeping list - so this works on the stored string, and the caller deletes
+ * the files it names.
+ *
+ * The BLOCK stays, and that is deliberate. It marks where the meeting was and
+ * what length it ran to, and a note whose recording simply vanished reads as a
+ * note that lost something rather than one you tidied. `lost` is a state the
+ * block already knows how to draw.
+ */
+export function withoutAudio(html: string): { html: string; paths: string[] } {
+  const root = document.createElement('div')
+  root.innerHTML = sanitizeHtml(html)
+  const paths: string[] = []
+  for (const block of root.querySelectorAll<HTMLElement>('[data-recording]')) {
+    const path = block.dataset.recording ?? ''
+    // `working` is a transcription in flight, holding the file open. Whisper
+    // would fail on a file deleted under it and the block would say `failed`
+    // about something nobody did wrong.
+    if (path.length === 0 || block.dataset.state === 'working' || block.dataset.state === 'lost') {
+      continue
+    }
+    paths.push(path)
+    block.dataset.state = 'lost'
+  }
+  applyRecordingBlocks(root)
+  return { html: sanitizeHtml(root.innerHTML), paths }
+}
+
+/**
  * Take a recording, and everything that belonged to it, out of a note's HTML.
  *
  * The other half of `withMovedRecording`, for the case where the note it is

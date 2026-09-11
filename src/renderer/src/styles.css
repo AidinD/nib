@@ -4229,3 +4229,57 @@ body.is-resizing .splitter-grip {
 .move-done button:hover {
   color: var(--text);
 }
+
+/* ---------- audio, where it costs something ---------- */
+
+/*
+ * The size on a card, in the same row as its tags.
+ *
+ * Amber rather than the accent: it is not a property of the note the way a tag
+ * is, it is a bill. A meeting is 3.8 MB a minute, so this is usually a
+ * three-figure number, and a three-figure number on a card is what turns "I will
+ * discard that later" into a click.
+ */
+.tag-audio {
+  color: var(--alert);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The rail's own marker for it: a filled square rather than a ring.
+ *
+ * The rings mean a flag somebody put there by hand - something owed, something
+ * being practised. Bytes on a disk are not that, and giving them a ring would
+ * say they were the same kind of fact.
+ */
+.marker-audio {
+  background: var(--alert);
+  border-radius: 2px;
+  opacity: 0.65;
+}
+
+/* The total, between the label and the count. Dim, because it is the answer to a
+   question you only ask when you are already looking at this row. */
+.row-hint {
+  margin-left: auto;
+  padding-right: 8px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-menu-row.is-danger {
+  color: var(--alert);
+}
+
+.card-menu-row.is-danger:hover {
+  background: color-mix(in srgb, var(--alert) 14%, transparent);
+}
+
+/* The size sits on the item, so the decision can be made before the confirm. */
+.card-menu-size {
+  float: right;
+  padding-left: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}

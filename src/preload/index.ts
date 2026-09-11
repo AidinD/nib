@@ -104,6 +104,17 @@ const api = {
   moveRecording: (path: string, toNoteId: string): Promise<string | null> =>
     ipcRenderer.invoke('recording:move', path, toNoteId),
 
+  /**
+   * Which notes are holding audio, and how much.
+   *
+   * Read off the recordings folder alone - a filename carries the id of the note
+   * that owns it - so this costs one directory listing however large the
+   * notebook is. A note id nothing recognises is an orphan the next startup
+   * sweep will remove, and real bytes until then.
+   */
+  audioByNote: (): Promise<{ noteId: string; bytes: number; paths: string[] }[]> =>
+    ipcRenderer.invoke('recording:audio'),
+
   summarise: (request: {
     kind?: 'meeting' | 'note'
     /** What kind of conversation it was, which decides which sections exist. */

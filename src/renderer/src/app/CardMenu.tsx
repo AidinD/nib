@@ -18,10 +18,25 @@ interface CardMenuProps {
   /** The note's own id, shown as well as copied. */
   noteId: string
   reference: string
+  /**
+   * How much audio this note is holding, as a label. Absent when it holds none.
+   *
+   * On the item rather than behind the confirm, because the reason to be in this
+   * menu at all is deciding whether it is worth the click.
+   */
+  audio?: string
+  onDiscardAudio?: () => void
   onClose: () => void
 }
 
-export function CardMenu({ at, noteId, reference, onClose }: CardMenuProps): React.JSX.Element {
+export function CardMenu({
+  at,
+  noteId,
+  reference,
+  audio,
+  onDiscardAudio,
+  onClose
+}: CardMenuProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const box = useRef<HTMLDivElement | null>(null)
   const [place, setPlace] = useState(at)
@@ -81,6 +96,26 @@ export function CardMenu({ at, noteId, reference, onClose }: CardMenuProps): Rea
       <button type="button" className="card-menu-row" onClick={copy}>
         {copied ? 'Copied' : 'Copy reference'}
       </button>
+      {/*
+        Throwing away a meeting's audio, from the list rather than from inside
+        the note.
+        
+        The menu was one job wide and this is a second one, which is worth
+        naming: what the two have in common is that both are about the note
+        rather than about its text, and neither wants you to open it first.
+      */}
+      {audio !== undefined && onDiscardAudio !== undefined && (
+        <button
+          type="button"
+          className="card-menu-row is-danger"
+          onClick={() => {
+            onClose()
+            onDiscardAudio()
+          }}
+        >
+          Discard the audio <span className="card-menu-size">{audio}</span>
+        </button>
+      )}
       {/* The id itself, because sometimes the answer is to read it out rather
           than to paste it. Selectable on purpose. */}
       <span className="card-menu-id">{noteId}</span>
