@@ -1591,10 +1591,24 @@ export function Editor({
         holder.appendChild(copy)
       }
 
-      const doc = await window.nib.readNote(target.note.id)
-      if (doc === null) {
-        setSummaryError('The other note could not be read, so nothing was moved.')
-        return
+      /*
+       * A note with no file yet is empty, not missing.
+       *
+       * `addNote` writes the index row and nothing else - the body file appears
+       * on the first save - so a note you made and have not typed in reads back
+       * as null. That is the note you most often want to move a recording INTO:
+       * you notice the mistake, make the right note, and come back for the
+       * meeting. Refusing there, which is what the first version did, refused
+       * exactly the case this feature was built for.
+       */
+      const doc = (await window.nib.readNote(target.note.id)) ?? {
+        id: target.note.id,
+        categoryId: target.note.categoryId,
+        subId: target.note.subId,
+        title: target.note.title,
+        html: '',
+        created: target.note.created,
+        edited: target.note.edited
       }
       const patched = withMovedRecording(doc.html, holder.innerHTML)
       const edited = await window.nib.writeNote({ ...doc, html: patched.html })

@@ -271,11 +271,24 @@ export function withMovedRecording(html: string, moved: string): { html: string 
   }
 
   const first = parts[0] as HTMLElement
-  placeRecording(root, first)
+  const last = placeRecording(root, first)
   let after: Element = first
   for (const part of parts.slice(1)) {
     after.after(part)
     after = part
+  }
+  /*
+   * Somewhere to type, when what arrived is now the end of the note.
+   *
+   * The same paragraph `insertRecordingBlock` appends for the same reason, and
+   * it matters more here: the note you move a meeting into is often one you made
+   * a moment ago and never typed in, so without this it opens as a block you
+   * cannot put the caret after.
+   */
+  if (last) {
+    const room = document.createElement('p')
+    room.appendChild(document.createElement('br'))
+    after.after(room)
   }
   return { html: sanitizeHtml(root.innerHTML) }
 }

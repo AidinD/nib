@@ -3,6 +3,31 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-11 - A note with no file is empty, not missing
+
+**The report.** Moving a recording into a note said "The other note could not be
+read, so nothing was moved." The target was a note made a moment earlier and
+never typed in.
+
+**The cause.** `addNote` writes the index row and nothing else - the body file
+appears on the first save - so `readNote` returns null for a note that exists and
+is simply empty. The move read that as a failure.
+
+**And it refused exactly the case the feature was built for.** You notice the
+recording is in the wrong document, you make the right note, and you come back
+for the meeting. That note is new and empty by definition. Shipped an hour
+earlier, and the first real use of it hit the one path that was never exercised:
+every test and every e2e run moved into a note that already had a body.
+
+**Decided.** A missing file is an empty body. The document is built from the
+index row the picker already has - id, category, title, timestamps - and written,
+which creates the file the same way any first save would.
+
+**And the moved blocks leave somewhere to type after them.** The same paragraph
+`insertRecordingBlock` appends when a recording lands last, and it matters more
+here: a note that holds nothing but a recording block and a folded transcript
+opens with nowhere to put the caret.
+
 ## 2026-09-11 - A recording can be given to another note, and the file goes with it
 
 **The report.** A recording was started in the wrong document, and there was no
