@@ -39,6 +39,7 @@ From the author's own list, with where each one stands.
 | **A note with no name** | Done - titled with today's date, so an empty Enter is no longer a dead end |
 | **Conversation kind** | Done - 1-1, check-in, meeting or status decides which sections the summary even has |
 | **The Practising lane** | Done - a violet lane under Needs you, read off the flag on every render |
+| **Moving a recording** | Done - block, transcript and marks travel together, and the audio file is renamed |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a

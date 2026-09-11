@@ -130,6 +130,21 @@ export function applyRecordingBlocks(root: HTMLElement): void {
     }
 
     /*
+     * The offer to give this recording to another note.
+     *
+     * On every state that is not mid-transcription, because the moment you
+     * notice is not fixed: sometimes it is the block appearing in the wrong note
+     * and sometimes it is reading the transcript a day later. A `working` block
+     * is left alone - whisper is holding the file, and the answer lands by path.
+     */
+    const offerMove = (): void => {
+      const move = document.createElement('span')
+      move.dataset.moveNote = '1'
+      move.textContent = 'move to another note'
+      block.append(document.createTextNode(' · '), move)
+    }
+
+    /*
      * A transcribed recording keeps its audio, so the block is not a receipt for
      * something finished - it is the two things still worth doing.
      *
@@ -148,6 +163,7 @@ export function applyRecordingBlocks(root: HTMLElement): void {
       discard.dataset.discard = '1'
       discard.textContent = 'discard the audio'
       block.append(again, document.createTextNode(' · '), discard)
+      offerMove()
       offerTrim()
       continue
     }
@@ -162,10 +178,154 @@ export function applyRecordingBlocks(root: HTMLElement): void {
             // something it cannot do.
             `Recording · ${length} · the audio is no longer on disk`
           : `Recording · ${length} · ${language} · click to transcribe`
+    if (state === 'recorded' || state === 'lost') {
+      offerMove()
+    }
     if (state === 'recorded') {
       offerTrim()
     }
   }
+}
+
+/**
+ * Everything in a note that belongs to one recording, in document order.
+ *
+ * The block, the transcript that came out of it, and every moment pinned to it -
+ * a screenshot pasted at eleven minutes, a line marked while it was being said.
+ * That set is not a guess: a mark carries the recording's own path in
+ * `data-rec`, so it says which meeting it belongs to in its own markup.
+ *
+ * Leaving the marks behind would be the quiet kind of wrong. The timestamp on a
+ * screenshot is only meaningful beside the recording it counts from, and once
+ * the block has gone to another note the label is a number pointing at nothing -
+ * `applyTimeMarks` would keep drawing it and a click on it would find no
+ * transcript to jump into.
+ *
+ * A mark's own element can be nested - an image lives inside a paragraph - so
+ * what moves is the top-level block holding it. Moving the image alone would
+ * leave an empty paragraph behind and put a bare image at the top of the other
+ * note.
+ *
+ * The transcript is the next `[data-transcript]` after the block and before any
+ * later recording, rather than the block's next sibling: a real note had an
+ * empty paragraph between the two, left over from an older place-to-type, and a
+ * sibling check would have moved a meeting without its words.
+ */
+export function recordingParts(root: HTMLElement, block: HTMLElement): HTMLElement[] {
+  const parts: HTMLElement[] = [block]
+  const path = block.dataset.recording ?? ''
+
+  const blocks = Array.from(root.children) as HTMLElement[]
+  const from = blocks.indexOf(block)
+  if (from >= 0) {
+    for (let at = from + 1; at < blocks.length; at += 1) {
+      const kind = blockKind(blocks[at])
+      if (kind === 'recording') {
+        break
+      }
+      if (kind === 'transcript') {
+        parts.push(blocks[at])
+        break
+      }
+    }
+  }
+
+  if (path.length > 0) {
+    for (const mark of root.querySelectorAll<HTMLElement>('[data-rec]')) {
+      if (mark.dataset.rec !== path) {
+        continue
+      }
+      const top = blocks.find((child) => child === mark || child.contains(mark))
+      if (top !== undefined && !parts.includes(top)) {
+        parts.push(top)
+      }
+    }
+  }
+
+  // Document order, so what arrives in the other note reads the way it read here.
+  return parts.sort((left, right) => blocks.indexOf(left) - blocks.indexOf(right))
+}
+
+/**
+ * Put a moved recording into another note's stored HTML.
+ *
+ * The target is almost never the note on screen - that is the entire point of
+ * moving it - so this works on the stored string the way `withTranscript` does,
+ * against a detached copy, and nothing about the result depends on which note
+ * the editor happens to be showing.
+ *
+ * The recording block goes where `placeRecording` puts one: the top, under a
+ * summary, after any recording already there. Everything that came with it
+ * follows immediately, which keeps a transcript with its own block - the pairing
+ * that decides which meeting a screenshot was taken in.
+ */
+export function withMovedRecording(html: string, moved: string): { html: string } {
+  const root = document.createElement('div')
+  root.innerHTML = sanitizeHtml(html)
+
+  const holder = document.createElement('div')
+  holder.innerHTML = sanitizeHtml(moved)
+  const parts = Array.from(holder.children)
+  if (parts.length === 0) {
+    return { html: sanitizeHtml(root.innerHTML) }
+  }
+
+  const first = parts[0] as HTMLElement
+  placeRecording(root, first)
+  let after: Element = first
+  for (const part of parts.slice(1)) {
+    after.after(part)
+    after = part
+  }
+  return { html: sanitizeHtml(root.innerHTML) }
+}
+
+/**
+ * What a move actually took, written out rather than counted.
+ *
+ * "and 2 more" is not a receipt - two more of what, and would you have noticed
+ * if it had said one? The transcript and the marked moments are the two things
+ * somebody would go and check for, so they are the two things it names.
+ */
+export function movedLine(moved: { transcript: boolean; marks: number }): string {
+  const parts = ['Inspelningen']
+  if (moved.transcript) {
+    parts.push('transkriptet')
+  }
+  if (moved.marks === 1) {
+    parts.push('ett markerat ögonblick')
+  } else if (moved.marks > 1) {
+    parts.push(`${moved.marks} markerade ögonblick`)
+  }
+  const last = parts.pop() as string
+  return `${parts.length === 0 ? last : `${parts.join(', ')} och ${last}`} flyttades`
+}
+
+/**
+ * Take a recording, and everything that belonged to it, out of a note's HTML.
+ *
+ * The other half of `withMovedRecording`, for the case where the note it is
+ * leaving is no longer the one on screen - the write to the other note took a
+ * moment, and reading a different note meanwhile is the ordinary thing to do
+ * rather than an edge.
+ *
+ * Found by path rather than by identity, for the same reason `withTranscript`
+ * does: the block in the stored string is not the node that was clicked.
+ */
+export function withoutRecording(html: string, path: string): { html: string } {
+  const root = document.createElement('div')
+  root.innerHTML = sanitizeHtml(html)
+  const block = Array.from(root.querySelectorAll<HTMLElement>('[data-recording]')).find(
+    (candidate) => candidate.dataset.recording === path
+  )
+  if (block === undefined) {
+    return { html: sanitizeHtml(root.innerHTML) }
+  }
+  for (const part of recordingParts(root, block)) {
+    part.remove()
+  }
+  applyTimeMarks(root)
+  return { html: sanitizeHtml(root.innerHTML) }
 }
 
 /**
@@ -732,6 +892,17 @@ export function normaliseBlocks(root: HTMLElement): void {
 }
 
 /** Wrap the bare text nodes directly inside `container` in paragraphs. */
+/**
+ * The tags that count as a block of their own, rather than as loose content.
+ *
+ * A name rather than a regex inside the loop, so it can be tested without a DOM
+ * - and so the omission that put `details` outside it is visible as a list with
+ * something missing rather than as a character class nobody reads.
+ */
+export function isBlockTag(tagName: string): boolean {
+  return /^(P|H1|H2|H3|H4|UL|OL|BLOCKQUOTE|PRE|HR|DIV|TABLE|DETAILS)$/.test(tagName)
+}
+
 function adoptLooseText(container: HTMLElement): void {
   let loose: ChildNode[] = []
   const adopt = (): void => {
@@ -748,7 +919,22 @@ function adoptLooseText(container: HTMLElement): void {
   for (const node of Array.from(container.childNodes)) {
     const isBlock =
       node.nodeType === Node.ELEMENT_NODE &&
-      /^(P|H1|H2|H3|H4|UL|OL|BLOCKQUOTE|PRE|HR|DIV|TABLE)$/.test((node as Element).tagName)
+      /*
+       * DETAILS belongs in that list, and leaving it out had consequences.
+       *
+       * A transcript is a top-level `details`, and without it the whole thing
+       * counted as loose content and was wrapped in a paragraph on every load.
+       * `<p><details>` is not valid HTML, so the DOM held a shape the parser
+       * will not build - which is why it never reached disk: saving serialises
+       * and re-parses, and the parser closes the paragraph in front of the
+       * details. The empty paragraph before every transcript in this notebook is
+       * the fossil of that.
+       *
+       * Harmless right up until something read the live DOM and expected the
+       * transcript to BE the top-level block it is on disk, which is what moving
+       * a recording to another note does.
+       */
+      isBlockTag((node as Element).tagName)
     if (isBlock) {
       adopt()
       continue

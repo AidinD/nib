@@ -1,7 +1,7 @@
 import { createWriteStream, WriteStream } from 'fs'
 import { promises as fs } from 'fs'
 import type { FileHandle } from 'fs/promises'
-import { join } from 'path'
+import { basename, dirname, join, resolve } from 'path'
 
 /*
  * Writing a meeting to disk, while it is still happening.
@@ -180,6 +180,60 @@ export async function sweepRecordings(
     }
   }
   return { removed, bytes }
+}
+
+/**
+ * The timestamp a recording's filename ends with, which is what names it.
+ *
+ * The same shape the sweep peels off, and deliberately the same regex: a note id
+ * has its own hyphens, so the id is what is LEFT after the stamp comes off the
+ * end rather than something split off the front. Two different ideas of that
+ * would be a file the sweep deletes because it no longer recognises the name.
+ */
+const STAMP = /-(\d{4}-\d{2}-\d{2}T[\d-]+\.wav)$/
+
+/**
+ * Give a recording to a different note.
+ *
+ * The file is renamed, and that is not bookkeeping. The filename is the ONLY
+ * record of which note a recording belongs to - the sweep reads it to decide
+ * what is an orphan, and deleting a note takes its recordings with it. Move a
+ * block to another note without renaming and the audio still plays, right up
+ * until the note it was recorded in is deleted and the sweep takes the file out
+ * from under a note that is still using it.
+ *
+ * Returns the new path, or null when there was nothing to move - a recording
+ * whose audio has already been discarded is a block with no file, and that is an
+ * ordinary state rather than a failure.
+ *
+ * @param recordingsDir Where the files are, so nothing here can be talked into
+ *   renaming something outside it.
+ */
+export async function moveRecording(
+  recordingsDir: string,
+  path: string,
+  toNoteId: string
+): Promise<string | null> {
+  const name = basename(path)
+  const stamp = STAMP.exec(name)
+  // Resolved on both sides rather than compared as strings: the path arrives off
+  // an attribute in a note's HTML, and the separators in one of those are
+  // whatever the machine that wrote the note used.
+  if (stamp === null || toNoteId.length === 0 || resolve(dirname(path)) !== resolve(recordingsDir)) {
+    return null
+  }
+  const moved = join(recordingsDir, `${toNoteId}-${stamp[1]}`)
+  if (moved === path) {
+    return path
+  }
+  try {
+    await fs.rename(path, moved)
+    return moved
+  } catch {
+    // Gone already, or locked. The block keeps the path it has, which is the
+    // honest answer: nothing moved.
+    return null
+  }
 }
 
 /** Delete a recording once its transcript exists - the whole point of keeping it. */

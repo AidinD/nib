@@ -93,6 +93,17 @@ const api = {
    * Summarise a meeting. The only call in this app that leaves the machine, and
    * the only one that spends anything.
    */
+  /**
+   * Give a recording's audio to another note.
+   *
+   * Renaming the file is the move: its name is the only record of which note
+   * owns it, and the startup sweep deletes by that name. Null when there was no
+   * file to move, which is an ordinary state for a block whose audio was
+   * discarded.
+   */
+  moveRecording: (path: string, toNoteId: string): Promise<string | null> =>
+    ipcRenderer.invoke('recording:move', path, toNoteId),
+
   summarise: (request: {
     kind?: 'meeting' | 'note'
     /** What kind of conversation it was, which decides which sections exist. */

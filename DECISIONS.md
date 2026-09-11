@@ -3,6 +3,78 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-09-11 - A recording can be given to another note, and the file goes with it
+
+**The report.** A recording was started in the wrong document, and there was no
+way out of that. The transcript is guarded against deletion precisely because it
+cannot be typed again, so the one thing the notebook would not let you do was
+take it somewhere else.
+
+**Decided.** "move to another note" on the recording block, raising the same
+picker the link control uses. The block, its transcript and every moment pinned
+to it travel together, and the audio file is renamed to the note that now owns
+it.
+
+**Why not the cut and paste that was asked for.** The clipboard cannot carry
+this. Chromium's paste path sanitises what it inserts and strips data attributes
+off it - measured in this app already, when a colour span arrived as an inline
+style - so a pasted transcript would land as ordinary markup with no
+`data-transcript`: no fold, no delete guard, no pairing with the block it came
+out of. The audio would fare worse, since the path tying a block to its file is
+an attribute too. And a cut leaves the only copy of a transcript in volatile
+memory between two clicks, in an app that already refuses to delete one without
+asking.
+
+**The filename IS the ownership, and that is the part with teeth.** A recording
+is `<noteId>-<timestamp>.wav`, the startup sweep reads the id out of it to decide
+what is an orphan, and deleting a note schedules exactly that sweep. Move a block
+without renaming and the audio keeps playing right up until the note it was
+recorded in is deleted, at which point the sweep takes the file out from under a
+note that is still using it. So `moveRecording` renames, using the same pattern
+the sweep peels off - two different ideas of that would be a file the sweep no
+longer recognises. It refuses anything outside the recordings folder: the path
+arrives off an attribute in a note's HTML, which is the least trustworthy string
+in this app.
+
+**What travels, and why the marks are not optional.** A moment carries the
+recording's own path in `data-rec`, so the set is stated in the markup rather
+than guessed. Left behind, a screenshot's timestamp is a number counting from a
+recording that is no longer in the note - `applyTimeMarks` would keep drawing it
+and a click on it would find no transcript to land in.
+
+**The other note is written first.** A failure anywhere leaves the recording
+where it was, which is recoverable; the other order loses a meeting. And if the
+editor has moved to a different note while the write was in flight, the source is
+patched on disk instead - the same shape the transcription path uses, for the
+same reason.
+
+**A receipt, because the block simply vanishes.** It names what went and where,
+and offers to go there. "And 2 more" would not be a receipt - two more of what,
+and would you have noticed if it had said one - so the transcript and the marked
+moments are named.
+
+**And a real bug fell out of building it: a transcript was not a block.**
+`adoptLooseText` gathers everything that is not a block into a paragraph, and its
+list of block tags left out `details` - which is what a transcript is. So every
+load wrapped the entire transcript in a `<p>`. It never reached disk, which is
+why it went unnoticed: `<p><details>` is not valid HTML, so saving serialises and
+re-parses and the parser closes the paragraph in front of the details. **The empty
+paragraph sitting before every transcript in this notebook is the fossil of
+that** - including the one `placeRecording` already had a comment about, working
+around a shape nobody had explained. Harmless until something read the live DOM
+and expected the transcript to be the top-level block it is on disk, which is
+exactly what a move does.
+
+**Verified in two halves, because neither could do the other.** The rename and
+its sweep interaction are unit-tested end to end - move the file, delete the old
+note's id from the live set, run the real sweep, and the audio survives; and the
+same test without the rename shows the sweep taking it, so the reason the rename
+exists cannot quietly stop being true. The markup, the picker, the receipt and
+what lands on disk are driven in the running app. The two halves do not meet:
+the e2e harness gives the app a per-run user-data directory, so a seeded audio
+file cannot be inside the recordings folder the app is actually using, and the
+rename correctly refuses. That refusal is itself the guard being exercised.
+
 ## 2026-09-10 - A violet lane under "Needs you", for what is being practised
 
 **Decided.** A second ambient lane directly under the alert strip, holding the

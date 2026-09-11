@@ -15,6 +15,7 @@ import {
   appendSamples,
   deleteRecording,
   isRecording,
+  moveRecording,
   startRecording,
   stopRecording,
   findCallEnd,
@@ -271,6 +272,11 @@ function registerIpc(): void {
   ipcMain.handle('recording:stop', () => stopRecording())
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
   ipcMain.handle('recording:exists', (_event, path: string) => existsSync(path))
+  /* Renaming the file IS the move - the filename is the only record of which
+     note a recording belongs to. See `moveRecording`. */
+  ipcMain.handle('recording:move', (_event, path: string, toNoteId: string) =>
+    moveRecording(recordingsDir(), path, toNoteId)
+  )
 
   /*
    * Where the call ended, and shortening the file to it.

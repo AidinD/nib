@@ -3559,9 +3559,14 @@ body.is-resizing .splitter-grip {
  * first or do nothing destructive at all.
  */
 .recording-block [data-retranscribe],
+.recording-block [data-move-note],
 .recording-block [data-discard] {
   text-decoration: underline;
   cursor: pointer;
+}
+
+.recording-block [data-move-note]:hover {
+  color: var(--text);
 }
 
 .recording-block [data-retranscribe]:hover {
@@ -4187,4 +4192,40 @@ body.is-resizing .splitter-grip {
 .cmdk-hint:hover {
   color: var(--text);
   background: var(--surface-hover);
+}
+
+/*
+ * Where a recording went.
+ *
+ * The same box as the summary's failure notice and deliberately not its colour:
+ * a move that worked is not a warning. Accent rather than alert, and it stays
+ * until it is dismissed, because it is the only receipt a disappearing block
+ * leaves behind.
+ */
+.move-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.move-done button {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.move-done .move-open {
+  color: var(--accent);
+}
+
+.move-done button:hover {
+  color: var(--text);
 }

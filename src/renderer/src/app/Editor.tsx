@@ -40,6 +40,10 @@ import {
   clock,
   lineSeconds,
   applyRecordingBlocks,
+  recordingParts,
+  movedLine,
+  withMovedRecording,
+  withoutRecording,
   applySummaryBlocks,
   applyTimeMarks,
   applyTranscriptBlocks,
@@ -304,6 +308,25 @@ export function Editor({
   const [linker, setLinker] = useState<{
     at: { left: number; top: number }
     spaced: boolean
+  } | null>(null)
+  /**
+   * The recording block waiting for somewhere to go, and where the picker opens.
+   *
+   * A separate piece of state from `linker` even though both raise the same
+   * picker: what they do with the answer has nothing in common, and one state
+   * with a mode is how a picked note ends up being inserted as a link into a
+   * note it was supposed to be moved to.
+   */
+  const [moving, setMoving] = useState<{
+    block: HTMLElement
+    at: { left: number; top: number }
+  } | null>(null)
+  /** Where a recording just went, so its disappearance is not read as a delete. */
+  const [moved, setMoved] = useState<{
+    noteId: string
+    title: string
+    transcript: boolean
+    marks: number
   } | null>(null)
   const saveTimer = useRef<number | null>(null)
   // The note the body element currently holds, so a save that lands after a
@@ -1499,6 +1522,136 @@ export function Editor({
       window.setTimeout(() => line.classList.remove('is-moment'), 1500)
     }
   }, [])
+
+  /**
+   * Give this recording, and everything that belongs to it, to another note.
+   *
+   * ## Why this is not a cut and a paste
+   *
+   * It is what was asked for, and the clipboard cannot carry it. Chromium's
+   * paste path sanitises what it inserts and strips the data attributes off it -
+   * measured in this app once already, when a colour span arrived as an inline
+   * style - so a transcript pasted that way would land as ordinary markup with
+   * no `data-transcript`: no fold, no delete guard, and no pairing with the
+   * block it came out of. The audio would be worse off still, since the path
+   * that ties a block to its file is an attribute too.
+   *
+   * And a cut leaves the only copy of a transcript in volatile memory between
+   * two clicks. This app already refuses to delete one without asking; holding
+   * it in nothing but a variable while you go and find the other note is the
+   * same risk with none of the asking.
+   *
+   * ## The order, which is the safety
+   *
+   * The other note is written FIRST and this one is edited only once that
+   * write has come back. A failure anywhere leaves the recording exactly where
+   * it was, which is recoverable; the other order loses a meeting.
+   *
+   * The audio file is renamed before either, because its name is the only record
+   * of which note owns it - see `moveRecording`. Left alone, the recording keeps
+   * playing right up until the note it was made in is deleted and the startup
+   * sweep takes the file out from under the note now using it.
+   */
+  const moveRecordingTo = useCallback(
+    async (block: HTMLElement, target: NoteChoice) => {
+      const root = bodyRef.current
+      if (root === null || note === null || target.note.id === note.id) {
+        return
+      }
+      const parts = recordingParts(root, block)
+
+      /*
+       * The file first, and the new path written onto the copies that travel.
+       *
+       * `data-rec` on a moment is the same path, so the marks are re-pointed
+       * too - otherwise the screenshot arrives in the other note still naming a
+       * file that no longer exists, and nothing there would pair it with the
+       * recording sitting beside it.
+       */
+      const path = block.dataset.recording ?? ''
+      const renamed =
+        path.length > 0 ? await window.nib.moveRecording(path, target.note.id) : null
+
+      const holder = document.createElement('div')
+      for (const part of parts) {
+        const copy = part.cloneNode(true) as HTMLElement
+        if (renamed !== null) {
+          if (copy.dataset.recording === path) {
+            copy.dataset.recording = renamed
+          }
+          if (copy.dataset.rec === path) {
+            copy.dataset.rec = renamed
+          }
+          for (const mark of copy.querySelectorAll<HTMLElement>('[data-rec]')) {
+            if (mark.dataset.rec === path) {
+              mark.dataset.rec = renamed
+            }
+          }
+        }
+        holder.appendChild(copy)
+      }
+
+      const doc = await window.nib.readNote(target.note.id)
+      if (doc === null) {
+        setSummaryError('The other note could not be read, so nothing was moved.')
+        return
+      }
+      const patched = withMovedRecording(doc.html, holder.innerHTML)
+      const edited = await window.nib.writeNote({ ...doc, html: patched.html })
+      onSaved(target.note.id, { edited, preview: buildPreview(patched.html) })
+
+      /*
+       * And only now is it taken out of this note.
+       *
+       * Looked up again rather than trusted: the write took a moment, and a
+       * different note may be in the body by the time it came back. If it is,
+       * this note is patched on disk instead - the same shape the transcription
+       * path uses, and for the same reason.
+       */
+      const live = bodyRef.current
+      if (live !== null && loadedId.current === note.id) {
+        for (const part of parts) {
+          part.remove()
+        }
+        applyTimeMarks(live)
+        onBodyInput()
+      } else {
+        const mine = await window.nib.readNote(note.id)
+        if (mine !== null) {
+          const without = withoutRecording(mine.html, path)
+          const stamp = await window.nib.writeNote({ ...mine, html: without.html })
+          onSaved(note.id, { edited: stamp, preview: buildPreview(without.html) })
+        }
+      }
+
+      /*
+       * Named rather than counted.
+       *
+       * "and 2 more" is not a receipt - two more of what, and would you have
+       * noticed if it had said one? The transcript and the marked moments are
+       * the two things somebody would check for, so they are the two things it
+       * says went.
+       */
+      setMoved({
+        noteId: target.note.id,
+        title: target.note.title.length > 0 ? target.note.title : 'Untitled',
+        /*
+         * Asked of the top-level block rather than of the element itself.
+         *
+         * A note written before `details` was recognised as a block can still
+         * have its transcript inside a paragraph in memory, and `hasAttribute`
+         * on the wrapper answers no about a transcript that is right there.
+         */
+        transcript: parts.some(
+          (part) => part.hasAttribute('data-transcript') || part.querySelector('[data-transcript]') !== null
+        ),
+        marks: parts.filter(
+          (part) => part.hasAttribute('data-at') || part.querySelector('[data-at]') !== null
+        ).length
+      })
+    },
+    [note, onBodyInput, onSaved]
+  )
 
   /**
    * Ask for the summary. The one thing here that costs anything.
@@ -2932,6 +3085,25 @@ export function Editor({
           />
         )}
 
+        {/*
+          The same picker the link control raises, answering a different
+          question. It has a search field over the whole notebook, which is what
+          a move needs: the note this belongs in is one you can name but probably
+          cannot see from here.
+        */}
+        {moving !== null && (
+          <NotePicker
+            at={moving.at}
+            choices={listNotes(index, note?.id ?? null)}
+            onPick={(choice) => {
+              const block = moving.block
+              setMoving(null)
+              void moveRecordingTo(block, choice)
+            }}
+            onClose={() => setMoving(null)}
+          />
+        )}
+
         {pendingDrop !== null && (
           <ConfirmModal
             title="Ta bort transkriptet?"
@@ -3000,6 +3172,35 @@ export function Editor({
               void summarise(source, summaryModel, conversation ?? guessed)
             }}
           />
+        )}
+
+        {/*
+          Where it went, because a block that simply vanishes reads as a delete.
+          
+          It names the note and offers to go there: the one thing you want after
+          moving a meeting is to see that it arrived. Dismissed by opening the
+          note or by the cross - not on a timer, since it is the only receipt.
+        */}
+        {moved !== null && (
+          <p className="move-done">
+            <span>
+              {movedLine(moved)} till <strong>{moved.title}</strong>.
+            </span>
+            <button
+              type="button"
+              className="move-open"
+              onClick={() => {
+                const to = moved.noteId
+                setMoved(null)
+                onOpenNote(to)
+              }}
+            >
+              Öppna
+            </button>
+            <button type="button" className="move-close" onClick={() => setMoved(null)}>
+              ×
+            </button>
+          </p>
         )}
 
         {summaryError !== null && (
@@ -3337,6 +3538,24 @@ export function Editor({
               const block = trim.closest<HTMLElement>('[data-recording]')
               if (block !== null) {
                 setPendingTrim(block)
+              }
+              return
+            }
+            /*
+             * Move it somewhere else, caught before the block itself so that a
+             * click on the words does not also mean "transcribe".
+             *
+             * The picker opens where the control is rather than in the middle of
+             * the window: what is being moved is the thing you just clicked, and
+             * a dialog somewhere else makes you check which one it meant.
+             */
+            const move = target.closest<HTMLElement>('[data-move-note]')
+            if (move !== null) {
+              const block = move.closest<HTMLElement>('[data-recording]')
+              if (block !== null) {
+                const box = move.getBoundingClientRect()
+                setMoved(null)
+                setMoving({ block, at: { left: box.left, top: box.bottom + 4 } })
               }
               return
             }
