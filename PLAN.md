@@ -95,6 +95,11 @@ cosmetic.
   and clicking a timestamp opens the folded transcript and lands on the last line
   at or before it - `1:05` on the `01:00` line, `0:42` on the `00:40` one. The
   highlight fades on its own.
+- **The summary reading screenshots** (2026-10-14). A seeded meeting whose
+  transcript only points ("den här", "den här veckan") and two drawn screenshots
+  holding the content: summarised on Haiku from the built app, the summary named
+  the October export, its EJ SKICKAD status and week 44 - all only in the
+  pictures. See DECISIONS 2026-10-14.
 - **The stereo capture graph**, in the renderer that will run it, with two
   oscillators standing in for the two captures: the processor sees two channels
   and the interleaved output comes back with peaks of 0.9 and 0.3, matching the

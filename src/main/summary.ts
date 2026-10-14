@@ -22,7 +22,8 @@ import type { ConversationKind } from '../shared/conversation.ts'
  *
  * It is the ONLY part of this feature that leaves the machine, which is why it is
  * a button rather than a step: the audio never leaves it at all - it is recorded,
- * transcribed and deleted here - and this sends text the user can read first.
+ * transcribed and deleted here - and this sends text the user can read first,
+ * with the screenshots they pasted into the note during the meeting.
  */
 
 /* --------------------------------------------------- the glossary -- */
@@ -238,6 +239,86 @@ export function schemaFor(kind: ConversationKind | undefined): Record<string, un
   }
 }
 
+/* ------------------------------------------------- the screenshots -- */
+
+/**
+ * A screenshot pasted during the meeting, ready to be looked at.
+ *
+ * `number` is the one in the transcript's `(skärmbild N)`, and it is kept even
+ * when an earlier one could not be sent, so a gap is a gap rather than every
+ * later picture sliding onto the wrong moment.
+ */
+export interface Screenshot {
+  number: number
+  mediaType: string
+  /** Base64. */
+  data: string
+}
+
+/** What the model can read. SVG and BMP are pasteable here and are not. */
+const SCREENSHOT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp'
+}
+
+/**
+ * At most this many. A meeting where someone pasted forty pictures is one where
+ * the first twenty already say what was on screen, and each one is roughly a
+ * page of transcript on the bill.
+ */
+export const MAX_SCREENSHOTS = 20
+
+/** The API's ceiling is 5 MB of base64, which is 3.75 MB of file. */
+const MAX_SCREENSHOT_BYTES = 3_750_000
+
+/**
+ * Read each screenshot the transcript numbers, skipping what cannot be sent.
+ *
+ * Skipped silently, not failed: a missing file, an SVG, or a picture too large
+ * leaves that moment as it was before this existed - a label saying something
+ * was on screen - and the instruction tells the model that a label without a
+ * picture means exactly that. One unreadable asset is not a reason to refuse
+ * the summary of a whole meeting.
+ *
+ * `resolve` turns an asset URL into a path, or null for anything that is not
+ * one. Passed in so this can be tested without the app's storage.
+ */
+export function loadScreenshots(
+  sources: string[],
+  resolve: (src: string) => string | null
+): Screenshot[] {
+  const loaded: Screenshot[] = []
+  for (const [index, src] of sources.entries()) {
+    if (loaded.length >= MAX_SCREENSHOTS) {
+      break
+    }
+    const path = resolve(src)
+    const mediaType = SCREENSHOT_TYPES[path?.split('.').pop()?.toLowerCase() ?? '']
+    if (path === null || mediaType === undefined) {
+      continue
+    }
+    let bytes: Buffer
+    try {
+      bytes = readFileSync(path)
+    } catch {
+      continue
+    }
+    if (bytes.length === 0 || bytes.length > MAX_SCREENSHOT_BYTES) {
+      continue
+    }
+    loaded.push({ number: index + 1, mediaType, data: bytes.toString('base64') })
+  }
+  return loaded
+}
+
+/** The label a screenshot is sent under - the same words the transcript uses. */
+export function screenshotLabel(number: number): string {
+  return `(skärmbild ${number})`
+}
+
 /** What is being summarised, which decides both the schema and the instruction. */
 export type SummaryKind = 'meeting' | 'note'
 
@@ -255,6 +336,14 @@ export interface SummaryRequest {
   conversation?: ConversationKind
   /** The words, with their timestamps. */
   transcript: string
+  /**
+   * The `src` of each screenshot the transcript numbers, in that order - what
+   * the renderer sends. Turned into `images` in the main process, which is the
+   * side that can read the files.
+   */
+  screenshots?: string[]
+  /** The screenshots that could be read, by the number the transcript gives them. */
+  images?: Screenshot[]
   /** What the user typed themselves during the meeting - weighted above the transcript. */
   notes: string
   /** The previous meeting with the same person, when there is one. */
@@ -632,7 +721,7 @@ export function applyGlossary(
  * point is only theirs: "I'll look into it" is a promise, "he'll send it over" is
  * not, and a list that mixes the two is a list you cannot act on.
  */
-function instruction(request: SummaryRequest): string {
+export function instruction(request: SummaryRequest): string {
   const language = request.language === 'sv' ? 'Swedish' : 'English'
 
   /*
@@ -677,14 +766,24 @@ function instruction(request: SummaryRequest): string {
       : `The transcript is labelled by speaker: "${request.speakers.mine}" is the user and "${request.speakers.theirs}" is the other side. The labels come from which microphone the sound arrived on rather than from recognising anybody's voice, so they are reliable about WHOSE side spoke - use them to decide whose promise a line is. A turn marked "?" is one the recording could not separate; fall back on the words there.`
 
   /*
-   * A screenshot in the transcript is a time and nothing more.
+   * The screenshots, and what the model may say about them.
    *
-   * The model is told `[14:32] (skärmbild)` because that is honestly all this
-   * call carries: `ask` runs with its tools off and sends text, so nothing here
-   * has looked at the picture. Saying so is what stops it describing one.
+   * Pasted mid-meeting, a screenshot is what the words were pointing at - "den
+   * här", "där", "om du går tillbaka" - so a summary that cannot see it has the
+   * pointing and not the thing. They are attached after this text, each under
+   * the label the transcript uses, so the model can read one together with what
+   * was said around its moment.
+   *
+   * Two limits, both stated. Describe only what is visible: a screenshot is
+   * evidence and the model must not narrate past it. And no section of their
+   * own - they make the existing sections specific, they are not a fifth list.
+   * A label whose picture could not be sent is told apart rather than hidden,
+   * because the alternative is a model inventing what one showed.
    */
   const marks =
-    'A line like "[14:32] (skärmbild)" marks a screenshot the user pasted at that moment, and "[14:32] ..." marks something they typed then. You cannot see the screenshots - never describe what one showed. Treat them only as evidence that the moment mattered.'
+    request.images !== undefined && request.images.length > 0
+      ? 'A line like "[14:32] (skärmbild 2)" marks a screenshot the user pasted at that moment, and "[14:32] ..." marks something they typed then. The screenshots are attached after the transcript, each under the same label. Read each one together with what was being said around its time: it shows what was on screen while it was discussed, which the words often only point at. Use what it shows where it makes the summary more specific - which view, which filter, which number - but describe only what is actually visible, and do not give the screenshots a section of their own. A label with no attached picture is one that could not be sent: treat it only as evidence that the moment mattered, and never describe it.'
+      : 'A line like "[14:32] (skärmbild 1)" marks a screenshot the user pasted at that moment, and "[14:32] ..." marks something they typed then. You cannot see the screenshots - never describe what one showed. Treat them only as evidence that the moment mattered.'
 
   /*
    * The note's own questions, asked as a second job in the same call.
@@ -814,6 +913,15 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
     prompt: instruction(request),
     model: request.model,
     schema: schemaFor(request.kind === 'note' ? 'one-to-one' : request.conversation),
+    // A meeting's only. A note summarised as a note is asked about its own text.
+    images:
+      request.kind === 'note'
+        ? undefined
+        : request.images?.map((image) => ({
+            mediaType: image.mediaType,
+            data: image.data,
+            label: screenshotLabel(image.number)
+          })),
     // Fifteen minutes: a long transcript on a busy machine is not a hung call,
     // and the default would give up on exactly the meetings worth summarising.
     timeoutMs: 15 * 60 * 1000

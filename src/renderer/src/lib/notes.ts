@@ -2014,18 +2014,36 @@ export function applyTimeMarks(root: HTMLElement): void {
  * said around it mattered enough to keep. Threaded in at the right line it costs
  * one line of text and tells the model where to look.
  *
- * It says `(skärmbild)` and not what the picture showed, because nothing here
- * has seen it: the summary call sends text with its tools off. The instruction
- * says so as well, so the model does not fill the gap in.
+ * A screenshot is numbered - `(skärmbild 2)` - and its `src` is handed back in
+ * the same order, so the summary call can attach the picture itself under the
+ * same label. The number is what ties the moment in the words to the image; a
+ * bare `(skärmbild)` could only say that something was on screen, not what.
  */
 export function transcriptsWithMarks(root: HTMLElement): string {
+  return transcriptsWithScreenshots(root).text
+}
+
+/** The same text, and the `src` of each screenshot it numbers, in order. */
+export function transcriptsWithScreenshots(root: HTMLElement): {
+  text: string
+  screenshots: string[]
+} {
+  const screenshots: string[] = []
+  const say = (mark: { owner: HTMLElement; at: number; text: string }): string => {
+    if (mark.owner.tagName !== 'IMG') {
+      return `[${clock(mark.at)}] ${mark.text}`
+    }
+    screenshots.push(mark.owner.getAttribute('src') ?? '')
+    return `[${clock(mark.at)}] (skärmbild ${screenshots.length})`
+  }
+
   const blocks = Array.from(
     root.querySelectorAll<HTMLElement>('[data-recording], [data-transcript]')
   )
   const transcripts = blocks.filter((block) => block.hasAttribute('data-transcript'))
   const all = timeMarks(root)
 
-  return transcripts
+  const text = transcripts
     .map((transcript) => {
       const at = blocks.indexOf(transcript)
       const before = at > 0 ? blocks[at - 1] : undefined
@@ -2051,18 +2069,20 @@ export function transcriptsWithMarks(root: HTMLElement): string {
         while (pending.length > 0 && seconds !== null && pending[0].at <= seconds) {
           const mark = pending.shift()
           if (mark !== undefined) {
-            lines.push(`[${clock(mark.at)}] ${mark.text}`)
+            lines.push(say(mark))
           }
         }
         lines.push(line.textContent ?? '')
       }
       // Anything marked after the last spoken line still happened.
       for (const mark of pending) {
-        lines.push(`[${clock(mark.at)}] ${mark.text}`)
+        lines.push(say(mark))
       }
       return lines.join('\n')
     })
     .join('\n\n')
+
+  return { text, screenshots }
 }
 
 /**

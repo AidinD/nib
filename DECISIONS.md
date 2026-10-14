@@ -3,6 +3,43 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-10-14 - The summary sees the screenshots
+
+**The report.** "När jag lägger till bilder som marks när jag recordar - hur kommer
+claude åt dem? det verkar inte gå." It did not. The summary was told
+`[3:04] (skärmbild)` and instructed that it could not see the picture, so in a
+meeting spent pointing at a screen ("den här", "om du går tillbaka") it had the
+pointing and not the thing pointed at.
+
+**Decided.** The transcript numbers its screenshots - `(skärmbild 2)` - and the
+summary call attaches each picture under that same label, through keel's `ask`,
+which now takes images (keel 0.1.28, stream-json input; see keel's DECISIONS).
+The renderer sends only the `nib-asset:` URLs; the main process reads the files
+through the asset resolver, so nothing the renderer sends becomes an arbitrary
+file read. Meetings only - a note summarised as a note is asked about its text.
+
+**The limits, and why they are what they are.**
+- *Numbered, with gaps kept.* A screenshot that cannot be sent - an SVG, a missing
+  file, one over the API's size limit - is skipped and its number is not reused,
+  so every later picture stays on its own moment. The instruction says a label
+  with no picture is only evidence the moment mattered, which is the old rule.
+- *At most twenty.* Each picture costs roughly a page of transcript; past twenty
+  the first ones have already said what was on screen.
+- *Describe only what is visible, no section of their own.* The pictures make the
+  existing sections specific - which export, which week - rather than becoming a
+  fifth list that narrates screenshots back at him.
+
+**What it changes about "the one step that leaves the machine".** It now sends
+the screenshots as well as the text. They are pictures he pasted into the note
+himself and can see in it, which is the same test the text passed: nothing goes
+that is not on the page in front of him.
+
+**Verified** against the built app on a seeded meeting whose transcript only
+says "exporten" and "den här veckan", with the content only in two drawn
+screenshots. The Haiku summary came back with "fakturaexporten för oktober",
+"status EJ SKICKAD" and "schema för vecka 44" - words that exist only in the
+pictures.
+
 ## 2026-09-11 - The audio you are keeping, where you can see it
 
 **The report.** "Sometimes I forget to clear out audio files, so I would like an

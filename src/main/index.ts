@@ -24,7 +24,7 @@ import {
   sweepRecordings
 } from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
-import { readGlossary, summarise } from './summary'
+import { loadScreenshots, readGlossary, summarise } from './summary'
 import type { SummaryRequest } from './summary'
 import { NoteStorage } from './storage'
 import {
@@ -306,9 +306,19 @@ function registerIpc(): void {
    *
    * Read per call, so editing `glossary.txt` takes effect on the next press
    * instead of on the next restart.
+   *
+   * The screenshots are read here for the same reason, and only through the
+   * asset resolver: the renderer names them by `nib-asset:` URL, and nothing
+   * else it could send is turned into a file read.
    */
   ipcMain.handle('summary:run', (_event, request: SummaryRequest) =>
-    summarise({ ...request, glossary: readGlossary(resolveDataDir()) })
+    summarise({
+      ...request,
+      glossary: readGlossary(resolveDataDir()),
+      images: loadScreenshots(request.screenshots ?? [], (src) =>
+        src.startsWith(`${ASSET_SCHEME}:`) ? resolveAssetPath(src) : null
+      )
+    })
   )
 
   /*

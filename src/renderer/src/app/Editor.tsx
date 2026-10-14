@@ -51,7 +51,7 @@ import {
   transcriptForRecording,
   transcriptLineAt,
   transcriptSpeakers,
-  transcriptsWithMarks,
+  transcriptsWithScreenshots,
   insertSummary,
   withSummary,
   notePrompts,
@@ -1777,6 +1777,7 @@ export function Editor({
       const previous =
         earlier === undefined ? undefined : (await window.nib.readNote(earlier.id))?.html
 
+      const marked = transcriptsWithScreenshots(root)
       const result = await window.nib.summarise({
         kind: source === 'transcripts' ? 'meeting' : 'note',
         conversation: conversationKind,
@@ -1787,7 +1788,13 @@ export function Editor({
          * A screenshot pasted at eleven minutes is a fact about the meeting that
          * the words themselves do not hold.
          */
-        transcript: transcriptsWithMarks(root),
+        transcript: marked.text,
+        /*
+         * The screenshots themselves, numbered as the transcript numbers them.
+         * Sent as asset URLs: the main process reads the files, so the pictures
+         * never pass through here as data.
+         */
+        screenshots: source === 'transcripts' ? marked.screenshots : undefined,
         notes: source === 'transcripts' ? ownNotes(root) : (root.textContent ?? ''),
         previous: previous === undefined ? undefined : htmlToText(previous).slice(0, 8000),
         // Only when the recording actually kept the two sides apart. Absent, the

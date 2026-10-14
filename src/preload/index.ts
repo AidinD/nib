@@ -120,6 +120,8 @@ const api = {
     /** What kind of conversation it was, which decides which sections exist. */
     conversation?: 'one-to-one' | 'check-in' | 'meeting' | 'status'
     transcript: string
+    /** The `src` of each screenshot the transcript numbers, in that order. */
+    screenshots?: string[]
     notes: string
     previous?: string
     /** The names the transcript labels its turns with, when it has any. */
