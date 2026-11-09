@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
 import { CanvasEditor } from './CanvasEditor'
 import { ConfirmModal } from './ConfirmModal'
+import { ImageViewer } from './ImageViewer'
+import { collectImages } from '../lib/lightbox'
 import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDivider } from '../lib/markdown'
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { NotePicker, listNotes } from './NotePicker'
@@ -167,6 +169,8 @@ export function Editor({
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [words, setWords] = useState(0)
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null)
+  /** The picture open in the viewer: every picture in the note, and which one. */
+  const [viewer, setViewer] = useState<{ sources: string[]; index: number } | null>(null)
   /*
    * The column row the caret was last put in, if any.
    *
@@ -2063,6 +2067,27 @@ export function Editor({
     [onBodyInput, selectedImage]
   )
 
+  /**
+   * Open a picture in the viewer.
+   *
+   * A double-click, or "Enlarge" on the toolbar a click brings up - never the
+   * single click. A single click on an image selects it, and the toolbar that
+   * appears is the only way to resize or remove it; taking the click for the
+   * viewer would either lose that or open an overlay every time someone meant to
+   * delete a screenshot. A double-click has no other meaning on an image.
+   */
+  const openViewer = useCallback((image: HTMLImageElement) => {
+    if (bodyRef.current !== null) {
+      setViewer(collectImages(bodyRef.current, image))
+    }
+  }, [])
+
+  const closeViewer = useCallback(() => {
+    setViewer(null)
+    // Back to the note, so typing carries on where it was.
+    bodyRef.current?.focus({ preventScroll: true })
+  }, [])
+
   const removeImage = useCallback(() => {
     selectedImage?.remove()
     setSelectedImage(null)
@@ -3331,8 +3356,13 @@ export function Editor({
           </div>
         )}
 
+        {viewer !== null && (
+          <ImageViewer sources={viewer.sources} start={viewer.index} onClose={closeViewer} />
+        )}
+
         {selectedImage !== null && (
           <div className="image-toolbar">
+            <button type="button" onClick={() => openViewer(selectedImage)}>Enlarge</button>
             <button type="button" onClick={() => resizeImage(0.8)}>Smaller</button>
             <button type="button" onClick={() => resizeImage(1.25)}>Larger</button>
             <button type="button" className="danger" onClick={removeImage}>Remove</button>
@@ -3352,6 +3382,13 @@ export function Editor({
           onBlur={() => {
             if (saveState !== 'saved') {
               void save()
+            }
+          }}
+          onDoubleClick={(event) => {
+            const target = event.target as HTMLElement
+            if (target.tagName === 'IMG' && target.closest('[data-canvas]') === null) {
+              event.preventDefault()
+              openViewer(target as HTMLImageElement)
             }
           }}
           onClick={(event) => {

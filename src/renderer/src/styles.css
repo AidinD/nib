@@ -1272,6 +1272,147 @@ mark:not([data-tint]) {
   font-size: 11px;
 }
 
+/* ---------- image viewer ---------- */
+
+/*
+ * Above the confirmation modal (50) and everything in the note. The backdrop is
+ * dark in any theme: a picture reads best against a quiet field, and the controls
+ * take the app's own surface colours so they follow whatever the theme is.
+ */
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.86);
+}
+
+.viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 48px;
+  overflow: hidden;
+  outline: none;
+}
+
+/* margin: auto centres without clipping the start of a scrollable overflow. */
+.viewer-stage > img {
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+
+.viewer-stage > img.is-zoomable {
+  cursor: zoom-in;
+}
+
+.viewer-stage.is-actual {
+  overflow: auto;
+  padding: 0;
+}
+
+.viewer-stage.is-actual > img {
+  max-width: none;
+  max-height: none;
+  flex: none;
+  cursor: grab;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.viewer-missing {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+  padding: 18px;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  font-size: 12.5px;
+}
+
+.viewer-missing strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.viewer-missing span:not(.viewer-missing-hint) {
+  word-break: break-all;
+}
+
+.viewer-missing-hint {
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.viewer-close,
+.viewer-step {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+
+.viewer-close:hover,
+.viewer-step:hover {
+  background: var(--surface-hover);
+}
+
+.viewer-close:focus-visible,
+.viewer-step:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.viewer-close {
+  top: 12px;
+  right: 12px;
+}
+
+.viewer-step {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.viewer-step.is-prev {
+  left: 12px;
+}
+
+.viewer-step.is-next {
+  right: 12px;
+}
+
+.viewer-count {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
 /* The same strip, for the row of columns the caret is in. */
 .columns-toolbar {
   align-items: center;

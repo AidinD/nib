@@ -3,6 +3,41 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-09 - A picture in a note opens large
+
+**The report.** "När jag klickar på en inklistrad bild i nib vill jag att den ska
+öppnas och förstoras." A screenshot pasted at reading size could not be inspected.
+
+**Found first.** A single click on an image already means something: it selects
+it and brings up the Enlarge/Smaller/Larger/Remove strip, which is the only way to
+resize or delete one. So the click was not free to take.
+
+**Decided.** A double-click on a picture opens it, and so does "Enlarge" on the
+strip a single click brings up. The single click keeps selecting. Taking it for
+the viewer would either have lost resize and delete or opened an overlay every
+time someone meant to remove a screenshot; a double-click has no other meaning on
+an image, and the button is there for anyone who does not think to try it.
+
+**The viewer** ([ImageViewer.tsx](src/renderer/src/app/ImageViewer.tsx), sums in
+[lightbox.ts](src/renderer/src/lib/lightbox.ts)) is a hand-built overlay, never a
+native dialog or a second window. Esc, a click on the backdrop or the x closes it.
+The picture is shown at 100% if the window holds it and shrunk to fit if not -
+never upscaled, because a blown-up small screenshot is the blur it exists to avoid
+- and a click on the picture toggles actual size, where the stage scrolls and a
+drag pans. Left and Right step through the other pictures in the note. A file that
+is not there says "Image file missing" and names it, instead of an empty overlay.
+
+**What it covers.** Every `<img>` in the note body, which is every `nib-asset://`
+picture, old notes included. A transcript's screenshots are in the same editable
+body, so there is no separate read-only view to wire. A drawing block's rendered
+image is excluded: clicking it opens the drawing, and it is not a picture in the
+note to step to.
+
+**Verified** against the built app on a seeded notebook: single click selects and
+does not open, double-click and Enlarge open, a 2400x1400 shows fitted and then at
+actual size scrollable, a 300x200 stays at 100%, the third picture shows the
+missing state, and Esc, backdrop and x all close it.
+
 ## 2026-10-14 - The summary sees the screenshots
 
 **The report.** "När jag lägger till bilder som marks när jag recordar - hur kommer
