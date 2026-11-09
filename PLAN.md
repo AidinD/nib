@@ -80,6 +80,7 @@ cosmetic.
 - **Confirmations**: deleting a note, a category or a sub-category asks first, in the app's own dialog, with a message that says what goes with it.
 - **Drag and drop in every list**: dropping a card in a flat list - All notes, Recent, Needs you - moves the note to wherever the card it landed on lives. Only a category's own list can reorder freely, because that is the only place an order is stored.
 - **Image viewer**: double-click a picture in a note, or Enlarge on the strip a single click brings up, opens it in an overlay - fit to the window, click for actual size, arrows between the note's pictures, a missing file named. See DECISIONS 2026-11-09.
+- **Updates**: checked at launch and hourly, announced by a strip with Restart and update, logged to `updater.log` in userData, installed on quit otherwise. See DECISIONS 2026-11-09.
 - **A test harness** in [scripts/e2e.mjs](scripts/e2e.mjs): drives the renderer over the DevTools protocol instead of the pointer.
 - **Drag and drop** on the native API: notes reorder within a category, categories reorder against each other, and a note dropped on a sub-category or category row moves there. The insertion marker is the spec's 3px inset accent bar with its glow, not a hairline - Jot's own CSS records why.
 

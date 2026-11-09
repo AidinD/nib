@@ -17,6 +17,7 @@ function asPlainText(html: string): string {
   return (holder.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 import { AlertStrip } from './AlertStrip'
+import { UpdateStrip } from './UpdateStrip'
 import { Launcher } from './Launcher'
 import { PracticeStrip } from './PracticeStrip'
 import { ConfirmModal } from './ConfirmModal'
@@ -655,6 +656,8 @@ export function App(): React.JSX.Element {
           </div>
         </div>
       </header>
+
+      <UpdateStrip />
 
       <AlertStrip
         index={index}

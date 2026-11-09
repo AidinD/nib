@@ -174,6 +174,19 @@ const api = {
     }
   },
 
+  /** The version downloaded and waiting for a restart, or null. */
+  pendingUpdate: (): Promise<string | null> => ipcRenderer.invoke('update:pending'),
+
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
+
+  onUpdateReady: (handler: (version: string) => void): (() => void) => {
+    const listener = (_event: unknown, version: string): void => handler(version)
+    ipcRenderer.on('update:ready', listener)
+    return () => {
+      ipcRenderer.removeListener('update:ready', listener)
+    }
+  },
+
   onIndexChanged: (handler: () => void): (() => void) => {
     const listener = (): void => handler()
     ipcRenderer.on('index:changed', listener)

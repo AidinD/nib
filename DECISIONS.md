@@ -3,6 +3,43 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-09 - An open app finds updates, and says so
+
+**The report.** "Nib blir inte auto updated" - the installed app did not pick up
+0.24.4, published that morning.
+
+**What was actually wrong.** Not the feed and not the release: `latest.yml` named
+0.24.4, the release was latest and neither draft nor prerelease, the installed
+`app-update.yml` pointed at AidinD/nib, and a Nib launched after the release
+downloaded `Nib-Setup-0.24.4.exe` into `%LOCALAPPDATA%
+ib-updater\pending` at
+exactly the size `latest.yml` gives. The updater worked. What it did was check
+**once, at launch**, download quietly and install **only on quit** - and Nib is
+left open for days, so an update published while it was open reached nobody until
+they happened to quit it, with nothing on screen to say one was waiting. There
+was also no log: electron-updater logs to the console, and a packaged app has no
+console, so "did it even check?" could not be answered afterwards.
+
+**Decided.** [updater.ts](src/main/updater.ts): check at launch and then hourly
+until a download lands; tell the renderer, which shows
+[UpdateStrip](src/renderer/src/app/UpdateStrip.tsx) - "Nib X is ready", Restart
+and update, Later; write `updater.log` in userData. Install-on-quit stays as the
+fallback. The restart is silent and runs the app again (`quitAndInstall(true,
+true)`); the library's default shows the installer wizard and leaves the app shut.
+
+**Rejected.** Restarting by itself on download - a meeting may be recording, and
+a window vanishing under someone is worse than a strip they dismiss. electron-log -
+a dependency for one file append.
+
+**Verified** on a packaged build of this code stamped 0.24.3, run in a scratch
+profile (own userData, own LOCALAPPDATA so the cache could not touch the real
+one) against the real GitHub feed: it found 0.24.4, downloaded it past a 504 on
+the blockmap by falling back to a full download, the strip appeared with the
+right text, and `updater.log` told the story. **Not verified:** the installer
+actually running. It shares an app id with the real install, so running it in a
+scratch folder would have overwritten the real install's registry entry and its
+"close the running app" step kills by name.
+
 ## 2026-11-09 - A picture in a note opens large
 
 **The report.** "När jag klickar på en inklistrad bild i nib vill jag att den ska
