@@ -3,6 +3,29 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-10 - A checklist's box starts where a bullet does
+
+**The report.** Checklists should be indented a little, the way bullet lists
+are.
+
+**Measured, in the running app, against a bullet list** (left edges, px past
+the paragraph text): bullet dot 5, number 8, checklist box 1 - at the first
+level; 26 and 24 nested; 49 and 45 one deeper. The item TEXT was already at
+22 / 44 / 66 in all three kinds of list. So the list was indented; the box was
+not. An image marker is placed by its right edge, and the first box was 14px
+wide with a margin of its own on the right, so it reached back almost to the
+paragraph's own left edge.
+
+**Decided.** The box image is 11px wide with no right margin and the box itself
+slightly smaller: it now starts at 4 / 26 / 48, within a pixel of the bullet at
+every level, and the text has not moved. `test/e2e/checklist-indent.steps.mjs`
+measures it by scanning a screenshot, since neither a bullet nor the box is in
+the DOM to be asked for its rectangle.
+
+**Rejected.** Pushing checklist items further in with a margin. It moves the text
+out of line with the bullets beside it, and every flag rule in the margin is an
+offset from the item's own box, so each would have needed a checklist variant.
+
 ## 2026-11-10 - A picture pasted during a recording goes in with its timestamp
 
 **The report.** Pasting a screenshot during a recording left the caret BEFORE
