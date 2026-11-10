@@ -4,7 +4,8 @@
  * Two families, triggered at different moments:
  *
  *  - Block shortcuts fire on the SPACE that follows a prefix at the start of a
- *    line: `# `, `## `, `### `, `- `, `* `, `1. `, `> `.
+ *    line: `# `, `## `, `### `, `- `, `* `, `1. `, `> `, and `[ ] ` / `[x] `
+ *    for a checklist item.
  *  - Inline shortcuts fire on the character that CLOSES a pair: `**bold**`,
  *    `*italic*`, `_italic_`, `` `code` ``.
  *
@@ -19,7 +20,8 @@
  * the key when it did.
  */
 
-import { normaliseLists } from './notes'
+import { keepingCaret, normaliseLists } from './notes'
+import { taskPrefixState } from './tasks'
 
 /** Where the caret is, when it is a plain collapsed caret in a text node. */
 interface Caret {
@@ -85,7 +87,8 @@ const BLOCK_SHORTCUTS: Array<{ prefix: RegExp; run: () => void }> = [
  * Turn a line-start prefix into a block, on the space that follows it.
  *
  * Skipped inside a list item: `- ` in a bullet is someone writing a dash, and
- * nesting is Tab's job. Skipped inside code, where the characters mean
+ * nesting is Tab's job. The checklist prefix is the exception, below. Skipped
+ * inside code, where the characters mean
  * themselves.
  */
 export function applyBlockShortcut(root: HTMLElement, blockOfCaret: HTMLElement | null): boolean {
@@ -93,12 +96,45 @@ export function applyBlockShortcut(root: HTMLElement, blockOfCaret: HTMLElement 
   if (caret === null || blockOfCaret === null) {
     return false
   }
-  if (blockOfCaret.tagName === 'LI' || caret.node.parentElement?.closest('code, pre') != null) {
+  if (caret.node.parentElement?.closest('code, pre') != null) {
     return false
   }
 
   const before = (caret.node.textContent ?? '').slice(0, caret.offset)
   if (textBefore(blockOfCaret, caret.node).length > 0) {
+    return false
+  }
+
+  /*
+   * `[ ] ` makes a checklist item, and `[x] ` a ticked one.
+   *
+   * The one block shortcut that also works INSIDE a list item: `- [ ] ` is how
+   * markdown writes a task, so the habit is to type a bullet first and the box
+   * second. Here the bullet the dash already made is turned into a task rather
+   * than a list being started inside it. An item that is already a task keeps
+   * the brackets as typed.
+   */
+  const task = taskPrefixState(before)
+  if (task !== null) {
+    let item = blockOfCaret.tagName === 'LI' ? blockOfCaret : null
+    if (item?.dataset.task !== undefined) {
+      return false
+    }
+    selectRange(caret, caret.offset - before.length, caret.offset)
+    document.execCommand('delete')
+    if (item === null) {
+      keepingCaret(root, () => document.execCommand('insertUnorderedList'))
+      const anchor = window.getSelection()?.anchorNode ?? null
+      const from = anchor instanceof HTMLElement ? anchor : (anchor?.parentElement ?? null)
+      item = from?.closest<HTMLElement>('li') ?? null
+    }
+    if (item !== null && root.contains(item)) {
+      item.dataset.task = task
+    }
+    return true
+  }
+
+  if (blockOfCaret.tagName === 'LI') {
     return false
   }
 

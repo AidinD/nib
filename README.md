@@ -14,7 +14,7 @@ things are the way they are.
 ## What it does
 
 - **Three panes**: a three-level sidebar on the left (smart lists, categories, sub-categories), the note list in the middle, the editor on the right.
-- **Real formatting**: headings, bold, italic, underline, strikethrough, inline code, bullet and numbered lists, quotes, dividers.
+- **Real formatting**: headings, bold, italic, underline, strikethrough, inline code, bullet and numbered lists, checklists, quotes, dividers.
 - **Images inline**: paste, drop or insert. They are stored beside the notes and referenced, not embedded, and a selected image can be resized or removed.
 - **Sub-categories**, one level deep, so a note can live under `Manager meeting › February`. Drag a note onto a row to move it.
 - **Sticky notes**: pinning a note opens a small always-on-top window bound to the same file, and pinned notes get their windows back on start.

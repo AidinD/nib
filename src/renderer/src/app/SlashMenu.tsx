@@ -38,6 +38,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: 'body', label: 'Body text', keywords: ['paragraph', 'text', 'brödtext'] },
   { id: 'bullets', label: 'Bulleted list', keywords: ['ul', 'punkter', 'lista'] },
   { id: 'numbers', label: 'Numbered list', keywords: ['ol', 'nummer', 'lista'] },
+  {
+    id: 'checklist',
+    label: 'Checklist',
+    keywords: ['todo', 'task', 'checkbox', 'steps', 'att göra', 'steg', 'bock', 'lista'],
+    hint: '[ ] and a space'
+  },
   { id: 'quote', label: 'Quote', keywords: ['blockquote', 'citat'] },
   { id: 'code', label: 'Code', keywords: ['monospace', 'kod'] },
   { id: 'divider', label: 'Divider', keywords: ['hr', 'line', 'avdelare'] },

@@ -995,6 +995,52 @@ textarea {
   color: var(--text-dim);
 }
 
+/*
+ * Checklists: `<li data-task="open|done">`, the box drawn where the bullet goes.
+ *
+ * The box IS the list marker, as an image - not `::before`, which every list
+ * item already spends on its alert flag, and not an `<input>`, which would be
+ * content (see lib/tasks.ts). A click in the marker's place ticks it.
+ *
+ * The images are drawn in the palette's own colours: the open box in
+ * --text-dim, the ticked one filled with --green on --bg, green being the token
+ * this palette already uses for "dealt with". An SVG in a data URL cannot read a
+ * custom property, so the hex values are repeated here; they are named as
+ * properties so a change of palette has one place to land.
+ *
+ * `list-style-image` is inherited, so an ordinary bullet nested under a task
+ * would grow a box of its own; the second rule puts it back.
+ */
+.doc-body,
+.sticky-body {
+  --task-open: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Crect x='1.5' y='1.5' width='11' height='11' rx='2.5' fill='none' stroke='%239a9da3' stroke-width='1.3'/%3E%3C/svg%3E");
+  --task-done: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Crect x='1' y='1' width='12' height='12' rx='2.5' fill='%235fd0a0'/%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%231b1c1f' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.doc-body li[data-task],
+.sticky-body li[data-task] {
+  list-style-image: var(--task-open);
+}
+
+.doc-body li:not([data-task]),
+.sticky-body li:not([data-task]) {
+  list-style-image: none;
+}
+
+/*
+ * A ticked step stays readable but steps back: the text dims and is struck
+ * through, in a quieter colour than the text so the line does not turn into a
+ * row of bars. Kept in the note rather than hidden, for the same reason a
+ * dealt-with flag is - what was done is the useful part of a procedure.
+ */
+.doc-body li[data-task='done'],
+.sticky-body li[data-task='done'] {
+  list-style-image: var(--task-done);
+  color: var(--text-dim);
+  text-decoration: line-through;
+  text-decoration-color: rgba(154, 157, 163, 0.55);
+}
+
 .doc-body blockquote {
   margin: 10px 0;
   padding-left: 12px;

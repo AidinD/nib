@@ -3,6 +3,65 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-10 - A list can be a checklist, and its boxes are drawn, not inserted
+
+**The request.** A to-do list, or a step-by-step procedure to follow, written in
+a note and ticked off item by item.
+
+**Decided.** A checklist item is `<li data-task="open">` or `data-task="done"`,
+in an ordinary `ul`. It is started with `[ ] ` or `[x] ` at the start of a line
+(or of a bullet, so `- [ ] ` works as markdown writes it), `Ctrl+Shift+9`, the
+Checklist button or `/checklist`. A click on the box ticks it, and
+`Ctrl+Shift+Enter` ticks the item the caret is in. Enter after an item makes a
+new open one, Enter on an empty one leaves the list, and Tab and Shift+Tab nest
+as bullets do. A ticked item is dimmed and struck through. Read as text - the
+summary, the external reader - an item comes out as `[ ]` or `[x]`; the card
+preview, the word count and search leave the markers out. See
+[tasks.ts](src/renderer/src/lib/tasks.ts).
+
+**This does not undo "the alert mark is a flag, not a checkbox"** (2026-08-23).
+That decision was about marking any line as needing attention, where a column of
+empty boxes would have said every line was a task. A checklist is the case where
+the author did write a list of tasks, and the box is what they asked for. The
+other half of that decision is kept: the box is drawn by CSS, as the item's list
+marker, and never an `<input>` in the document - for the same reason, that a
+control in a contenteditable is content the caret can land beside and delete
+halfway. A checklist item can still carry a flag like any other line.
+
+**The state is on the item, not the list.** Tab moves the `li` into a `ul`
+Chromium makes itself, and Enter clones the `li`; a mark on the list would be
+lost on the first and need re-deriving. The cost is that Chromium's clone copies
+the state too - Enter after a ticked step began the next one ticked - so the
+item that is new after an Enter is set to open by hand. `outdent` builds a new
+item without any of the old one's attributes, so Shift+Tab carries the state
+across by hand as well.
+
+**The box is a `list-style-image`, not `::before`.** Every list item already
+spends `::before` and `::after` on its alert flag. The SVG cannot read a custom
+property, so the palette's hex values are repeated in two named properties next
+to the rule.
+
+**Found on the way, and fixed because nesting a checklist depends on it.** Every
+list command lost the caret's place. After Tab, `normaliseLists` moved the new
+sub-list into its parent item and the caret fell out of it, so a Shift+Tab
+straight after did nothing and typing landed outside the item - for plain
+bullets too. Making a line into a list put the caret at the start of it.
+`keepingCaret` in notes.ts holds the place as a count of characters into the
+line, which survives Chromium rebuilding the item, and puts it back after the
+repair. `outdent`'s habit of wrapping the moved text in
+`<span style="color: var(--text)">` is undone in the same step: the sanitiser
+drops it on save, but until then it kept a ticked step at full strength.
+
+**Rejected.** An `<input type="checkbox">` - see above. A separate list of
+states in the index, keyed by position - stale the moment a line is added above.
+Ticking on Ctrl+Enter, as some editors do - that is save here, and changing what
+it does inside a list would make the save shortcut unreliable.
+
+**Not covered.** A checklist copied from one note and pasted into another
+arrives as plain bullets if Chromium's paste path drops the data attribute, as
+it does for colour spans; not measured. Only the dark palette exists, so there
+was no light theme to check against.
+
 ## 2026-11-09 - An open app finds updates, and says so
 
 **The report.** "Nib blir inte auto updated" - the installed app did not pick up

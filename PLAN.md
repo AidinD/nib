@@ -41,6 +41,7 @@ From the author's own list, with where each one stands.
 | **The Practising lane** | Done - a violet lane under Needs you, read off the flag on every render |
 | **Moving a recording** | Done - block, transcript and marks travel together, and the audio file is renamed |
 | **Seeing the audio** | Done - a Recordings row with the total, a size chip per card, and discard from the card menu |
+| **Checklists** | Done - `[ ] ` at a line start, Ctrl+Shift+9, the toolbar or `/checklist`; a click on the box ticks it, and the state is saved in the note |
 
 Alerts and columns both arrived after the design spec was written, so the spec
 does not cover them; their design is recorded in DECISIONS instead. A flag sits on a

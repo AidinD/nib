@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { STICKY_TINTS } from '@shared/types'
 import { useNib } from '../lib/useNib'
 import { applyPrefs, readPrefs } from '../lib/prefs'
+import { taskAtPoint, toggleTask } from '../lib/tasks'
 import {
   applyColumnBlocks,
   applyImageWidths,
@@ -218,6 +219,18 @@ export function StickyWindow({ noteId }: { noteId: string }): React.JSX.Element 
         contentEditable
         suppressContentEditableWarning
         onInput={scheduleSave}
+        onMouseDown={(event) => {
+          // A checklist box ticks here as it does in the editor - a sticky is
+          // where a short list of steps is most likely to be kept open.
+          const root = bodyRef.current
+          const item =
+            event.button !== 0 || root === null ? null : taskAtPoint(root, event.clientX, event.clientY)
+          if (item !== null) {
+            event.preventDefault()
+            toggleTask(item)
+            scheduleSave()
+          }
+        }}
         onBlur={() => void save()}
       />
 

@@ -69,6 +69,7 @@ import {
   normaliseBlocks,
   leaveEmptyItem,
   normaliseLists,
+  keepingCaret,
   blockAtSelection,
   bodyHasDrawing,
   bodyHasImage,
@@ -83,9 +84,11 @@ import {
   placeRecording,
   relativeTime,
   sanitizeHtml,
+  textWithTasks,
   wordCount
 } from '../lib/notes'
 import type { CaretMarks } from '../lib/notes'
+import { itemsInSelection, taskAtPoint, toggleTask } from '../lib/tasks'
 
 /** How long after the last keystroke the note is written to disk. */
 const SAVE_DELAY = 600
@@ -730,6 +733,30 @@ export function Editor({
     if (root === null) {
       return
     }
+    /*
+     * Enter in a checklist item makes an unticked one.
+     *
+     * The browser makes the new item by cloning the one the caret was in, state
+     * and all - so Enter after a ticked step started the next step already
+     * ticked. The items the list has before the edit are remembered here, and
+     * whichever one is new afterwards is set to open. The new one rather than
+     * "the one with the caret": Enter at the very start of an item puts the
+     * empty clone ABOVE it and leaves the caret in the original, whose state is
+     * the one worth keeping.
+     */
+    let splitting: { list: Element; before: Set<Element> } | null = null
+    const onInput = (event: Event): void => {
+      const pending = splitting
+      splitting = null
+      if (pending === null || (event as InputEvent).inputType !== 'insertParagraph') {
+        return
+      }
+      for (const item of pending.list.children) {
+        if (item.tagName === 'LI' && !pending.before.has(item)) {
+          ;(item as HTMLElement).dataset.task = 'open'
+        }
+      }
+    }
     const onBeforeInput = (event: Event): void => {
       const input = event as InputEvent
       // A real edit means the browser's undo stack now holds something newer
@@ -742,6 +769,10 @@ export function Editor({
 
       if (input.inputType === 'insertParagraph') {
         handled = applyDividerShortcut(root, line)
+        const task = line?.closest('li[data-task]') ?? null
+        if (!handled && task?.parentElement != null) {
+          splitting = { list: task.parentElement, before: new Set(task.parentElement.children) }
+        }
       } else if (input.data === ' ') {
         handled = applyBlockShortcut(root, line)
       } else if (input.data === '*' || input.data === '`' || input.data === '_') {
@@ -771,8 +802,10 @@ export function Editor({
       }
     }
     root.addEventListener('beforeinput', onBeforeInput)
+    root.addEventListener('input', onInput)
     return () => {
       root.removeEventListener('beforeinput', onBeforeInput)
+      root.removeEventListener('input', onInput)
     }
   })
 
@@ -827,6 +860,64 @@ export function Editor({
     },
     [onBodyInput, withSelection]
   )
+
+  /**
+   * Make the lines in the selection a checklist, or turn a checklist back into
+   * bullets.
+   *
+   * Like the Bullets button, it is a toggle: when every item it touches is
+   * already a task, it takes the boxes off and leaves the bullets. Lines that are
+   * not in a list yet become one first. Items in a numbered list keep their list
+   * and gain a box in place of the number.
+   */
+  const toggleChecklist = useCallback(() => {
+    const root = bodyRef.current
+    if (root === null) {
+      return
+    }
+    withSelection(() => {
+      const selection = window.getSelection()
+      if (selection === null || selection.rangeCount === 0) {
+        return
+      }
+      let items = itemsInSelection(root, selection.getRangeAt(0))
+      if (items.length > 0 && items.every((item) => item.dataset.task !== undefined)) {
+        for (const item of items) {
+          delete item.dataset.task
+        }
+      } else {
+        if (items.length === 0) {
+          keepingCaret(root, () => document.execCommand('insertUnorderedList'))
+          const after = window.getSelection()
+          items =
+            after === null || after.rangeCount === 0
+              ? []
+              : itemsInSelection(root, after.getRangeAt(0))
+        }
+        for (const item of items) {
+          if (item.dataset.task === undefined) {
+            item.dataset.task = 'open'
+          }
+        }
+      }
+      onBodyInput()
+    })
+  }, [onBodyInput, withSelection])
+
+  /** Tick off the checklist item the caret is in, or un-tick it. */
+  const tickTaskAtCaret = useCallback((): boolean => {
+    const root = bodyRef.current
+    const item =
+      root === null
+        ? null
+        : (blockAtSelection(root)?.closest<HTMLElement>('li[data-task]') ?? null)
+    if (item === null) {
+      return false
+    }
+    toggleTask(item)
+    onBodyInput()
+    return true
+  }, [onBodyInput])
 
   /**
    * Flag the block the caret is in as an action point, or clear the flag.
@@ -1799,8 +1890,8 @@ export function Editor({
          * never pass through here as data.
          */
         screenshots: source === 'transcripts' ? marked.screenshots : undefined,
-        notes: source === 'transcripts' ? ownNotes(root) : (root.textContent ?? ''),
-        previous: previous === undefined ? undefined : htmlToText(previous).slice(0, 8000),
+        notes: source === 'transcripts' ? ownNotes(root) : textWithTasks(root),
+        previous: previous === undefined ? undefined : htmlToText(previous, true).slice(0, 8000),
         // Only when the recording actually kept the two sides apart. Absent, the
         // model works out whose promise a line was from the words alone, the way
         // it always has.
@@ -2404,6 +2495,9 @@ export function Editor({
         case 'numbers':
           exec('insertOrderedList')
           break
+        case 'checklist':
+          toggleChecklist()
+          break
         case 'quote':
           exec('formatBlock', 'blockquote')
           break
@@ -2450,6 +2544,7 @@ export function Editor({
       insertColumns,
       pickImage,
       toggleAlert,
+      toggleChecklist,
       wrapInCode
     ]
   )
@@ -2709,9 +2804,38 @@ export function Editor({
           }
           return
         }
+        /*
+         * With the caret held where it was - see `keepingCaret`.
+         *
+         * And the span `outdent` wraps the moved text in goes. Chromium
+         * "preserves" the line's colour as `<span style="color: var(--text)">`.
+         * Nothing in Nib is a span with only a style - the sanitiser drops
+         * `style` on save - but until then it pinned the text to full strength,
+         * so a ticked step taken out one level stopped looking ticked.
+         */
+        const nest = (command: 'indent' | 'outdent'): void => {
+          withSelection(() => {
+            keepingCaret(root, () => {
+              document.execCommand(command)
+              for (const span of root.querySelectorAll('li span[style]')) {
+                if (span.attributes.length === 1) {
+                  unwrap(span)
+                }
+              }
+            })
+            onBodyInput()
+          })
+        }
         if (event.shiftKey) {
-          exec('outdent')
-          normaliseLists(root)
+          // `outdent` builds a new item rather than moving the old one, and the
+          // new one has none of its attributes - so a checklist step came out a
+          // plain bullet. Its state is carried across by hand.
+          const task = item.dataset.task
+          nest('outdent')
+          const moved = blockAtSelection(root)?.closest<HTMLElement>('li') ?? null
+          if (task !== undefined && moved !== null) {
+            moved.dataset.task = task
+          }
           return
         }
         /*
@@ -2723,8 +2847,7 @@ export function Editor({
          * that has swallowed its siblings. So the first item stays put.
          */
         if (item.previousElementSibling?.tagName === 'LI') {
-          exec('indent')
-          normaliseLists(root)
+          nest('indent')
         }
         return
       }
@@ -2792,6 +2915,18 @@ export function Editor({
         }
       }
 
+      /*
+       * Ctrl+Shift+Enter ticks off the checklist item the caret is in.
+       *
+       * Ahead of Ctrl+Enter, which saves and would otherwise take it too. Outside
+       * a checklist it falls through to that, so the save shortcut does not
+       * quietly stop working with Shift held.
+       */
+      if (event.ctrlKey && event.shiftKey && event.key === 'Enter' && tickTaskAtCaret()) {
+        event.preventDefault()
+        return
+      }
+
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault()
         void save()
@@ -2825,6 +2960,13 @@ export function Editor({
       if (event.ctrlKey && event.shiftKey && event.code === 'Digit8') {
         event.preventDefault()
         exec('insertUnorderedList')
+        return
+      }
+      // Ctrl+Shift+9 for a checklist, beside Ctrl+Shift+8 for bullets - the pair
+      // other editors use, so the hand already knows it.
+      if (event.ctrlKey && event.shiftKey && event.code === 'Digit9') {
+        event.preventDefault()
+        toggleChecklist()
         return
       }
       if (selectedImage !== null && (event.key === 'Backspace' || event.key === 'Delete')) {
@@ -2917,7 +3059,10 @@ export function Editor({
       save,
       selectedImage,
       slash,
-      toggleAlert
+      tickTaskAtCaret,
+      toggleAlert,
+      toggleChecklist,
+      withSelection
     ]
   )
 
@@ -3030,6 +3175,14 @@ export function Editor({
         <div className="toolbar-group">
           <button type="button" className={mark('bullets')} onClick={() => exec('insertUnorderedList')}>Bullets</button>
           <button type="button" className={mark('numbers')} onClick={() => exec('insertOrderedList')}>1. List</button>
+          <button
+            type="button"
+            className={mark('checklist')}
+            title="Checklist (Ctrl+Shift+9) - or type [ ] and a space"
+            onClick={toggleChecklist}
+          >
+            Checklist
+          </button>
           <button type="button" className={mark('quote')} onClick={() => exec('formatBlock', 'blockquote')}>Quote</button>
           <button type="button" onClick={addDivider}>Divider</button>
           {/* Two, because two is the row you reach for - the third column is one
@@ -3377,6 +3530,25 @@ export function Editor({
           spellCheck
           onInput={onBodyInput}
           onKeyDown={onBodyKeyDown}
+          onMouseDown={(event) => {
+            /*
+             * A click on a checklist box ticks it.
+             *
+             * On mousedown, and the default prevented, so the click does not
+             * also move the caret to the start of the item: ticking a step while
+             * writing further down should leave the caret where it was.
+             */
+            const root = bodyRef.current
+            if (event.button !== 0 || root === null) {
+              return
+            }
+            const item = taskAtPoint(root, event.clientX, event.clientY)
+            if (item !== null) {
+              event.preventDefault()
+              toggleTask(item)
+              onBodyInput()
+            }
+          }}
           onPaste={onPaste}
           onDrop={onDrop}
           onBlur={() => {

@@ -992,6 +992,76 @@ function adoptLooseText(container: HTMLElement): void {
   adopt()
 }
 
+/** A line's own text nodes, in order - not the ones in a sub-list it holds. */
+function ownTextNodes(line: Element): Text[] {
+  const nodes: Text[] = []
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const list = node.parentElement?.closest('ul, ol') ?? null
+    if (list === null || !line.contains(list)) {
+      nodes.push(node as Text)
+    }
+  }
+  return nodes
+}
+
+/**
+ * Run a list edit with the caret held where it was.
+ *
+ * Every list command here loses the caret's place, each in its own way.
+ * `indent` and `outdent` rebuild the item, text node and all. `insertUnorderedList`
+ * merging a line into the list beside it leaves the caret at the START of the
+ * line. And `normaliseLists`, run after each of them, moves nodes - a sub-list
+ * into its parent item - which takes the caret out of them altogether. The
+ * result: after Tab the next Shift+Tab did nothing and typing landed outside the
+ * item, and making a checklist of a line just typed sent the next Enter to the
+ * wrong end of it.
+ *
+ * So the place is held as "this many characters into the line", which survives
+ * any rebuild. After the edit, the line is the one Chromium left the caret in -
+ * it always gets the LINE right, only not the place in it - read before the
+ * lists are repaired, while the caret is still somewhere.
+ */
+export function keepingCaret(root: HTMLElement, edit: () => void): void {
+  const selection = window.getSelection()
+  const before = blockAtSelection(root)
+  let offset: number | null = null
+  if (before !== null && selection !== null && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0)
+    offset = 0
+    for (const node of ownTextNodes(before)) {
+      if (node === range.startContainer) {
+        offset += range.startOffset
+        break
+      }
+      if (range.comparePoint(node, 0) >= 0) {
+        break
+      }
+      offset += node.length
+    }
+  }
+  edit()
+  const line = blockAtSelection(root)
+  normaliseLists(root)
+  if (selection === null || line === null || !line.isConnected || offset === null) {
+    return
+  }
+  const caret = document.createRange()
+  caret.setStart(line, 0)
+  let left = offset
+  for (const node of ownTextNodes(line)) {
+    if (left <= node.length) {
+      caret.setStart(node, left)
+      break
+    }
+    left -= node.length
+    caret.setStart(node, node.length)
+  }
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+}
+
 export function normaliseLists(root: HTMLElement): void {
   for (const nested of root.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol')) {
     const previous = nested.previousElementSibling
@@ -1034,12 +1104,68 @@ export function normaliseLists(root: HTMLElement): void {
       paragraph.replaceWith(list)
     }
   }
+
+  tidyTasks(root)
 }
 
 /** The stored width of an image, or its natural width when it has none yet. */
 export function imageWidth(image: HTMLImageElement): number {
   const stored = Number(image.dataset.w)
   return Number.isFinite(stored) && stored > 0 ? stored : image.naturalWidth
+}
+
+/*
+ * ---------- checklist items, read as text ----------
+ *
+ * Here rather than in tasks.ts because this file is the one that reads a note
+ * as text, and it stays free of runtime imports so the tests can load it
+ * without a bundler. The rest of the checklist lives in tasks.ts.
+ */
+
+/**
+ * The marker an item gets when the note is read as text.
+ *
+ * Markdown's own spelling, so anything reading the text - the summary, the
+ * external reader - sees a ticked step as ticked without knowing about Nib.
+ */
+export function taskMarker(state: string | undefined): string {
+  return state === 'done' ? '[x] ' : '[ ] '
+}
+
+/**
+ * Take `data-task` off anything that is not a list item.
+ *
+ * Shift+Tab on a top-level item, or the Bullets button on one, turns it into a
+ * paragraph - and depending on the path, Chromium may carry the item's
+ * attributes across. A paragraph with a task state draws nothing, but the text
+ * export would still print a box in front of it.
+ */
+export function tidyTasks(root: HTMLElement): void {
+  for (const stray of root.querySelectorAll<HTMLElement>('[data-task]')) {
+    if (stray.tagName !== 'LI') {
+      delete stray.dataset.task
+    }
+  }
+}
+
+/**
+ * Write each task item's marker into its text, for reading the note as text.
+ *
+ * On a detached copy only - the live document never holds the characters. Each
+ * marker goes in as the item's first child, so the flattened line reads
+ * `[x] Call the contractor` and a sub-list's items get their own.
+ */
+export function writeTaskMarkers(root: ParentNode): void {
+  for (const item of root.querySelectorAll<HTMLElement>('li[data-task]')) {
+    item.prepend(document.createTextNode(taskMarker(item.dataset.task)))
+  }
+}
+
+/** An element's text with each task's marker in it, read off a copy. */
+export function textWithTasks(root: HTMLElement): string {
+  const copy = root.cloneNode(true) as HTMLElement
+  writeTaskMarkers(copy)
+  return copy.textContent ?? ''
 }
 
 /**
@@ -1050,11 +1176,14 @@ export function imageWidth(image: HTMLImageElement): number {
  * image's alt text inside one would, so the blocks are removed here rather than
  * trusted to be empty.
  */
-function bodyElement(html: string): HTMLElement {
+function bodyElement(html: string, tasks = false): HTMLElement {
   const holder = document.createElement('div')
   holder.innerHTML = sanitizeHtml(html)
   for (const block of holder.querySelectorAll('[data-canvas]')) {
     block.remove()
+  }
+  if (tasks) {
+    writeTaskMarkers(holder)
   }
   /*
    * A break between the blocks, so reading the whole body as text does not run
@@ -1075,9 +1204,15 @@ function bodyElement(html: string): HTMLElement {
   return holder
 }
 
-/** A note's plain text, used for previews, word counts and search. */
-export function htmlToText(html: string): string {
-  return (bodyElement(html).textContent ?? '').replace(/\s+/g, ' ').trim()
+/**
+ * A note's plain text, used for previews, word counts and search.
+ *
+ * `tasks` writes each checklist item's `[ ]` or `[x]` into the text, for a
+ * reader that should know which steps are done - the summary. Off by default:
+ * a word count that counts the boxes, or a search that matches `x`, is wrong.
+ */
+export function htmlToText(html: string, tasks = false): string {
+  return (bodyElement(html, tasks).textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
 /**
@@ -1377,6 +1512,8 @@ export interface CaretMarks {
   block: string
   /** The nearest list around the caret: UL, OL, or empty. */
   list: string
+  /** Whether the caret's list item is a checklist item. */
+  task?: boolean
   quoted: boolean
   code: boolean
   /** The name of the colour and of the highlight around the caret, or empty. */
@@ -1408,10 +1545,13 @@ export function activeFormats(marks: CaretMarks): string[] {
   if (marks.block === 'P' && !marks.quoted && marks.list.length === 0) {
     active.push('body')
   }
-  if (marks.list === 'UL') {
+  // A checklist item lights Checklist alone: it is in a `ul`, but pressing
+  // Bullets there would not leave it as it is.
+  if (marks.task === true) {
+    active.push('checklist')
+  } else if (marks.list === 'UL') {
     active.push('bullets')
-  }
-  if (marks.list === 'OL') {
+  } else if (marks.list === 'OL') {
     active.push('numbers')
   }
   if (marks.quoted) {
@@ -1485,6 +1625,7 @@ export function readCaretMarks(root: HTMLElement): CaretMarks | null {
   return {
     block: block?.tagName ?? '',
     list: around('ul, ol')?.tagName ?? '',
+    task: (around('li') as HTMLElement | null)?.dataset.task !== undefined,
     quoted: around('blockquote') !== null,
     code: around('code, pre') !== null,
     color: around('span[data-color]')?.getAttribute('data-color') ?? '',
@@ -2291,6 +2432,8 @@ export function ownNotes(root: HTMLElement): string {
   for (const generated of copy.querySelectorAll('[data-transcript], [data-recording], [data-summary]')) {
     generated.remove()
   }
+  // A step ticked off in the note is a fact the summary should not report as open.
+  writeTaskMarkers(copy)
   return (copy.textContent ?? '').replace(/\s{3,}/g, '\n\n').trim()
 }
 

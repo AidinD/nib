@@ -93,7 +93,7 @@ The crumb only appears when the list spans more than one place: listing a whole 
 
 A `--surface` panel with a 1px `--border`, 12px radius and 18px padding, matching Jot's detail panel.
 
-Toolbar: `H1` `H2` `H3` `Body` | `B` `I` `U` `S` `code` | `Bullets` `1. List` `Quote` `Divider` | `Image` `Canvas`, with a "Pin as sticky" / "Sticky" toggle on the right end.
+Toolbar: `H1` `H2` `H3` `Body` | `B` `I` `U` `S` `code` | `Bullets` `1. List` `Checklist` `Quote` `Divider` | `Image` `Canvas`, with a "Pin as sticky" / "Sticky" toggle on the right end.
 
 Document: a borderless 26px title input, a metadata row (category trail, word count, `edited …`, a private tag when the category is scoped Private), then the editable body at 14px / 1.7 line-height in a centred column whose width is adjustable.
 
@@ -111,7 +111,9 @@ Backspace or Delete while selected removes it.
 
 ### Saving
 
-Typing marks the note unsaved and schedules a save 600ms later; the header shows `Saved` or `Saving…`. `Ctrl+Enter` saves immediately. `Ctrl+Shift+8` inserts a bullet list.
+Typing marks the note unsaved and schedules a save 600ms later; the header shows `Saved` or `Saving…`. `Ctrl+Enter` saves immediately. `Ctrl+Shift+8` inserts a bullet list, `Ctrl+Shift+9` a checklist, and `Ctrl+Shift+Enter` ticks the checklist item the caret is in. `[ ] ` or `[x] ` at the start of a line (or of a bullet) starts a checklist item.
+
+A checklist item's box is drawn in the bullet's place: an outlined square in `--text-dim`, filled `--green` with a dark tick once done, and a done item's text turns `--text-dim` and is struck through. A click on the box ticks it without moving the caret.
 
 ## Artboard 2: sticky windows
 
