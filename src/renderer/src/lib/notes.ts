@@ -1023,27 +1023,40 @@ function ownTextNodes(line: Element): Text[] {
  * lists are repaired, while the caret is still somewhere.
  */
 export function keepingCaret(root: HTMLElement, edit: () => void): void {
-  const selection = window.getSelection()
-  const before = blockAtSelection(root)
-  let offset: number | null = null
-  if (before !== null && selection !== null && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    offset = 0
-    for (const node of ownTextNodes(before)) {
-      if (node === range.startContainer) {
-        offset += range.startOffset
-        break
-      }
-      if (range.comparePoint(node, 0) >= 0) {
-        break
-      }
-      offset += node.length
-    }
-  }
+  const offset = caretOffsetInLine(root)
   edit()
   const line = blockAtSelection(root)
   normaliseLists(root)
-  if (selection === null || line === null || !line.isConnected || offset === null) {
+  if (line !== null && line.isConnected && offset !== null) {
+    placeCaretInLine(line, offset)
+  }
+}
+
+/** How many characters into its line the caret is, or null outside any line. */
+export function caretOffsetInLine(root: HTMLElement): number | null {
+  const selection = window.getSelection()
+  const line = blockAtSelection(root)
+  if (line === null || selection === null || selection.rangeCount === 0) {
+    return null
+  }
+  const range = selection.getRangeAt(0)
+  let offset = 0
+  for (const node of ownTextNodes(line)) {
+    if (node === range.startContainer) {
+      return offset + range.startOffset
+    }
+    if (range.comparePoint(node, 0) >= 0) {
+      break
+    }
+    offset += node.length
+  }
+  return offset
+}
+
+/** Put the caret this many characters into a line - its own text, not a sub-list's. */
+export function placeCaretInLine(line: HTMLElement, offset: number): void {
+  const selection = window.getSelection()
+  if (selection === null) {
     return
   }
   const caret = document.createRange()
@@ -1077,9 +1090,21 @@ export function normaliseLists(root: HTMLElement): void {
    * when it takes an item one level out, and it renders as a bullet swallowed by
    * the one above. Notes written before Enter stopped going through `outdent`
    * still contain it, so this heals them on the way in.
+   *
+   * Whatever follows the stray item inside that parent goes WITH it, as its
+   * own sub-list. That is where Chromium puts the items that came after the
+   * one taken out - `<li>one<ul>a</ul><li>b</li><ul>c</ul></li>` for Shift+Tab
+   * on b - and lifting b alone left c behind under "one", so the line taken
+   * out jumped below the one after it: one, a, c, b. Carried along it reads
+   * one, a, b, with c under b, which is the order it was written in.
    */
   for (const stray of root.querySelectorAll('li > li')) {
+    const following: ChildNode[] = []
+    for (let node = stray.nextSibling; node !== null; node = node.nextSibling) {
+      following.push(node)
+    }
     stray.parentElement?.after(stray)
+    stray.append(...following)
   }
 
   /*

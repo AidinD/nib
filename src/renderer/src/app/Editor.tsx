@@ -70,6 +70,8 @@ import {
   leaveEmptyItem,
   normaliseLists,
   keepingCaret,
+  caretOffsetInLine,
+  placeCaretInLine,
   blockAtSelection,
   bodyHasDrawing,
   bodyHasImage,
@@ -90,6 +92,8 @@ import {
 } from '../lib/notes'
 import type { CaretMarks } from '../lib/notes'
 import { itemsInSelection, taskAtPoint, toggleTask } from '../lib/tasks'
+import { outdentNested, outdentTopLevel } from '../lib/list-outdent'
+import type { UndoOutdent } from '../lib/list-outdent'
 
 /** How long after the last keystroke the note is written to disk. */
 const SAVE_DELAY = 600
@@ -311,6 +315,18 @@ export function Editor({
    * be the answer to a Ctrl+Z that meant something else.
    */
   const undoPaint = useRef<(() => void) | null>(null)
+  /*
+   * How to take the last Shift+Tab back, if that is still what Ctrl+Z means.
+   *
+   * Shift+Tab moves the item by hand - see lib/list-outdent.ts for why the
+   * browser's own `outdent` could not be undone safely - so the browser's undo
+   * stack does not hold it. Cleared by the next real edit, like the two above,
+   * and by any other list move, so it only ever answers the Ctrl+Z straight
+   * after it.
+   */
+  const undoOutdent = useRef<{ undo: UndoOutdent; line: HTMLElement; offset: number | null } | null>(
+    null
+  )
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
     null
@@ -436,6 +452,7 @@ export function Editor({
     setPicker(null)
     setLinker(null)
     setSummaryError(null)
+    undoOutdent.current = null
 
     void window.nib.readNote(note.id).then((doc) => {
       if (cancelled || bodyRef.current === null) {
@@ -765,6 +782,7 @@ export function Editor({
       // again.
       undone.current = null
       undoPaint.current = null
+      undoOutdent.current = null
       const line = blockAtSelection(root)
       let handled = false
 
@@ -2018,6 +2036,7 @@ export function Editor({
       if (root === null) {
         return
       }
+      undoOutdent.current = null
       undone.current = { node: block, parent: block.parentElement, before: block.nextSibling }
       block.remove()
       setTranscriptCount(root.querySelectorAll('[data-transcript]').length)
@@ -2385,6 +2404,7 @@ export function Editor({
         selection.removeAllRanges()
         selection.addRange(shown)
         onBodyInput()
+        undoOutdent.current = null
         undoPaint.current = (): void => {
           for (const wrapper of wrappers) {
             if (wrapper.isConnected) {
@@ -2429,6 +2449,7 @@ export function Editor({
         const inside = Array.from(painted.childNodes)
         unwrap(painted)
         onBodyInput()
+        undoOutdent.current = null
         undoPaint.current = (): void => {
           const again = paintWrapper(kind, name)
           const first = inside[0]
@@ -2822,38 +2843,35 @@ export function Editor({
           }
           return
         }
-        /*
-         * With the caret held where it was - see `keepingCaret`.
-         *
-         * And the span `outdent` wraps the moved text in goes. Chromium
-         * "preserves" the line's colour as `<span style="color: var(--text)">`.
-         * Nothing in Nib is a span with only a style - the sanitiser drops
-         * `style` on save - but until then it pinned the text to full strength,
-         * so a ticked step taken out one level stopped looking ticked.
-         */
-        const nest = (command: 'indent' | 'outdent'): void => {
+        // Tab stays the browser's `indent`, with the caret held where it was -
+        // see `keepingCaret`. Its repair only moves a new sub-list into the item
+        // above, which its undo survives; Shift+Tab's could not, below.
+        const indent = (): void => {
+          undoOutdent.current = null
           withSelection(() => {
-            keepingCaret(root, () => {
-              document.execCommand(command)
-              for (const span of root.querySelectorAll('li span[style]')) {
-                if (span.attributes.length === 1) {
-                  unwrap(span)
-                }
-              }
-            })
+            keepingCaret(root, () => document.execCommand('indent'))
             onBodyInput()
           })
         }
+        /*
+         * Shift+Tab is moved by hand rather than through `outdent` - see
+         * lib/list-outdent.ts. A nested item keeps its own element, and with it
+         * a checklist state or a flag; a top-level one becomes a paragraph.
+         */
         if (event.shiftKey) {
-          // `outdent` builds a new item rather than moving the old one, and the
-          // new one has none of its attributes - so a checklist step came out a
-          // plain bullet. Its state is carried across by hand.
-          const task = item.dataset.task
-          nest('outdent')
-          const moved = blockAtSelection(root)?.closest<HTMLElement>('li') ?? null
-          if (task !== undefined && moved !== null) {
-            moved.dataset.task = task
+          const offset = caretOffsetInLine(root)
+          const nested = outdentNested(item)
+          const top = nested === null ? outdentTopLevel(item) : null
+          const undo = nested ?? top?.undo ?? null
+          const line = nested !== null ? item : (top?.paragraph ?? null)
+          if (undo === null || line === null) {
+            return
           }
+          placeCaretInLine(line, offset ?? 0)
+          undoPaint.current = null
+          undone.current = null
+          undoOutdent.current = { undo, line: item, offset }
+          onBodyInput()
           return
         }
         /*
@@ -2865,7 +2883,7 @@ export function Editor({
          * that has swallowed its siblings. So the first item stays put.
          */
         if (item.previousElementSibling?.tagName === 'LI') {
-          nest('indent')
+          indent()
         }
         return
       }
@@ -2911,6 +2929,16 @@ export function Editor({
        * of the two by construction: whichever ref was set last is the one that
        * survives, and a real edit clears both.
        */
+      if (event.ctrlKey && !event.shiftKey && event.key === 'z' && undoOutdent.current !== null) {
+        const { undo, line, offset } = undoOutdent.current
+        undoOutdent.current = null
+        event.preventDefault()
+        undo()
+        placeCaretInLine(line, offset ?? 0)
+        onBodyInput()
+        return
+      }
+
       if (event.ctrlKey && !event.shiftKey && event.key === 'z' && undoPaint.current !== null) {
         const undo = undoPaint.current
         undoPaint.current = null

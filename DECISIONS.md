@@ -3,6 +3,69 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-10 - Shift+Tab is ours, and lists were audited for where the caret goes
+
+**The report.** "When I Tab the next line in, the caret ends up at the start of
+the line above" - only sometimes - and Shift+Tab did the same. Then: the caret
+feels wrong in lists generally, "if you delete one or something like that".
+
+**The Tab case, reproduced on demand on 0.24.5.** Type an item, Enter, Tab:
+`indent` put the new sub-list BESIDE the item above, `normaliseLists` moved it
+inside, and moving a node takes the caret out of it - the selection was left on
+the outer list, between two items, belonging to neither. The next Shift+Tab then
+found no item and did nothing, and the next keystroke landed at the end of the
+line above. "Sometimes" was the shape: when the item above already had a
+sub-list, Chromium indented into it, nothing was moved, and the caret stayed.
+No race was involved: the one path that writes a note's body back into the
+editor outside a note switch - picking up an edit made elsewhere - is gated on
+the body not having focus and having nothing unsaved, and the case reproduced
+the same with and without a save landing straight after the Tab. 0.24.6 already
+held the caret through Tab (`keepingCaret`); the regression script now proves
+it, including across the autosave.
+
+**What the audit found**, driving bullets, numbers and checklists in the app
+(test/e2e/list-caret.steps.mjs keeps the cases that were wrong):
+
+- **Shift+Tab on a nested item reordered the note.** On the middle of a, b, c it
+  read a, c, b. Ours: Chromium's `outdent` leaves an item inside an item with
+  the rest after it, in the right order, and the `li > li` repair lifted the
+  item out and left the rest behind.
+- **Repairing that properly made Ctrl+Z lose text.** With the rest carried
+  along, undoing Shift+Tab on the first of three nested items left only the
+  parent. The browser undoes its own `outdent` against nodes the repair had
+  moved. Also ours.
+- **Shift+Tab on a top-level item left its text loose under the body**, in no
+  block, inside `<span style="color: var(--text)">`. Chromium's output, ours to
+  have left.
+- Correct, and left alone: Backspace at the start of a middle or last item, in
+  an empty item, at the start of a nested item, Delete at the end of an item -
+  each joins the two lines with the caret at the join; Enter mid-text and on an
+  empty last item; typing over or deleting a selection across items; select-all
+  and delete; lists beside a pasted picture or a timestamp. Undo restored each
+  of the browser's own steps.
+- **Not changed, reported:** Backspace at the start of a list's FIRST item joins
+  it to the paragraph above (the caret is at the join, which is consistent, but
+  the line leaves the list and moves up). That is Chromium's default, and most
+  editors take the bullet off instead. Changing it means taking over Backspace,
+  which is a decision to make on purpose, not inside a caret fix. Likewise
+  Ctrl+Z after Enter on an empty item does not bring the bullet back - accepted
+  on 2026-08-24.
+
+**Decided.** Shift+Tab is done by hand, in
+[list-outdent.ts](src/renderer/src/lib/list-outdent.ts): a nested item moves
+out after its parent with the items that followed it as its own sub-items, so
+the order on screen never changes; a top-level item becomes a paragraph between
+the two halves of its list. It records what it moved, and Ctrl+Z straight after
+moves it back exactly. The item element is kept, so a checklist state or a flag
+travels with it - which replaces the state-copying the checklist entry below
+describes. Tab stays the browser's `indent`, whose undo survives its repair.
+The `li > li` healing on load now carries the following items along too, so an
+old note with that shape opens in its written order.
+
+**The cost** is the same one Enter on an empty item already pays: Shift+Tab is
+not on the browser's undo stack, so it is undone by the editor's own one-step
+undo, and only straight after.
+
 ## 2026-11-10 - A checklist's box starts where a bullet does
 
 **The report.** Checklists should be indented a little, the way bullet lists
