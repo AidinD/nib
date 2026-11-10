@@ -85,6 +85,7 @@ import {
   relativeTime,
   sanitizeHtml,
   textWithTasks,
+  timeLabel,
   wordCount
 } from '../lib/notes'
 import type { CaretMarks } from '../lib/notes'
@@ -1080,11 +1081,28 @@ export function Editor({
       const image = document.createElement('img')
       image.src = url
       image.alt = ''
+      /*
+       * During a recording the picture and its timestamp go in as ONE insert.
+       *
+       * The label used to be added afterwards, by `applyTimeMarks`, right after
+       * the image - which is exactly where the insert had left the caret. So the
+       * caret ended up between the picture and its own time, and Enter followed
+       * by the next paste put the second picture in front of the first one's
+       * timestamp. Inserted together, the caret lands after the whole unit.
+       *
+       * With a zero-width space after it, as the inline shortcuts end theirs:
+       * the label is not editable, and an insert that ENDS on a non-editable
+       * element leaves Chromium nowhere after it to put the caret - it went to
+       * the start of the line instead, in front of the picture.
+       */
+      let unit = image.outerHTML
       if (recording !== null) {
-        image.dataset.at = String(recording.recorder.seconds())
+        const at = recording.recorder.seconds()
+        image.dataset.at = String(at)
         image.dataset.rec = recording.recorder.path
+        unit = image.outerHTML + timeLabel(at).outerHTML + '\u200b'
       }
-      exec('insertHTML', image.outerHTML)
+      exec('insertHTML', unit)
       if (bodyRef.current !== null) {
         applyTimeMarks(bodyRef.current)
       }

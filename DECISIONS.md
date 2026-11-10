@@ -3,6 +3,38 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-10 - A picture pasted during a recording goes in with its timestamp
+
+**The report.** Pasting a screenshot during a recording left the caret BEFORE
+the picture's timestamp, so Enter and the next paste put the second picture in
+front of the first one's time.
+
+**Why.** The paste inserted the `<img>` alone, which leaves the caret right after
+it, and `applyTimeMarks` then added the `14:32` label - right after the image,
+which is to say right where the caret was. The caret ended up between a picture
+and its own time.
+
+**Decided.** The picture and its label are built together and go in as one
+`insertHTML`, in `insertImageFromDataUrl`; `timeLabel` in notes.ts builds the
+label for both that and the reload path. The unit ends in a zero-width space,
+the way the inline shortcuts end theirs: the label is not editable, and an
+insert that ends on a non-editable element left Chromium nowhere after it to put
+the caret, so it went to the start of the line. A paste outside a recording is
+unchanged - the picture alone.
+
+**Rejected.** Moving the caret after the label once it had been added. That
+fixes where the caret is and leaves the insert itself in two halves, one of them
+outside the browser's undo.
+
+**Regression scripts.** This is the first fix guarded by a script under
+`test/e2e/` - `node test/e2e/run.mjs`, after a build - which drives the real app
+through scripts/e2e.mjs, each script in its own scratch notebook written before
+the app starts. `npm test` has no document and cannot see what Chromium's
+editing commands do with the caret, which is where this bug and the list ones
+beside it lived. It pastes twice with Enter in between, during a real recording
+whose microphone is a tone, and asserts image 1, timestamp 1, image 2,
+timestamp 2 on two lines.
+
 ## 2026-11-10 - A list can be a checklist, and its boxes are drawn, not inserted
 
 **The request.** A to-do list, or a step-by-step procedure to follow, written in

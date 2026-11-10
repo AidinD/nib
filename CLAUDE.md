@@ -105,6 +105,11 @@ never in the bundle being tested.
 `eval` wraps its argument in an async function, so a step must `return` its
 value; `waitFor` takes a bare expression and must not.
 
+The editor's regression scripts live in `test/e2e/*.steps.mjs`; `npm run e2e`
+builds and runs them all, each against its own scratch notebook seeded before the
+app starts. Add one there when a fix depends on what Chromium does with the caret
+- `npm test` has no document and cannot see it.
+
 Do **not** verify by moving the pointer and clicking. It fights whoever is using
 the machine, steals focus into their other windows, and every coordinate is a
 guess that goes stale the moment a toolbar wraps - all three happened here on

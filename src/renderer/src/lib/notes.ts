@@ -2105,6 +2105,22 @@ export function timeMarks(
 }
 
 /**
+ * The `14:32` beside a moment, as an element - new, or an existing one brought
+ * up to date.
+ *
+ * One builder for both places a label is made: `applyTimeMarks` on load, and the
+ * paste during a recording, which has to put the label in together with its
+ * picture - see `insertImageFromDataUrl`.
+ */
+export function timeLabel(at: number, label: HTMLElement = document.createElement('span')): HTMLElement {
+  label.dataset.atLabel = '1'
+  label.contentEditable = 'false'
+  label.title = 'Hoppa dit i transkriptet'
+  label.textContent = clock(at)
+  return label
+}
+
+/**
  * Put the timestamp back on every moment.
  *
  * Rebuilt on load the way the transcript's cross is, rather than stored: the
@@ -2132,11 +2148,7 @@ export function applyTimeMarks(root: HTMLElement): void {
     const beside = owner.tagName === 'IMG' ? owner.nextElementSibling : owner.firstElementChild
     const found =
       beside instanceof HTMLElement && beside.hasAttribute('data-at-label') ? beside : null
-    const label = found ?? document.createElement('span')
-    label.dataset.atLabel = '1'
-    label.contentEditable = 'false'
-    label.title = 'Hoppa dit i transkriptet'
-    label.textContent = clock(mark.at)
+    const label = timeLabel(mark.at, found ?? undefined)
     if (found === null) {
       if (owner.tagName === 'IMG') {
         owner.after(label)
