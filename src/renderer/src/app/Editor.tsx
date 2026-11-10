@@ -70,6 +70,7 @@ import {
   leaveEmptyItem,
   normaliseLists,
   keepingCaret,
+  caretAtStartOf,
   caretOffsetInLine,
   placeCaretInLine,
   blockAtSelection,
@@ -316,9 +317,10 @@ export function Editor({
    */
   const undoPaint = useRef<(() => void) | null>(null)
   /*
-   * How to take the last Shift+Tab back, if that is still what Ctrl+Z means.
+   * How to take the last Shift+Tab back - or the last Backspace that took a
+   * bullet off - if that is still what Ctrl+Z means.
    *
-   * Shift+Tab moves the item by hand - see lib/list-outdent.ts for why the
+   * Both move the item by hand - see lib/list-outdent.ts for why the
    * browser's own `outdent` could not be undone safely - so the browser's undo
    * stack does not hold it. Cleared by the next real edit, like the two above,
    * and by any other list move, so it only ever answers the Ctrl+Z straight
@@ -2690,6 +2692,32 @@ export function Editor({
     [onBodyInput, withSelection]
   )
 
+  /**
+   * Take a list item one level out, by hand, and remember how to put it back.
+   *
+   * Shift+Tab and Backspace at the start of a first item both come here - see
+   * lib/list-outdent.ts for why this is not the browser's `outdent`. Returns
+   * whether anything moved.
+   */
+  const outdentItem = useCallback(
+    (root: HTMLElement, item: HTMLElement, offset: number): boolean => {
+      const nested = outdentNested(item)
+      const top = nested === null ? outdentTopLevel(item) : null
+      const undo = nested ?? top?.undo ?? null
+      const line = nested !== null ? item : (top?.paragraph ?? null)
+      if (undo === null || line === null || !root.contains(line)) {
+        return false
+      }
+      placeCaretInLine(line, offset)
+      undoPaint.current = null
+      undone.current = null
+      undoOutdent.current = { undo, line: item, offset }
+      onBodyInput()
+      return true
+    },
+    [onBodyInput]
+  )
+
   const onBodyKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       /*
@@ -2859,19 +2887,7 @@ export function Editor({
          * a checklist state or a flag; a top-level one becomes a paragraph.
          */
         if (event.shiftKey) {
-          const offset = caretOffsetInLine(root)
-          const nested = outdentNested(item)
-          const top = nested === null ? outdentTopLevel(item) : null
-          const undo = nested ?? top?.undo ?? null
-          const line = nested !== null ? item : (top?.paragraph ?? null)
-          if (undo === null || line === null) {
-            return
-          }
-          placeCaretInLine(line, offset ?? 0)
-          undoPaint.current = null
-          undone.current = null
-          undoOutdent.current = { undo, line: item, offset }
-          onBodyInput()
+          outdentItem(root, item, caretOffsetInLine(root) ?? 0)
           return
         }
         /*
@@ -3021,6 +3037,33 @@ export function Editor({
         return
       }
       /*
+       * Backspace at the very start of a list's FIRST item takes the bullet off.
+       *
+       * Left to Chromium it joined the item to the paragraph above, so the line
+       * left the list and jumped up into the text before it. Every other editor
+       * takes the bullet off first and keeps the line where it is; a second
+       * Backspace on the plain line then joins it as usual. A nested first item
+       * goes one level out instead, the same move as Shift+Tab, and Ctrl+Z puts
+       * either back exactly. Any item that has one above it is left to the
+       * browser, whose join with the item above is what that key should do there.
+       */
+      if (
+        event.key === 'Backspace' &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        bodyRef.current !== null
+      ) {
+        const root = bodyRef.current
+        const item = blockAtSelection(root)?.closest<HTMLElement>('li') ?? null
+        if (item !== null && item.previousElementSibling === null && caretAtStartOf(item)) {
+          if (outdentItem(root, item, 0)) {
+            event.preventDefault()
+            return
+          }
+        }
+      }
+      /*
        * Backspace at the top of a column, and Delete at the bottom of one, do
        * nothing at all.
        *
@@ -3105,6 +3148,7 @@ export function Editor({
       save,
       selectedImage,
       slash,
+      outdentItem,
       tickTaskAtCaret,
       toggleAlert,
       toggleChecklist,

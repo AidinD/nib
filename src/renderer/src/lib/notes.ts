@@ -1032,6 +1032,29 @@ export function keepingCaret(root: HTMLElement, edit: () => void): void {
   }
 }
 
+/**
+ * Whether the caret is collapsed at the very start of a line: no text before it
+ * and nothing else either - a picture or a timestamp in front counts as content,
+ * so Backspace there is about that, not about the line.
+ */
+export function caretAtStartOf(line: HTMLElement): boolean {
+  const selection = window.getSelection()
+  if (selection === null || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false
+  }
+  const caret = selection.getRangeAt(0)
+  if (!line.contains(caret.startContainer)) {
+    return false
+  }
+  const before = document.createRange()
+  before.setStart(line, 0)
+  before.setEnd(caret.startContainer, caret.startOffset)
+  return (
+    before.toString().replace(/\u200b/g, '').length === 0 &&
+    before.cloneContents().querySelector('img, hr, [data-at-label], [data-canvas]') === null
+  )
+}
+
 /** How many characters into its line the caret is, or null outside any line. */
 export function caretOffsetInLine(root: HTMLElement): number | null {
   const selection = window.getSelection()

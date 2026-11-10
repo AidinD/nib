@@ -13,6 +13,9 @@
  * Shift+Tab is also checked for order and undo: the old repair put the item
  * taken out BELOW the ones after it, and a fuller repair made Ctrl+Z lose
  * items. See lib/list-outdent.ts.
+ *
+ * And Backspace at the start of a list's first item, which takes the bullet off
+ * rather than joining the line to the paragraph above.
  */
 
 import { body, check, keys, openNote, setBody } from './editor.mjs'
@@ -108,4 +111,65 @@ export default async (page) => {
   await page.type('X')
   check((await body(page)) === '<ul><li>oXne</li><li>two</li></ul>', 'Tab on the first item changes nothing', await body(page))
 
+  /*
+   * Backspace at the start of a list's FIRST item takes the bullet off, and the
+   * line stays where it is. It used to be joined to the paragraph above.
+   */
+  for (const [kind, list, item] of [
+    ['bullets', 'ul', '<li>'],
+    ['numbers', 'ol', '<li>'],
+    ['checklist', 'ul', '<li data-task="open">']
+  ]) {
+    const start = `<p>Start</p><${list}>${item}one</li>${item}two</li></${list}>`
+    const shown = start.replace(/ data-task="open"/g, '·t')
+    const rest = `<${list}>${item.replace(' data-task="open"', '·t')}two</li></${list}>`
+
+    await setBody(page, start, ['one', 0])
+    await keys.backspace(page)
+    await page.type('X')
+    check((await body(page)) === `<p>Start</p><p>Xone</p>${rest}`, `${kind}: Backspace at the start of the first item makes it a paragraph, caret at its start`, await body(page))
+
+    await setBody(page, start, ['one', 0])
+    await keys.backspace(page)
+    await keys.backspace(page)
+    await page.type('X')
+    // Chromium wraps the text it joins in a style-only span, on any paragraph join in
+    // Nib; the sanitiser drops it on save, and it is not what this case is about.
+    const joined = (await body(page)).replace(/<span style="[^"]*">([^<]*)<\/span>/g, '$1')
+    check(joined === `<p>StartXone</p>${rest}`, `${kind}: a second Backspace joins it to the line above as usual`, joined)
+
+    await setBody(page, start, ['one', 0])
+    await keys.backspace(page)
+    await keys.undo(page)
+    check((await body(page)) === shown, `${kind}: Ctrl+Z puts the item back exactly`, await body(page))
+    await page.type('Y')
+    check((await body(page)).includes('Yone'), `${kind}: and the caret back at its start`, await body(page))
+  }
+
+  // An empty first item becomes an empty line, still in its place.
+  await setBody(page, '<p>Start</p><ul><li><br></li><li>two</li></ul>', ['', 0])
+  await keys.backspace(page)
+  await page.type('X')
+  check((await body(page)) === '<p>Start</p><p>X</p><ul><li>two</li></ul>', 'Backspace in an empty first item leaves an empty line in its place', await body(page))
+
+  // A nested first item goes one level out, its siblings under it, the caret at its start.
+  const nestedFirst = '<ul><li>one<ul><li>a</li><li>b</li></ul></li></ul>'
+  await setBody(page, nestedFirst, ['a', 0])
+  await keys.backspace(page)
+  await page.type('X')
+  check((await body(page)) === '<ul><li>one</li><li>Xa<ul><li>b</li></ul></li></ul>', 'Backspace at the start of a nested first item takes it one level out', await body(page))
+  await setBody(page, nestedFirst, ['a', 0])
+  await keys.backspace(page)
+  await keys.undo(page)
+  check((await body(page)) === nestedFirst, 'and Ctrl+Z puts it back in', await body(page))
+
+  // Only the FIRST item, and only at its very start: everywhere else Backspace is the browser's.
+  await setBody(page, '<ul><li>one</li><li>two</li></ul>', ['two', 0])
+  await keys.backspace(page)
+  await page.type('X')
+  check((await body(page)) === '<ul><li>oneXtwo</li></ul>', 'Backspace at the start of a later item still joins it to the one above', await body(page))
+  await setBody(page, '<ul><li>one</li><li>two</li></ul>', ['one', 1])
+  await keys.backspace(page)
+  await page.type('X')
+  check((await body(page)) === '<ul><li>Xne</li><li>two</li></ul>', 'Backspace inside the first item deletes a character as usual', await body(page))
 }

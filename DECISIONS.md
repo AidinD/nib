@@ -3,6 +3,33 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-10 - Backspace at the start of a first item takes the bullet off
+
+**Decided by the author**, from the open question the audit below left: yes,
+take the bullet off.
+
+Backspace with the caret at the very start of a list's FIRST item now turns
+that item into a plain paragraph in the same place, keeping its text - bullets,
+numbers and checklists alike. A nested first item goes one level out instead,
+the same move as Shift+Tab, its siblings following it as its sub-items. A
+second Backspace on the plain line joins it to the line above, which is the
+browser's own join. Ctrl+Z straight after puts the item back exactly, checklist
+state included, with the caret at its start.
+
+It reuses the Shift+Tab move in [list-outdent.ts](src/renderer/src/lib/list-outdent.ts)
+and its one-step undo; only the trigger is new. "At the very start" means
+nothing before the caret in the item - not text and not a picture or a
+timestamp, so Backspace after a picture at the start of an item still deletes
+the picture. Any item with one above it is left to the browser, whose join with
+the item above is what Backspace should do there.
+
+**Before**, Chromium joined the first item to the paragraph above, so the line
+left the list and moved up into the text before it.
+
+**Seen on the way, not changed:** any paragraph join in Nib - a plain `<p>` into
+a `<p>` too - wraps the joined text in `<span style="color: var(--text)">`.
+Chromium's doing; the sanitiser drops it on save, and nothing shows.
+
 ## 2026-11-10 - Shift+Tab is ours, and lists were audited for where the caret goes
 
 **The report.** "When I Tab the next line in, the caret ends up at the start of
@@ -47,7 +74,8 @@ it, including across the autosave.
   it to the paragraph above (the caret is at the join, which is consistent, but
   the line leaves the list and moves up). That is Chromium's default, and most
   editors take the bullet off instead. Changing it means taking over Backspace,
-  which is a decision to make on purpose, not inside a caret fix. Likewise
+  which is a decision to make on purpose, not inside a caret fix - made the same
+  day, in the entry above. Likewise
   Ctrl+Z after Enter on an empty item does not bring the bullet back - accepted
   on 2026-08-24.
 
