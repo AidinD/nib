@@ -388,7 +388,14 @@ if (await portTaken()) {
   process.exit(1)
 }
 
-const electron = join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
+/*
+ * The checkout's Electron running `out/`, unless NIB_E2E_APP names a packaged
+ * Nib.exe (`dist/win-unpacked/Nib.exe` after `npm run package`). The packaged
+ * app is the only place an asar-only mistake shows up - a native addon whose
+ * DLLs were left inside the archive loads fine from `out/` and fails installed.
+ */
+const packaged = (process.env.NIB_E2E_APP ?? '').trim()
+const electron = packaged.length > 0 ? packaged : join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
 
 /*
  * A scratch userData folder as well as a scratch NIB_DATA_DIR.
@@ -412,7 +419,7 @@ console.log(`[e2e] userData: ${userData}`)
 
 const child = spawn(
   electron,
-  ['.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`],
+  [...(packaged.length > 0 ? [] : ['.']), `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`],
   {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],

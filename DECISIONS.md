@@ -3,6 +3,129 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-16 - A meeting recorded on a phone is imported, and its voices are told apart here
+
+**The ask.** In-room meetings will be recorded on a phone (Pixel Recorder) on
+the table. Recorder transcribes Swedish but only labels speakers in English, so
+a Swedish meeting comes out as one block. The cloud note-takers that split
+speakers were rejected for work: they send colleagues' voices to a third party.
+The audio must not leave this machine.
+
+**Decided.**
+
+- **Import audio**, beside Record. Pick the file; it is decoded in the renderer
+  (Chromium already carries AAC, MP3, Opus, FLAC and WAV decoders, so an `.m4a`
+  from the phone needs no converter installed), resampled to 16 kHz mono and
+  written as `<noteId>-<stamp>.wav` in the recordings folder. That name is the
+  whole integration with the audio rules of 2026-09-11: the size chip, discard,
+  move and the startup sweep apply to it unchanged. The phone's own file is left
+  where it was. Transcription starts by itself; the summary stays its own press,
+  because it is the one step that leaves the machine.
+- **Voices separated after the words, never instead of them.** whisper runs as
+  it always has. Then sherpa-onnx's offline diarization runs in an Electron
+  utility process, and keel's `labelSegments` gives each whisper segment to the
+  voice that spoke longest in it. Voices are `Speaker 1, 2, ...` in the order
+  they first spoke.
+- **Renamed once, everywhere.** Every voice is listed on the transcript's
+  summary line, so it can be named from the folded block; a name in a line works
+  too. The rename applies to every label of that voice in that transcript - not
+  the note, because two recordings are clustered separately. A second
+  transcription of the same audio keeps the names by voice number.
+- **The summary is told what the labels are**: clustered from how voices sound,
+  usually right, can be wrong at a turn or when people talk over each other,
+  trust the words over the label, never invent a name for an unnamed
+  `Speaker N`. A voice named `Jag` is the user; without one, whose promise a
+  line was is decided from the words.
+- **Honest failure.** Missing models, a crash, a timeout, or only one voice heard:
+  the transcript still lands, unlabelled, the summary line says
+  "talarna är inte särskilda", and the block says why.
+- **Nib's own recordings are untouched.** Separation runs only for a block with
+  `data-source="import"`; a two-channel recording is labelled by channel as
+  before, and a test pins that.
+
+**The engine, and what lost.**
+
+| | Runs where | Swedish | Packaging | Verdict |
+|---|---|---|---|---|
+| **sherpa-onnx** (pyannote segmentation-3.0 + speaker embedding, ONNX) | CPU, Windows, no Python | language-independent | npm `sherpa-onnx-node`, 23 MB of prebuilt N-API binaries | **chosen** |
+| pyannote.audio itself | Python + PyTorch, ~2 GB | yes | a Python runtime beside an Electron app; the models are gated on Hugging Face | rejected |
+| whisper.cpp `-tdrz` (tinydiarize) | with whisper | no - one English model only | free | rejected: marks turns without saying who, and not in Swedish |
+| NeMo / Sortformer | GPU, Python | yes | Python, CUDA | rejected: the brief is no GPU |
+| Writing MFCC clustering ourselves | anywhere | yes | none | rejected: accuracy nowhere near a trained embedding |
+
+sherpa-onnx is pyannote's own segmentation model, converted to ONNX and run by
+onnxruntime, so it is "pyannote via ONNX" without the Python.
+
+**Spawned exe or addon.** keel spawns whisper-cli as a process, and the same was
+the first plan here (sherpa ships `sherpa-onnx-offline-speaker-diarization.exe`).
+The addon won: it comes through npm with the app, so there is no second
+hand-installed binary, and running it in `utilityProcess` keeps what spawning
+gave whisper - a crash cannot take the window down, and minutes of CPU cannot
+freeze it. Two things it cost, both found on the first end-to-end run: sherpa's
+`readWave` returns memory Electron's V8 memory cage refuses ("External buffers
+are not allowed"), so the worker reads the WAV itself; and the DLLs must be
+unpacked from the asar (`asarUnpack` in electron-builder.yml).
+
+**The embedding model.** Measured on meetings built from TTS voices with known
+change points, scored by the fraction of speech labelled right and how many
+true changes were found within half a second:
+
+| embedding | 2 voices, Swedish | 3 voices, Swedish | 3 voices, English | stable across thresholds | size, licence |
+|---|---|---|---|---|---|
+| **NeMo TitaNet-small** | 10/10 changes | 10/12 | 8/12, right count at 0.7-0.8 | yes | 38 MB, Apache-2.0 (NeMo) |
+| 3D-Speaker ERes2Net (VoxCeleb) | 10/10 | 10/12 | 9/12 | yes | 25 MB, Apache-2.0; 2.5x slower |
+| WeSpeaker ResNet34 | 10/10 at 0.5-0.6 | - | 8/12 at 0.5, collapses to 1 voice at 0.7 | no | 25 MB |
+| 3D-Speaker CAM++ (VoxCeleb) | finds 5-6 voices | - | 7/12 | no | 28 MB |
+
+TitaNet-small at threshold 0.7: close to the best on accuracy and the fastest of
+the accurate ones. The segmentation model is 5.7 MB, MIT (pyannote, CNRS). Both
+files live in `<whisper root>/diarize/` beside the whisper models, outside every
+repo; keel's `DIARIZE_DOWNLOADS` has their addresses and hashes.
+
+**Merging with whisper's words.** The Swedish whisper model prints every segment
+boundary to the whole second (`.000`), while the voice turns are measured to a
+few hundredths. So each segment's edges are first moved onto the nearest voice
+boundary within a second, then the segment goes to whoever spoke longest in it;
+a segment that still spans two voices is cut between sentences only, never
+inside one. On the three-voice Swedish meeting, the snap took the first line of
+each new turn from 10 to 11 of 12 right (lines 23/26 -> 23/25). Word-level
+timestamps (`-ml 1`) were tried and were worse: the model spreads words across
+pauses it did not transcribe.
+
+**Measured in the built app** (`test/e2e/import-voices.steps.mjs`, an 85-second
+three-voice Swedish meeting encoded to AAC `.m4a` with Windows' own encoder):
+converted in 0.3 s, words in 10 s, voices in 7 s, 3 voices found, 21 of 22
+lines right and 11 of 12 change points right on the first line of the new turn -
+the same in three runs. The miss is a 1.4-second "Ja, till fredag." The same run
+against a packaged build (`NIB_E2E_APP=dist/win-unpacked/Nib.exe`) passed, which
+is what proves the unpacked addon loads.
+
+A 45.6-minute meeting (a 44 MB `.m4a`) through the built app: 6 s to convert,
+4.7 min of words (whisper on the GPU), **3.8 min to separate the voices** on six
+CPU cores with five threads - 8.5 min in all. Measured on its own outside the app
+with four threads, the separation took 5.4 min. It found four voices where there
+were three: on a long file it split one of the two near-identical TTS voices.
+
+**The summary reads every line with its speaker.** On the page only a turn's
+first line is labelled. The first summary of an imported meeting gave the user a
+promise that Speaker 2 made: the turn's second line began "Jag kan bygga två
+stycken", and with the user's voice named "Jag" the flat text could not say whose
+line that was. Voice-split transcripts now reach the summary as `Name: words` on
+every line; the next two runs attributed every promise correctly. The page and
+Nib's own two-channel transcripts are unchanged.
+
+**What does not work well.**
+
+- Short interjections - "Ja.", "Mm", a two-second reply - are the misses: too
+  short to fingerprint, so they join the voice around them.
+- Two people talking at once get one label.
+- Similar voices merge. Two female English TTS voices from the same engine were
+  confused under every embedding tried; real people differ more than that, but
+  it is the failure to expect with many speakers. More than five or six voices
+  in one room has not been tried.
+- A long meeting can split one person into two; that shows up as an extra
+  `Speaker N` to rename to the same name.
+
 ## 2026-11-16 - Stories live in their own folder after all
 
 **Decided by the author.** Supersedes the filing argument in "Story bank: a

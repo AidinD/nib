@@ -3853,6 +3853,51 @@ body.is-resizing .splitter-grip {
 }
 
 /*
+ * Voices told apart on a one-microphone recording. Clickable, because clicking
+ * one is how it gets a name; the dotted line says so without a tooltip. Colour
+ * is not used to tell them apart - there can be six, and six accent colours
+ * would turn the transcript into a legend.
+ */
+.doc-body details[data-transcript] [data-speaker^='v'] {
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dotted currentColor;
+}
+
+.doc-body details[data-transcript] summary [data-speaker^='v'] {
+  margin-left: 2px;
+  font-weight: 500;
+}
+
+.voice-rename {
+  position: fixed;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 220px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5);
+}
+
+.voice-rename input {
+  font: inherit;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.voice-rename-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/*
  * The line a moment jumps to.
  *
  * A background wash rather than an outline: it fades, and an outline that fades

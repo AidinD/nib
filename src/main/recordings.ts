@@ -89,6 +89,36 @@ export async function startRecording(
   return path
 }
 
+/**
+ * A recording made somewhere else, written as if it had been made here.
+ *
+ * A meeting recorded on a phone arrives as AAC in an `.m4a`; the renderer
+ * decodes it - Chromium already carries the decoder - and hands over 16 kHz mono
+ * samples, which is what whisper and the voice models both read. Written under
+ * the same name a live recording gets, `<noteId>-<stamp>.wav`, so everything
+ * that already reads that name applies to it unchanged: the size on the card,
+ * discarding it, moving it to another note, and the startup sweep when its note
+ * is gone. The phone's own file is left where it was.
+ *
+ * One channel, and that is the point rather than a limitation: whisper sees a
+ * mono file and does not try to label sides that were never kept apart.
+ */
+export async function writeImportedRecording(
+  recordingsDir: string,
+  noteId: string,
+  samples: Uint8Array
+): Promise<{ path: string; seconds: number; bytes: number }> {
+  await fs.mkdir(recordingsDir, { recursive: true })
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const path = join(recordingsDir, `${noteId}-${stamp}.wav`)
+  // An odd byte would be half a sample; whisper would read the rest shifted.
+  const bytes = samples.byteLength - (samples.byteLength % 2)
+  const temp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
+  await fs.writeFile(temp, Buffer.concat([header(bytes, 1), Buffer.from(samples.buffer, samples.byteOffset, bytes)]))
+  await fs.rename(temp, path)
+  return { path, bytes, seconds: Math.round(bytes / ((SAMPLE_RATE * BITS) / 8)) }
+}
+
 /** Append captured samples. Silently ignored when nothing is recording, because
  *  a chunk in flight when Stop was pressed is normal, not an error. */
 export function appendSamples(chunk: Uint8Array): void {

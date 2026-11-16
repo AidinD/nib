@@ -8,6 +8,8 @@ import { applyBlockShortcut, applyDividerShortcut, applyInlineShortcut, insertDi
 import { DatePicker, formatDate, shiftDate } from './DatePicker'
 import { NotePicker, listNotes } from './NotePicker'
 import { RecordPanel, RecordingBar } from './RecordPanel'
+import { ImportPanel } from './ImportPanel'
+import { VoiceRename } from './VoiceRename'
 import { SummaryPanel, SUMMARY_MODELS } from './SummaryPanel'
 import type { SummarySource } from './SummaryPanel'
 import { conversationOf, guessConversation } from '@shared/conversation'
@@ -53,7 +55,10 @@ import {
   transcriptForRecording,
   transcriptLineAt,
   transcriptSpeakers,
+  transcriptVoices,
   transcriptsWithScreenshots,
+  renameVoice,
+  voiceNames,
   insertSummary,
   withSummary,
   notePrompts,
@@ -268,6 +273,15 @@ export function Editor({
    * a meeting away.
    */
   const [panel, setPanel] = useState(false)
+  /** The import pre-flight - a recording made on a phone, brought in as a file. */
+  const [importing, setImporting] = useState(false)
+  /** A voice being named: which transcript, which voice, and where to ask. */
+  const [renaming, setRenaming] = useState<{
+    transcript: HTMLElement
+    voice: string
+    name: string
+    at: { left: number; top: number }
+  } | null>(null)
   const [summarising, setSummarising] = useState(false)
 
   /** The transcript waiting on a yes - held by element, since it is about to go. */
@@ -1147,16 +1161,28 @@ export function Editor({
    * after any earlier recording - and why, is written there.
    */
   const insertRecordingBlock = useCallback(
-    (path: string, seconds: number, language: Language) => {
+    (
+      path: string,
+      seconds: number,
+      language: Language,
+      imported?: { origin: string }
+    ): HTMLElement | null => {
       const root = bodyRef.current
       if (root === null) {
-        return
+        return null
       }
       const block = document.createElement('div')
       block.dataset.recording = path
       block.dataset.seconds = String(seconds)
       block.dataset.language = language
       block.dataset.state = 'recorded'
+      if (imported !== undefined) {
+        // `source` is what asks for the voices to be separated when it is
+        // transcribed, and `origin` is the phone's own filename, kept so the
+        // block can be matched to the file it came from.
+        block.dataset.source = 'import'
+        block.dataset.origin = imported.origin
+      }
       const last = placeRecording(root, block)
       if (last) {
         // Somewhere to type, but only when the block is the end of the note -
@@ -1180,6 +1206,12 @@ export function Editor({
        */
       block.scrollIntoView({ block: 'nearest' })
 
+      // A phone in a room has no call to end: its file is the meeting as it
+      // was recorded, and the dead-air search would only find a quiet room.
+      if (imported !== undefined) {
+        return block
+      }
+
       /*
        * Ask the file whether the call ended before the recording did.
        *
@@ -1199,6 +1231,7 @@ export function Editor({
           onBodyInput()
         })
         .catch(() => undefined)
+      return block
     },
     [onBodyInput, onAudioChanged]
   )
@@ -1345,6 +1378,15 @@ export function Editor({
       const noteId = loadedId.current
       const language = block.dataset.language === 'en' ? 'en' : 'sv'
       const seconds = Number(block.dataset.seconds ?? 0)
+      /*
+       * One microphone, so the voices are separated after the words. Only for
+       * an imported recording: Nib's own are labelled by channel, and that is
+       * left exactly as it was. Names already given in an earlier transcript of
+       * the same audio are carried over by voice number.
+       */
+      const voices = block.dataset.source === 'import'
+      const earlier = transcriptForRecording(root, path)
+      const names = earlier === null ? {} : voiceNames(earlier)
 
       const status = await window.nib.transcribeStatus(language)
       if (!status.ready) {
@@ -1365,7 +1407,7 @@ export function Editor({
        * back showed a block that had apparently done nothing for ten minutes.
        * Looked up per tick because the element is replaced on every reload.
        */
-      const stopListening = window.nib.onTranscribeProgress((fraction) => {
+      const showProgress = (text: string): void => {
         const live = bodyRef.current
         if (live === null || loadedId.current !== noteId) {
           return
@@ -1375,20 +1417,50 @@ export function Editor({
         )
         if (showing !== undefined) {
           showing.dataset.state = 'working'
-          showing.textContent = `Recording · transcribing… ${Math.round(fraction * 100)}%`
+          showing.textContent = text
         }
-      })
+      }
+      const kind = voices ? 'Imported recording' : 'Recording'
+      const stopProgress = window.nib.onTranscribeProgress((fraction) =>
+        showProgress(`${kind} · transcribing… ${Math.round(fraction * 100)}%`)
+      )
+      /*
+       * The second half, on the CPU. Measured at about a tenth of real time, so
+       * the estimate is worth saying: forty-five minutes of meeting is five of
+       * waiting, and a block that only says "separating" for five minutes looks
+       * stuck.
+       */
+      const stopVoices = window.nib.onTranscribeVoices(() =>
+        showProgress(
+          `${kind} · the words are done · separating voices… about ${Math.max(1, Math.round(seconds / 600))} min`
+        )
+      )
+      const stopListening = (): void => {
+        stopProgress()
+        stopVoices()
+      }
 
       try {
-        const result = await window.nib.transcribe({ path, language, seconds })
+        const result = await window.nib.transcribe({ path, language, seconds, voices })
         stopListening()
 
         const holder = document.createElement('div')
         holder.innerHTML = transcriptHtml(
           result.segments,
           Math.max(1, Math.round(seconds / 60)),
-          speakerNames()
+          speakerNames(),
+          result.voices === undefined ? undefined : { count: result.voices.count, names }
         )
+        /*
+         * What became of the voices, for the block to say. Stored as attributes
+         * so a reload says it too, and set the same way on both paths below.
+         */
+        const blockData: Record<string, string> =
+          result.voices === undefined
+            ? {}
+            : result.voices.count >= 2
+              ? { voices: String(result.voices.count) }
+              : { voices: String(result.voices.count), voicesWhy: result.voices.why ?? 'only one voice was heard' }
         const transcript = holder.firstElementChild
         if (transcript === null) {
           return
@@ -1414,6 +1486,10 @@ export function Editor({
         if (live !== null && onScreen !== undefined) {
           placeTranscript(live, onScreen, transcript)
           onScreen.dataset.state = 'transcribed'
+          delete onScreen.dataset.voicesWhy
+          for (const [key, value] of Object.entries(blockData)) {
+            onScreen.dataset[key] = value
+          }
           applyRecordingBlocks(live)
           applyTranscriptBlocks(live)
           onBodyInput()
@@ -1437,7 +1513,7 @@ export function Editor({
         if (doc === null) {
           return
         }
-        const patched = withTranscript(doc.html, path, holder.innerHTML)
+        const patched = withTranscript(doc.html, path, holder.innerHTML, blockData)
         if (patched === null) {
           // The recording block is gone - deleted while whisper was running.
           // Nowhere to put the words, and inventing somewhere is worse.
@@ -1934,6 +2010,9 @@ export function Editor({
         // model works out whose promise a line was from the words alone, the way
         // it always has.
         speakers: transcriptSpeakers(root),
+        // The names of the voices in a recording made on one microphone - told
+        // apart by how they sound, not by which device they came through.
+        voices: source === 'transcripts' ? transcriptVoices(root) : undefined,
         /*
          * The questions the note came with, when it came from a template.
          *
@@ -3296,6 +3375,15 @@ export function Editor({
           >
             Record
           </button>
+          {/* A meeting recorded on a phone, brought in as a file. Beside Record
+              because it ends in the same block and the same transcript. */}
+          <button
+            type="button"
+            onClick={() => setImporting((open) => !open)}
+            disabled={note === null || recording !== null}
+          >
+            Import audio
+          </button>
           {/*
             Summarising is a separate press, on purpose. Recording and
             transcribing are local and free; this is the one step that leaves the
@@ -3523,6 +3611,36 @@ export function Editor({
             onStarted={(recorder, language) => {
               setPanel(false)
               setRecording({ recorder, language })
+            }}
+          />
+        )}
+
+        {importing && recording === null && (
+          <ImportPanel
+            noteId={note?.id ?? 'untitled'}
+            onClose={() => setImporting(false)}
+            onImported={({ path, seconds, language, origin }) => {
+              setImporting(false)
+              const block = insertRecordingBlock(path, seconds, language, { origin })
+              // Straight on to the words: the file was chosen to be transcribed,
+              // and asking for a second click would only be a pause. The summary
+              // stays its own press - it is the one step that leaves the machine.
+              if (block !== null) {
+                void transcribeBlock(block)
+              }
+            }}
+          />
+        )}
+
+        {renaming !== null && (
+          <VoiceRename
+            at={renaming.at}
+            name={renaming.name}
+            onClose={() => setRenaming(null)}
+            onRename={(name) => {
+              renameVoice(renaming.transcript, renaming.voice, name)
+              setRenaming(null)
+              onBodyInput()
             }}
           />
         )}
@@ -3782,6 +3900,25 @@ export function Editor({
               if (linkedId !== undefined && link.dataset.gone === undefined) {
                 onOpenNote(linkedId)
               }
+              return
+            }
+
+            /*
+             * A voice's name, on a line or on the summary line: name it. Caught
+             * before the details element sees the click, so naming somebody on
+             * the folded block does not also unfold it.
+             */
+            const voice = target.closest<HTMLElement>('[data-speaker^="v"]')
+            const owner = voice?.closest<HTMLElement>('[data-transcript]') ?? null
+            if (voice !== null && owner !== null && /^v\d+$/.test(voice.dataset.speaker ?? '')) {
+              event.preventDefault()
+              const box = voice.getBoundingClientRect()
+              setRenaming({
+                transcript: owner,
+                voice: voice.dataset.speaker ?? '',
+                name: (voice.textContent ?? '').trim(),
+                at: { left: box.left, top: box.bottom + 4 }
+              })
               return
             }
 

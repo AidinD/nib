@@ -108,6 +108,21 @@ export function applyRecordingBlocks(root: HTMLElement): void {
     }
     const length = `${minutes}:${String(seconds % 60).padStart(2, '0')}`
     const language = block.dataset.language === 'en' ? 'English' : 'Svenska'
+    /*
+     * A recording brought in from a phone says so, and says what became of its
+     * voices: told apart, and how many - or not, and why. The why is the part
+     * a person can act on ("the voice models are not installed"), and the part
+     * that stops an unlabelled transcript reading as one speaker.
+     */
+    const imported = block.dataset.source === 'import'
+    const kind = imported ? 'Imported recording' : 'Recording'
+    const voiceCount = Number(block.dataset.voices ?? '')
+    const voices =
+      !imported || block.dataset.voices === undefined
+        ? ''
+        : voiceCount >= 2
+          ? ` · ${voiceCount} voices, click a name to rename it`
+          : ` · speakers not told apart: ${block.dataset.voicesWhy ?? 'no reason given'}`
 
     /*
      * The offer to cut, when the file says the call ended before the recording did.
@@ -155,7 +170,7 @@ export function applyRecordingBlocks(root: HTMLElement): void {
      * purpose, and both offers sit on the block rather than behind a menu.
      */
     if (state === 'transcribed') {
-      block.textContent = `Recording · ${length} · ${language} · transcribed · the audio is still here · `
+      block.textContent = `${kind} · ${length} · ${language} · transcribed${voices} · the audio is still here · `
       const again = document.createElement('span')
       again.dataset.retranscribe = '1'
       again.textContent = 'transcribe again'
@@ -170,14 +185,14 @@ export function applyRecordingBlocks(root: HTMLElement): void {
 
     block.textContent =
       state === 'working'
-        ? `Recording · ${length} · transcribing…`
+        ? `${kind} · ${length} · transcribing…`
         : state === 'lost'
           ? // The audio is gone: discarded on purpose, thrown away with its note,
             // or transcribed back when transcribing deleted it. The block stays
             // because it marks where the meeting was, but it no longer offers
             // something it cannot do.
-            `Recording · ${length} · the audio is no longer on disk`
-          : `Recording · ${length} · ${language} · click to transcribe`
+            `${kind} · ${length} · the audio is no longer on disk`
+          : `${kind} · ${length} · ${language} · click to transcribe`
     if (state === 'recorded' || state === 'lost') {
       offerMove()
     }
@@ -1988,9 +2003,10 @@ export function noteTitles(index: NibIndex): Map<string, string> {
  * worse than the question mark.
  */
 export function transcriptHtml(
-  segments: { start: string; end: string; text: string; speaker?: string }[],
+  segments: { start: string; end: string; text: string; speaker?: string; voice?: number }[],
   minutes: number,
-  speakers?: { mine: string; theirs: string }
+  speakers?: { mine: string; theirs: string },
+  voices?: { count: number; names?: Record<string, string> }
 ): string {
   const escape = (text: string): string =>
     text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character] ?? character)
@@ -2008,23 +2024,58 @@ export function transcriptHtml(
     return `<span data-speaker="${which}">${escape(name)}</span> `
   }
 
+  /*
+   * Voices, for a recording with one microphone: `v1`, `v2`, ... in the order
+   * they first spoke, printed as "Speaker 1" until somebody gives them a name.
+   * A name given before - this transcript is being run again - is carried over
+   * by the same number, because the same audio clusters the same way.
+   */
+  const labelled = voices !== undefined && voices.count >= 2
+  const voiceName = (voice: number): string => voices?.names?.[`v${voice}`] ?? `Speaker ${voice}`
+  const voiced = (voice: number | undefined): string =>
+    voice === undefined
+      ? `<span data-speaker="unknown">?</span> `
+      : `<span data-speaker="v${voice}">${escape(voiceName(voice))}</span> `
+
   let previous: string | null = null
   const lines = segments
     .filter((segment) => segment.text.length > 0)
     .map((segment) => {
+      if (labelled) {
+        const voice = segment.voice === undefined ? '?' : String(segment.voice)
+        const turn = voice !== previous ? voiced(segment.voice) : ''
+        previous = voice
+        return `<p><em>${segment.start.replace(/^00:/, '')}</em> ${turn}${escape(segment.text)}</p>`
+      }
       const speaker = segment.speaker
       const turn = speaker !== undefined && speaker !== previous ? named(speaker) : ''
       previous = speaker ?? previous
       return `<p><em>${segment.start.replace(/^00:/, '')}</em> ${turn}${escape(segment.text)}</p>`
     })
     .join('')
+
+  /*
+   * Who is in it, on the line that is always on screen.
+   *
+   * Every voice once, so the one who said a single sentence can be named
+   * without finding that sentence - and the click that renames is on the folded
+   * block, where it is seen. When the voices were asked for and could not be
+   * told apart the line says so, so an unlabelled transcript is never mistaken
+   * for one where everything was said by the same person.
+   */
+  const legend = labelled
+    ? Array.from({ length: voices.count }, (_unused, at) => ` · ${voiced(at + 1).trim()}`).join('')
+    : voices !== undefined
+      ? ' · talarna är inte särskilda'
+      : ''
+
   return (
     `<details data-transcript="1">` +
     // The delete control lives in the summary line, which is the one part of a
     // folded block that is always on screen. `data-drop` rather than a class,
     // because a class does not survive the sanitiser and this has to still be
     // there after a reload.
-    `<summary>Transkript · ${minutes} min · ${segments.length} avsnitt` +
+    `<summary>Transkript · ${minutes} min · ${segments.length} avsnitt${legend}` +
     `<span data-drop="transcript" title="Ta bort transkriptet">×</span></summary>` +
     (lines.length > 0 ? lines : '<p><em>Ingenting hördes.</em></p>') +
     `</details>`
@@ -2263,6 +2314,19 @@ export function transcriptsWithScreenshots(root: HTMLElement): {
           ? [...all]
           : all.filter((mark) => mark.recording === recording && recording.length > 0)
 
+      /*
+       * A transcript split by voice names the speaker on EVERY line, as
+       * `Name: words`, in what the summary reads - the page itself still names
+       * only the turn. Found on the first summary of an imported meeting: a
+       * turn's second line read "Jag kan bygga två stycken", and with the
+       * user's voice named "Jag" the model gave that promise to the user. On the
+       * page the reader sees whose turn it is; in flat text a line without its
+       * speaker is a guess, and the colon is what keeps a name apart from the
+       * first word of the sentence.
+       */
+      const voiced = transcript.querySelector('p [data-speaker^="v"]') !== null
+      let speaking = ''
+
       const lines: string[] = []
       const pending = [...mine]
       for (const line of transcript.querySelectorAll<HTMLElement>('p')) {
@@ -2273,7 +2337,21 @@ export function transcriptsWithScreenshots(root: HTMLElement): {
             lines.push(say(mark))
           }
         }
-        lines.push(line.textContent ?? '')
+        if (!voiced) {
+          lines.push(line.textContent ?? '')
+          continue
+        }
+        const label = line.querySelector<HTMLElement>('[data-speaker]')
+        if (label !== null) {
+          speaking = (label.textContent ?? '').trim()
+        }
+        const stamp = line.querySelector('em')?.textContent?.trim() ?? ''
+        const words = Array.from(line.childNodes)
+          .filter((node) => node !== label && !(node instanceof HTMLElement && node.tagName === 'EM'))
+          .map((node) => node.textContent ?? '')
+          .join('')
+          .trim()
+        lines.push(`${stamp} ${speaking.length > 0 ? `${speaking}: ` : ''}${words}`.trim())
       }
       // Anything marked after the last spoken line still happened.
       for (const mark of pending) {
@@ -2300,6 +2378,62 @@ export function transcriptSpeakers(
   const mine = named('mine')
   const theirs = named('theirs')
   return mine.length > 0 && theirs.length > 0 ? { mine, theirs } : undefined
+}
+
+/**
+ * The names a transcript's voices go by, keyed by voice: `{ v1: 'Anna' }`.
+ *
+ * Read off the labels rather than kept anywhere else, so what the summary and a
+ * second run are told is what the reader can see.
+ */
+export function voiceNames(transcript: ParentNode): Record<string, string> {
+  const names: Record<string, string> = {}
+  for (const label of transcript.querySelectorAll<HTMLElement>('[data-speaker^="v"]')) {
+    const id = label.dataset.speaker ?? ''
+    const name = (label.textContent ?? '').trim()
+    if (/^v\d+$/.test(id) && name.length > 0 && names[id] === undefined) {
+      names[id] = name
+    }
+  }
+  return names
+}
+
+/**
+ * Every voice name in the note, once each, in the order they first appear.
+ *
+ * For the summary, which is told who was in the room. Absent when no transcript
+ * in the note was separated by voice.
+ */
+export function transcriptVoices(root: HTMLElement): string[] | undefined {
+  const names: string[] = []
+  for (const transcript of root.querySelectorAll<HTMLElement>('[data-transcript]')) {
+    for (const name of Object.values(voiceNames(transcript))) {
+      if (!names.includes(name)) {
+        names.push(name)
+      }
+    }
+  }
+  return names.length > 0 ? names : undefined
+}
+
+/**
+ * Give a voice a name, everywhere in its own transcript.
+ *
+ * Within the one transcript and not the note: two recordings are clustered
+ * separately, so "Speaker 1" in one is not the same person as "Speaker 1" in the
+ * other. An empty name puts the number back.
+ */
+export function renameVoice(transcript: HTMLElement, voice: string, name: string): number {
+  const fallback = `Speaker ${voice.replace(/^v/, '')}`
+  const text = name.trim().length > 0 ? name.trim() : fallback
+  let renamed = 0
+  for (const label of transcript.querySelectorAll<HTMLElement>('[data-speaker]')) {
+    if (label.dataset.speaker === voice) {
+      label.textContent = text
+      renamed += 1
+    }
+  }
+  return renamed
 }
 
 /**
@@ -2867,7 +3001,8 @@ export function placeTranscript(root: HTMLElement, block: HTMLElement, transcrip
 export function withTranscript(
   html: string,
   path: string,
-  transcript: string
+  transcript: string,
+  blockData: Record<string, string> = {}
 ): { html: string } | null {
   const root = document.createElement('div')
   root.innerHTML = sanitizeHtml(html)
@@ -2890,6 +3025,11 @@ export function withTranscript(
 
   placeTranscript(root, block, node)
   block.dataset.state = 'transcribed'
+  // What the voice separation found travels with the words, so a note patched
+  // on disk says the same thing about its speakers as one patched on screen.
+  for (const [key, value] of Object.entries(blockData)) {
+    block.dataset[key] = value
+  }
   return { html: sanitizeHtml(root.innerHTML) }
 }
 

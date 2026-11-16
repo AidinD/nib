@@ -126,6 +126,8 @@ const api = {
     previous?: string
     /** The names the transcript labels its turns with, when it has any. */
     speakers?: { mine: string; theirs: string }
+    /** The names of the voices a one-microphone recording was split into. */
+    voices?: string[]
     /** The note's own questions, one per prompt line, when it came from a template. */
     prompts?: { id: string; heading: string; question: string; existing: string }[]
     language: 'sv' | 'en'
@@ -158,12 +160,45 @@ const api = {
     path: string
     language: 'sv' | 'en'
     seconds: number
+    /** Separate the voices too - for a recording with one microphone. */
+    voices?: boolean
   }): Promise<{
     // `speaker` is there only when the recording had two channels to tell apart:
     // '0' is the microphone, '1' the machine's output, '?' whisper's own doubt.
-    segments: { start: string; end: string; text: string; speaker?: string }[]
+    // `voice` is there only when `voices` was asked for and two or more were
+    // told apart: 1, 2, 3 in the order they first spoke.
+    segments: { start: string; end: string; text: string; speaker?: string; voice?: number }[]
     text: string
+    /** Present when `voices` was asked for. `why` says why the lines are unlabelled. */
+    voices?: { count: number; why?: string; took: number }
   }> => ipcRenderer.invoke('transcribe:run', args),
+
+  /** Whether the voice models are installed, and if not, which file is missing where. */
+  voicesStatus: (): Promise<{ ready: boolean; why?: string }> =>
+    ipcRenderer.invoke('voices:status'),
+
+  /** Fired once, when the words are done and the voices are being separated. */
+  onTranscribeVoices: (handler: () => void): (() => void) => {
+    const listener = (): void => handler()
+    ipcRenderer.on('transcribe:voices', listener)
+    return () => {
+      ipcRenderer.removeListener('transcribe:voices', listener)
+    }
+  },
+
+  /*
+   * Importing a recording made elsewhere. The renderer decodes between the two
+   * calls, because it is the side that has an AAC decoder - see main.
+   */
+  importPick: (
+    defaultPath?: string
+  ): Promise<{ name: string; extension: string; folder: string; bytes: Uint8Array } | null> =>
+    ipcRenderer.invoke('import:pick', defaultPath),
+  importWrite: (
+    noteId: string,
+    samples: Uint8Array
+  ): Promise<{ path: string; seconds: number; bytes: number }> =>
+    ipcRenderer.invoke('import:write', noteId, samples),
 
   /** How far along it is, pushed as whisper works through the file. */
   onTranscribeProgress: (handler: (fraction: number) => void): (() => void) => {

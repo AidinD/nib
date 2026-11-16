@@ -12,6 +12,15 @@ export default defineConfig({
       alias: {
         '@shared': resolve('src/shared')
       }
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          // Its own entry, because it runs in its own process - see diarize.ts.
+          'diarize-worker': resolve(__dirname, 'src/main/diarize-worker.ts')
+        }
+      }
     }
   },
   preload: {

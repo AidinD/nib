@@ -370,6 +370,14 @@ export interface SummaryRequest {
    * was that" it has to infer from the words - see the instruction.
    */
   speakers?: { mine: string; theirs: string }
+  /**
+   * The voices a one-microphone recording was split into, by the names they go
+   * by in the note - "Speaker 2" until somebody renamed it.
+   *
+   * Present only for an imported recording whose voices were told apart. Not
+   * the same kind of label as `speakers`, and the instruction says so.
+   */
+  voices?: string[]
   language: 'sv' | 'en'
   model: string
 }
@@ -766,6 +774,22 @@ export function instruction(request: SummaryRequest): string {
       : `The transcript is labelled by speaker: "${request.speakers.mine}" is the user and "${request.speakers.theirs}" is the other side. The labels come from which microphone the sound arrived on rather than from recognising anybody's voice, so they are reliable about WHOSE side spoke - use them to decide whose promise a line is. A turn marked "?" is one the recording could not separate; fall back on the words there.`
 
   /*
+   * Voices told apart by how they sound, on a recording made with one
+   * microphone in the room.
+   *
+   * Weaker than the channel labels above, and the model is told exactly how:
+   * the split comes from clustering voices, so it can be wrong where a turn
+   * changes or two people talk at once, and a voice still called "Speaker N"
+   * was never named. "Jag" is the name the rename panel offers for the user's
+   * own voice, so that is the one name that says whose promises are whose.
+   */
+  const named = (request.voices ?? []).filter((name) => name.trim().length > 0)
+  const voiceLabels =
+    named.length === 0
+      ? ''
+      : `The transcript was recorded on one microphone in a room and split by voice on this computer. Each turn is labelled with who spoke: ${named.map((name) => `"${name}"`).join(', ')}. The split comes from clustering how the voices sound, not from knowing who anybody is, so it is usually right but can be wrong near a change of speaker or where two people talk at once; when a label and the words disagree, trust the words. A label of the form "Speaker N" is a voice nobody has named - refer to it as that and do not guess a name for it. ${named.some((name) => name.trim().toLowerCase() === 'jag') ? 'The voice labelled "Jag" is the user.' : 'None of the labels says which voice is the user, so decide whose promise a line is from the words.'}`
+
+  /*
    * The screenshots, and what the model may say about them.
    *
    * Pasted mid-meeting, a screenshot is what the words were pointing at - "den
@@ -887,6 +911,7 @@ export function instruction(request: SummaryRequest): string {
      */
     conversation.says,
     labels,
+    voiceLabels,
     marks,
     '',
     'Do not invent. A transcript is imperfect and a name heard wrong is worse than a name left out - if you cannot tell what was said, leave it out rather than guess.',

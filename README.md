@@ -22,6 +22,7 @@ things are the way they are.
 - **A canvas** in a note: pen, highlighter and eraser, with stroke width driven by stylus pressure. Stored as strokes plus a rendered image.
 - **Local-first**: one folder of plain JSON files, no server, and it syncs by living in a synced folder.
 - **Archive a note**: out of the way, not gone. An archived note leaves every list, every count and the alert strip, keeps its file and its category, and comes back from the Archive row in one click. Search leaves the archive alone - unless it holds matches you are not being shown, in which case it says so and offers them.
+- **Meetings, transcribed locally**: record a call (your microphone and the machine's output on separate channels, so the transcript knows which side spoke), or import a recording made on a phone in the room, whose voices are told apart on this machine and can be renamed. whisper and the voice models run locally; only the optional summary goes to Claude.
 - **Nothing deletes without asking**: notes, categories and sub-categories all confirm first, in the app's own dialog, which says what goes with it - a category takes its sub-categories and every note inside them, a sub-category takes nothing.
 
 ## Running it
@@ -53,6 +54,28 @@ npm run typecheck  # both TypeScript projects
 npm run build      # compile without packaging
 npm run icon       # regenerate resources/icon.png and icon.ico
 ```
+
+## Meetings recorded on a phone
+
+**Import audio** in the toolbar takes a recording from a phone - an `.m4a` from
+Pixel Recorder, or mp3, wav, ogg, flac - converts it, transcribes it with
+whisper and splits it by voice into `Speaker 1`, `Speaker 2`... Click a name, on
+a line or on the transcript's summary line, to rename that voice everywhere; name
+your own voice `Jag` and the summary knows which promises are yours.
+
+The voices are separated by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
+on the CPU, which needs two model files beside the whisper models (wherever
+`WHISPER_DIR` points), in a `diarize` folder:
+
+```
+<whisper>/diarize/pyannote-segmentation-3.0.onnx   model.onnx from sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+<whisper>/diarize/nemo_en_titanet_small.onnx
+```
+
+Both are on the sherpa-onnx releases page (`speaker-segmentation-models` and
+`speaker-recongition-models`); keel's `DIARIZE_DOWNLOADS` lists the exact
+addresses and hashes. Without them the transcript still arrives, unlabelled, and
+the recording says which file is missing.
 
 ## Building an installer
 

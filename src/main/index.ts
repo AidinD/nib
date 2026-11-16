@@ -1,8 +1,8 @@
 import { createHash } from 'crypto'
 import { existsSync, promises as fs } from 'fs'
-import { join, normalize, sep } from 'path'
+import { basename, dirname, extname, join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
-import { app, BrowserWindow, clipboard, ipcMain, net, protocol } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import type { DrawingDoc, NibIndex, NoteDoc } from '@shared/types'
 import { ASSETS_DIR, migrateLegacyData, resolveDataDir } from './data-dir'
@@ -16,9 +16,12 @@ import {
   stopRecording,
   findCallEnd,
   trimRecording,
-  sweepRecordings
+  sweepRecordings,
+  writeImportedRecording
 } from './recordings'
 import { transcribe, whisperStatus } from 'keel/whisper'
+import { labelSegments } from 'keel/diarize'
+import { diarizeFile, voicesStatus } from './diarize'
 import { loadScreenshots, readGlossary, summarise } from './summary'
 import type { SummaryRequest } from './summary'
 import { NoteStorage } from './storage'
@@ -316,11 +319,17 @@ function registerIpc(): void {
   ipcMain.handle('transcribe:status', (_event, language: 'sv' | 'en') =>
     whisperStatus(language, { roots: whisperRoots() })
   )
+  ipcMain.handle('voices:status', () => voicesStatus(whisperRoots()))
   ipcMain.handle(
     'transcribe:run',
     async (
       event,
-      { path, language, seconds }: { path: string; language: 'sv' | 'en'; seconds: number }
+      {
+        path,
+        language,
+        seconds,
+        voices
+      }: { path: string; language: 'sv' | 'en'; seconds: number; voices?: boolean }
     ) => {
       const result = await transcribe({
         file: path,
@@ -333,8 +342,92 @@ function registerIpc(): void {
           }
         }
       })
-      return result
+      if (voices !== true) {
+        return result
+      }
+
+      /*
+       * Who spoke, for a recording with one microphone - after the words, never
+       * instead of them.
+       *
+       * The transcript is already complete here, so nothing below can cost it:
+       * `diarizeFile` answers every failure with a reason rather than throwing,
+       * and the words come back either way - labelled, or unlabelled with the
+       * reason beside them. One voice is reported as one voice rather than as
+       * "Speaker 1" on every line, which would say something was told apart when
+       * nothing was.
+       */
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('transcribe:voices')
+      }
+      const started = Date.now()
+      const found = await diarizeFile(path, seconds, whisperRoots())
+      const took = Math.round((Date.now() - started) / 1000)
+      if (!found.ok) {
+        console.log(`[nib] voices not separated after ${took}s: ${found.why}`)
+        return { ...result, voices: { count: 0, why: found.why, took } }
+      }
+      const labelled = labelSegments(result.segments, found.turns)
+      console.log(`[nib] ${labelled.voices} voice(s) in ${seconds}s of audio, separated in ${took}s`)
+      if (labelled.voices < 2) {
+        return {
+          ...result,
+          voices: {
+            count: labelled.voices,
+            why: labelled.voices === 0 ? 'no voice was found in it' : 'only one voice was heard',
+            took
+          }
+        }
+      }
+      return { ...result, segments: labelled.segments, voices: { count: labelled.voices, took } }
     }
+  )
+
+  /*
+   * Bringing in a recording made somewhere else - a phone on the meeting table.
+   *
+   * Two calls with the renderer in between, because the renderer is the side
+   * that can decode AAC: Chromium carries the decoder, so an `.m4a` straight from
+   * the phone needs no converter installed anywhere. Main reads the file and
+   * later writes the 16 kHz result; nothing about the audio leaves the machine.
+   *
+   * `NIB_E2E_IMPORT` answers the picker without showing it, for the end-to-end
+   * run, which can drive the page but not a native dialog.
+   */
+  ipcMain.handle('import:pick', async (event, defaultPath?: string) => {
+    let file = process.env.NIB_E2E_IMPORT ?? ''
+    if (file.length === 0) {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const options = {
+        title: 'Import a recording',
+        defaultPath: typeof defaultPath === 'string' && defaultPath.length > 0 ? defaultPath : undefined,
+        properties: ['openFile' as const],
+        filters: [
+          { name: 'Audio', extensions: ['m4a', 'aac', 'mp3', 'wav', 'ogg', 'opus', 'flac', 'webm', 'mp4', '3gp', 'amr'] },
+          { name: 'All files', extensions: ['*'] }
+        ]
+      }
+      const picked = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options)
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return null
+      }
+      file = picked.filePaths[0]
+    }
+    const stats = await fs.stat(file)
+    // Far beyond any meeting: a 3-hour m4a is about 200 MB. Past this the
+    // decode would hold gigabytes, and the honest answer is no.
+    if (stats.size > 1024 * 1024 * 1024) {
+      throw new Error('That file is over a gigabyte, which is longer than a meeting')
+    }
+    return {
+      name: basename(file),
+      extension: extname(file).slice(1).toLowerCase(),
+      folder: dirname(file),
+      bytes: new Uint8Array(await fs.readFile(file))
+    }
+  })
+  ipcMain.handle('import:write', (_event, noteId: string, samples: Uint8Array) =>
+    writeImportedRecording(recordingsDir(), noteId, samples)
   )
 
   ipcMain.handle('sticky:open', (_event, noteId: string) => {

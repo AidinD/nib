@@ -5,6 +5,11 @@ directories:
 files:
   - out/**
   - resources/**
+# The voice separation is a native addon whose DLLs are loaded by Windows, not
+# by Electron, and Windows cannot read inside an asar archive. Unpacked, the
+# addon and onnxruntime.dll sit side by side on disk where the loader finds them.
+asarUnpack:
+  - node_modules/sherpa-onnx-win-x64/**
 win:
   target:
     - nsis

@@ -1,6 +1,6 @@
 {
   "name": "nib",
-  "version": "0.24.9",
+  "version": "0.24.10",
   "description": "A desktop note-taking app, sibling to Jot",
   "main": "./out/main/index.js",
   "author": "Aidin",
@@ -28,7 +28,8 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "dompurify": "^3.4.13",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "sherpa-onnx-node": "2.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
