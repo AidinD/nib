@@ -81,10 +81,13 @@ export interface NoteMeta {
    * Only `story` so far: a career story in STAR form, captured while it is fresh
    * rather than reconstructed in March from October.
    *
-   * A marker on the note rather than a dedicated category, deliberately. A story
-   * about an incident belongs filed with the incident, and forcing it into a
-   * "Story bank" folder fights the filing you already have - the same reason
-   * Tend binds Nib folders to people rather than relying on a naming convention.
+   * A marker on the note rather than a dedicated category, so the app never
+   * decides where a story is filed: it works the same in any folder. The
+   * original argument - a story belongs filed with its incident, inside the
+   * person's folder - did not hold up in use. A person's folder is the record of
+   * contact with that person, and a story there reads as one more conversation;
+   * stories are better kept together in a folder of their own, naming the person
+   * or project they are about in their first line. See DECISIONS 2026-11-16.
    */
   kind: NoteKind
   /**

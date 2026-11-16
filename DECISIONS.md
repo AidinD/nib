@@ -3,6 +3,25 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-16 - Stories live in their own folder after all
+
+**Decided by the author.** Supersedes the filing argument in "Story bank: a
+note kind, not a folder" (2026-08-24); the `kind` marker itself stands.
+
+That entry said a story belongs filed with its incident, so stories sat in the
+folder of the person or project they were about. In use, a person's folder is
+the record of contact with that person, and a story filed there reads as one
+more conversation with them - the wrong thing for the folder to say.
+
+So stories are now kept together in a folder of their own, with a first line
+naming the person or project they are about (`Person: ...`, `Projekt: ...`).
+That line is plain text rather than a link: Nib links point at notes, and there
+is no note that stands for a person.
+
+Nothing in the app changed. `kind` never tied a story to a folder, which is why
+the move was a filing change only: note ids, links and the story view are the
+same wherever the note sits.
+
 ## 2026-11-10 - Backspace at the start of a first item takes the bullet off
 
 **Decided by the author**, from the open question the audit below left: yes,
