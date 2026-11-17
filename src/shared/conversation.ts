@@ -41,7 +41,7 @@
  * not. See `schemaFor` in the main process.
  */
 
-export type ConversationKind = 'one-to-one' | 'check-in' | 'meeting' | 'status'
+export type ConversationKind = 'one-to-one' | 'manager' | 'check-in' | 'meeting' | 'status'
 
 export interface Conversation {
   id: ConversationKind
@@ -53,6 +53,17 @@ export interface Conversation {
   lastTime: boolean
   /** Whether the model is asked what nobody thought to ask. */
   questions: boolean
+  /**
+   * Whether the model weighs the OTHER person's part - what they did well and
+   * what less well, each point quoting them.
+   *
+   * Only for a conversation between two people where the user's habit is to
+   * review only themselves: a 1-1, and above all a conversation with their own
+   * manager, where the other side is assumed to have got it right. A meeting of
+   * several people has no single "other party", and a check-in or a status
+   * update is too narrow to judge anybody's contribution by.
+   */
+  theirs: boolean
   /** What the instruction is told this conversation was. English, like the prompt. */
   says: string
 }
@@ -64,8 +75,19 @@ export const CONVERSATIONS: readonly Conversation[] = [
     hint: 'återkommande, samma person',
     lastTime: true,
     questions: true,
+    theirs: true,
     says:
       'This is a recurring one-to-one with the same person. What was agreed last time and is still open is the most useful line in the whole answer, and a question a good manager would wish they had asked is worth naming.'
+  },
+  {
+    id: 'manager',
+    label: 'Chefssamtal',
+    hint: 'med din egen chef',
+    lastTime: true,
+    questions: true,
+    theirs: true,
+    says:
+      "This is a recurring conversation between the user and their own manager. The user tends to review only their own part and to assume the manager handled theirs well. Do not: a manager's explanation, decision, promise or follow-up can be clear or vague, kept or dropped, like anybody's, and rank is not evidence that it was right. Whose promise a line was matters as much as in a 1-1 - a commitment the manager made is theirs, not the user's."
   },
   {
     id: 'check-in',
@@ -73,6 +95,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     hint: 'ett avgränsat ämne',
     lastTime: false,
     questions: false,
+    theirs: false,
     says:
       'This is a check-in about ONE bounded subject. Everything else that is open with this person is out of scope: do not raise it, do not observe that it went unmentioned, and do not treat its absence as something missed. It was not on the agenda, and there was no agenda. Answer about the thing the conversation was about and nothing else.'
   },
@@ -82,6 +105,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     hint: 'flera personer',
     lastTime: false,
     questions: true,
+    theirs: false,
     says:
       'Several people were in this. Whose promise a line was is the hard part and the part to get right: a commitment somebody else made is not the user\'s and does not belong in their list, however clearly it was made.'
   },
@@ -91,6 +115,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     hint: 'mest fakta, få beslut',
     lastTime: false,
     questions: false,
+    theirs: false,
     says:
       'This is a status update. Most of it is reporting rather than deciding. Leave the decisions list empty rather than promoting a statement of where something stands into a decision that somebody made.'
   }
@@ -163,15 +188,35 @@ function starts(text: string, word: string): boolean {
 const ONE_TO_ONE_TAG = 'tag-one-to-one'
 
 /**
+ * The words in a FOLDER name that say its notes are conversations with the
+ * user's own manager.
+ *
+ * The folder rather than the title or a tag, because that is where the answer
+ * already is: those notes are titled by date and tagged as meetings, so neither
+ * says who the other person was, and the folder they are filed in does. See
+ * DECISIONS.md, 2026-11-17.
+ */
+const MANAGER_FOLDER_WORDS = ['chef', 'chefs', 'manager', 'managers']
+
+/**
  * What this note's conversation probably was.
  *
  * The tag first, because it is not a guess: the 1-1 template stamps it, so a
- * note carrying it was started as a one-to-one on purpose. Only then the title,
- * which is a guess and is treated as one.
+ * note carrying it was started as a one-to-one on purpose. Then the folder it is
+ * filed in, which says whether the other person is the user's manager. Only
+ * then the title, which is a guess and is treated as one.
  */
-export function guessConversation(title: string, tags: readonly string[] = []): ConversationKind {
+export function guessConversation(
+  title: string,
+  tags: readonly string[] = [],
+  folder = ''
+): ConversationKind {
   if (tags.includes(ONE_TO_ONE_TAG)) {
     return 'one-to-one'
+  }
+  const filed = folder.toLowerCase()
+  if (MANAGER_FOLDER_WORDS.some((word) => starts(filed, word))) {
+    return 'manager'
   }
   const text = title.toLowerCase()
   for (const [kind, words] of WORDS) {

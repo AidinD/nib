@@ -70,6 +70,9 @@ function sections(conversation: ConversationKind): string {
   if (chosen?.questions === true) {
     parts.push('frågor modellen hade ställt')
   }
+  if (chosen?.theirs === true) {
+    parts.push('vad den andra parten gjorde bra och mindre bra, när något sticker ut')
+  }
   const last = parts.pop()
   return `Vad som sades, plus det du själv skrev. Ger ${parts.join(', ')} och ${last}.`
 }

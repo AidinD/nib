@@ -118,7 +118,7 @@ const api = {
   summarise: (request: {
     kind?: 'meeting' | 'note'
     /** What kind of conversation it was, which decides which sections exist. */
-    conversation?: 'one-to-one' | 'check-in' | 'meeting' | 'status'
+    conversation?: 'one-to-one' | 'manager' | 'check-in' | 'meeting' | 'status'
     transcript: string
     /** The `src` of each screenshot the transcript numbers, in that order. */
     screenshots?: string[]
@@ -147,6 +147,8 @@ const api = {
       answers?: { id: string; answer: string }[]
       /** The glossary corrections applied on the way into this summary. */
       corrections?: { heard: string; meant: string }[]
+      /** The other person's part, each point quoting them. */
+      theirs?: { verdict: 'good' | 'less good'; point: string; quote: string }[]
     }
   }> => ipcRenderer.invoke('summary:run', request),
 

@@ -1911,8 +1911,17 @@ export function Editor({
    * and the title is the guess.
    */
   const guessed = useMemo(
-    () => (note === null ? 'check-in' : guessConversation(note.title, note.tags)),
-    [note]
+    () => {
+      if (note === null) {
+        return 'check-in'
+      }
+      // The folder it is filed in, which is what says a conversation was with
+      // the user's own manager - see `guessConversation`.
+      const category = index.categories.find((candidate) => candidate.id === note.categoryId)
+      const sub = category?.subs.find((candidate) => candidate.id === note.subId)
+      return guessConversation(note.title, note.tags, sub?.name ?? category?.name ?? '')
+    },
+    [note, index]
   )
 
   // A choice belongs to the note it was made about, so opening another one

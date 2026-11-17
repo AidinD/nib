@@ -3,6 +3,70 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-17 - A 1-1 and a conversation with your manager also weigh the other person's part
+
+**The ask.** The author reviews only himself in these conversations and assumes
+the other person, his own manager above all, got it right. The summary did the
+same: "Frågor modellen hade ställt" is about his side, and nothing weighed the
+other person's contribution.
+
+**Decided.** A field `theirs` - what the other person did well and what less
+well, each point with the words it rests on - rendered as "Den andra partens
+bidrag", good points first.
+
+- **Only for a 1-1 and a conversation with the user's own manager.** Added in
+  `schemaFor` through a `theirs` flag on the conversation kind, the same way
+  `questions` and `lastTime` are removed, because a field that is not in the
+  schema cannot be filled and an instruction to leave it alone can. A check-in,
+  a meeting of several people, a status update, and any note summarised as a
+  note never have it.
+- **Empty is the normal answer.** Said in the schema and in the instruction, and
+  an empty list renders as no heading at all: a heading waiting to be filled is
+  how flaws get invented to fill it.
+- **Every point must quote the other person, and code checks it.** `keepQuoted`
+  drops a point whose quote is not in what the OTHER person said. The user's own
+  lines are set aside when the user's label is known: the channel name on a
+  two-channel recording, or a voice renamed "Jag" on an imported one.
+
+**How a manager conversation is recognised: its own kind, guessed from the
+folder.** `manager` ("Chefssamtal") is a kind beside `one-to-one`, and a note
+filed in a folder whose name starts a word with "chef" or "manager" is guessed
+as one. The guess fills the kind already chosen in the summary panel, so a wrong
+one is seen and corrected with one click before anything is spent - the same
+rule as the other guesses (2026-09-10).
+
+- *The title* lost: those notes are titled by date.
+- *A tag* lost: they are tagged as meetings, and a second tag on every note is a
+  habit to keep up rather than a fact already there.
+- *A flag set on the folder* lost for now: it needs a control and a change to
+  the index that every synced copy has to understand, to say what the folder
+  name already says.
+- *Its own kind rather than a 1-1 with a flag* because the instruction differs:
+  with a manager the user's habit is to defer, and the model is told that rank is
+  not evidence that something was right.
+
+A folder named after a book about managing is also guessed as `manager`. It only
+matters for a note that holds a transcript, and the panel shows the guess.
+
+**What the first real runs found, before this shipped.** Run locally against a
+real 1-1 and a real manager conversation, read-only, nothing written:
+
+- An exact quote match dropped every point. The model quotes across several
+  transcript lines and elides with "...", and each line carries a timestamp and
+  a speaker between the words. Now pieces between ellipses must appear in order
+  in the other person's lines.
+- Exact words were still too strict for real speech: the speaker said "ha", the
+  model wrote "har", and a fair point was dropped. A piece now matches when four
+  in five of its words appear in order within a short stretch. Words never said
+  still fail - a test pins a paraphrase sharing half its words.
+- On a two-channel transcript a continuation line starting "Jag ..." could not
+  be told from the user's label, so these transcripts, too, now reach the
+  summary as `Name: words` on every line. The page is unchanged.
+- With all three, the 1-1 and the manager conversation each came back with two
+  points, one good and one less good, every one kept and every one quoting the
+  other person's own line. Under the exact match the same conversations had kept
+  none.
+
 ## 2026-11-17 - A popover closes on Escape and on a click outside, wherever the focus is
 
 **The report.** "Move to another note" on a recording opened the note picker,

@@ -2315,16 +2315,20 @@ export function transcriptsWithScreenshots(root: HTMLElement): {
           : all.filter((mark) => mark.recording === recording && recording.length > 0)
 
       /*
-       * A transcript split by voice names the speaker on EVERY line, as
-       * `Name: words`, in what the summary reads - the page itself still names
-       * only the turn. Found on the first summary of an imported meeting: a
-       * turn's second line read "Jag kan bygga två stycken", and with the
-       * user's voice named "Jag" the model gave that promise to the user. On the
-       * page the reader sees whose turn it is; in flat text a line without its
-       * speaker is a guess, and the colon is what keeps a name apart from the
-       * first word of the sentence.
+       * A labelled transcript names the speaker on EVERY line, as `Name: words`,
+       * in what the summary reads - the page itself still names only the turn.
+       * Found on the first summary of an imported meeting: a turn's second line
+       * read "Jag kan bygga två stycken", and with the user's voice named "Jag"
+       * the model gave that promise to the user. On the page the reader sees
+       * whose turn it is; in flat text a line without its speaker is a guess,
+       * and the colon is what keeps a name apart from the first word of the
+       * sentence.
+       *
+       * Every labelled transcript, two-channel ones included, since 2026-11-17:
+       * the other person's part is checked against THEIR lines only (see
+       * `keepQuoted`), and that needs every line to say whose it is.
        */
-      const voiced = transcript.querySelector('p [data-speaker^="v"]') !== null
+      const voiced = transcript.querySelector('p [data-speaker]') !== null
       let speaking = ''
 
       const lines: string[] = []
@@ -2468,6 +2472,7 @@ export function summaryHtml(
     people: string[]
     lastTime?: string
     corrections?: { heard: string; meant: string }[]
+    theirs?: { verdict: 'good' | 'less good'; point: string; quote: string }[]
   }
 ): string {
   const escape = (text: string): string =>
@@ -2514,6 +2519,26 @@ export function summaryHtml(
      * after a reload too.
      */
     parts.push('<p data-flag-all="1"></p>')
+  }
+
+  if (value.theirs !== undefined && value.theirs.length > 0) {
+    /*
+     * The other person's part, for the conversations where only the user's own
+     * was ever weighed - a 1-1, and one with their own manager.
+     *
+     * Each line carries the words it rests on, so it can be checked against the
+     * transcript rather than taken on trust. Absent rather than empty when there
+     * is nothing: a heading over "nothing stood out" is a heading inviting the
+     * next summary to find something.
+     */
+    const good = value.theirs.filter((point) => point.verdict === 'good')
+    const less = value.theirs.filter((point) => point.verdict !== 'good')
+    const line = (label: string, point: { point: string; quote: string }): string =>
+      `<li><strong>${label}:</strong> ${escape(point.point)} <em>"${escape(point.quote)}"</em></li>`
+    parts.push('<h2>Den andra partens bidrag</h2>')
+    parts.push(
+      `<ul>${[...good.map((point) => line('Bra', point)), ...less.map((point) => line('Mindre bra', point))].join('')}</ul>`
+    )
   }
 
   if (value.questions.length > 0) {
@@ -3104,6 +3129,7 @@ export function insertSummary(
     lastTime?: string
     answers?: { id: string; answer: string }[]
     corrections?: { heard: string; meant: string }[]
+    theirs?: { verdict: 'good' | 'less good'; point: string; quote: string }[]
   }
 ): number {
   const filled = fillAnswers(root, value.answers ?? [])

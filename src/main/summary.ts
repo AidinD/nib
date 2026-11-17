@@ -133,7 +133,7 @@ export function readGlossary(dir: string): string[] {
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'decisions', 'actions', 'questions', 'people'],
+  required: ['summary', 'decisions', 'actions', 'questions', 'people', 'theirs'],
   properties: {
     summary: {
       type: 'string',
@@ -174,6 +174,28 @@ const SCHEMA = {
       type: 'string',
       description:
         'Only when a previous meeting was supplied: what was agreed then and is unresolved now.'
+    },
+    theirs: {
+      type: 'array',
+      description:
+        "The OTHER person's contribution: what they did well and what less well. Usually empty or one or two points - empty is the normal answer when nothing stands out, and a point invented to fill the list is worse than none. Never balance a strength with a weakness for its own sake.",
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['verdict', 'point', 'quote'],
+        properties: {
+          verdict: { type: 'string', enum: ['good', 'less good'] },
+          point: {
+            type: 'string',
+            description: 'One sentence: what they did, and why it helped or did not.'
+          },
+          quote: {
+            type: 'string',
+            description:
+              'Their own words, copied exactly from the transcript - the line this point rests on. A point you cannot quote them for does not belong here.'
+          }
+        }
+      }
     },
     answers: {
       type: 'array',
@@ -223,7 +245,10 @@ const SCHEMA = {
  * Built per call. The object is small and the alternative is four frozen copies
  * that have to be kept in step with one another.
  */
-export function schemaFor(kind: ConversationKind | undefined): Record<string, unknown> {
+export function schemaFor(
+  kind: ConversationKind | undefined,
+  source: 'meeting' | 'note' = 'meeting'
+): Record<string, unknown> {
   const conversation = conversationOf(kind)
   const properties: Record<string, unknown> = { ...SCHEMA.properties }
   if (!conversation.lastTime) {
@@ -231,6 +256,11 @@ export function schemaFor(kind: ConversationKind | undefined): Record<string, un
   }
   if (!conversation.questions) {
     delete properties.questions
+  }
+  // The other person's part is judged from what they SAID, so a note summarised
+  // as a note - his own typing - never has it, whatever kind it is filed as.
+  if (!conversation.theirs || source === 'note') {
+    delete properties.theirs
   }
   return {
     ...SCHEMA,
@@ -382,6 +412,147 @@ export interface SummaryRequest {
   model: string
 }
 
+/** One thing the other person did well or less well, and the words it rests on. */
+export interface TheirPoint {
+  verdict: 'good' | 'less good'
+  point: string
+  quote: string
+}
+
+/**
+ * Only the points whose quote is really something the OTHER person said.
+ *
+ * The schema asks for a quote and the instruction says to copy it exactly, and
+ * neither stops a model from writing a plausible one - or from quoting the
+ * user's own line as the other person's. Checked here, in code, the way the
+ * glossary correction is finished in code: a judgement about somebody's
+ * contribution that rests on words they never said is the one thing this
+ * section must not contain, and it reads exactly like one that is true.
+ *
+ * How a quote is matched, from the first real run: the model quoted across
+ * several transcript lines and elided with "...", and an exact match against
+ * the raw text failed every time, because each line carries a timestamp and a
+ * speaker between the words. So the lines are read as `time Name: words`, the
+ * user's own are set aside when the user's label is known, and the rest are
+ * joined into one stream. Each piece of the quote between ellipses must be in
+ * that stream, in order, compared without case or punctuation and allowing a
+ * word in five to differ - see `matchPiece`. Fewer than three words is not a
+ * quote of anything.
+ *
+ * @param labels Every speaker label the transcript uses, so a line's label is
+ *   told apart from its first word. `user` is the one that is the user.
+ */
+export function keepQuoted(
+  points: readonly TheirPoint[],
+  transcript: string,
+  speakers: { labels: readonly string[]; user?: string } = { labels: [] }
+): TheirPoint[] {
+  const flat = (text: string): string =>
+    text
+      .toLowerCase()
+      .normalize('NFC')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+
+  const known = new Set(speakers.labels.map((label) => label.trim()).filter((label) => label.length > 0))
+  let speaking = ''
+  const theirs: string[] = []
+  for (const raw of transcript.split(/\r?\n/)) {
+    let line = raw.trim().replace(/^\[?\d{1,2}(?::\d{2}){1,2}\]?\s*/, '')
+    const colon = line.indexOf(': ')
+    if (colon > 0 && known.has(line.slice(0, colon).trim())) {
+      speaking = line.slice(0, colon).trim()
+      line = line.slice(colon + 2)
+    }
+    if (speakers.user !== undefined && speaking === speakers.user) {
+      continue
+    }
+    theirs.push(line)
+  }
+  const heard = flat(theirs.join(' ')).split(' ').filter((word) => word.length > 0)
+
+  return points.filter((point) => {
+    const pieces = point.quote
+      .split(/\.{3}|…/)
+      .map((piece) => flat(piece).split(' ').filter((word) => word.length > 0))
+      .filter((piece) => piece.length > 0)
+    if (pieces.reduce((sum, piece) => sum + piece.length, 0) < 3) {
+      return false
+    }
+    let from = 0
+    for (const piece of pieces) {
+      const end = matchPiece(piece, heard, from)
+      if (end < 0) {
+        return false
+      }
+      from = end
+    }
+    return true
+  })
+}
+
+/** How much of a quoted piece has to be there, word for word, in order. */
+const QUOTE_SHARE = 0.8
+
+/**
+ * Where a quoted piece ends in what they said, or -1 when it is not there.
+ *
+ * Not an exact match, which the first real 1-1 showed is too strict to be
+ * useful: the speaker said "ha" and the model wrote "har", and a sentence
+ * condensed by one word failed outright. So a piece matches when at least four
+ * in five of its words appear in that order inside a stretch not much longer
+ * than the piece itself - enough slack for spelling and a dropped "alltså",
+ * none for words that were never said.
+ */
+function matchPiece(piece: readonly string[], heard: readonly string[], from: number): number {
+  const need = Math.ceil(piece.length * QUOTE_SHARE)
+  const span = piece.length * 2 + 4
+  const first = new Set(piece.slice(0, Math.max(1, piece.length - need + 1)))
+  for (let start = from; start < heard.length; start += 1) {
+    if (!first.has(heard[start])) {
+      continue
+    }
+    // Longest common subsequence of the piece and this stretch, and where it ends.
+    const window = heard.slice(start, start + span)
+    let row = new Array<number>(window.length + 1).fill(0)
+    for (const word of piece) {
+      const next = new Array<number>(window.length + 1).fill(0)
+      for (let at = 1; at <= window.length; at += 1) {
+        next[at] = word === window[at - 1] ? row[at - 1] + 1 : Math.max(row[at], next[at - 1])
+      }
+      row = next
+    }
+    if (row[window.length] >= need) {
+      const reached = row.findIndex((value) => value >= need)
+      return start + reached
+    }
+  }
+  return -1
+}
+
+/**
+ * The labels a transcript uses, and which one is the user, for `keepQuoted`.
+ *
+ * Two-channel recordings name the user's side directly. A voice-split one has a
+ * user only when a voice was renamed "Jag", which is what the rename panel
+ * offers for exactly this; without it every line counts, and only the quote's
+ * presence is checked.
+ */
+export function quotedSpeakers(request: Pick<SummaryRequest, 'speakers' | 'voices'>): {
+  labels: string[]
+  user?: string
+} {
+  const voices = request.voices ?? []
+  const labels = [
+    ...(request.speakers === undefined ? [] : [request.speakers.mine, request.speakers.theirs]),
+    ...voices,
+    '?'
+  ]
+  const user =
+    request.speakers?.mine ?? voices.find((name) => name.trim().toLowerCase() === 'jag')
+  return { labels, ...(user === undefined ? {} : { user }) }
+}
+
 export interface SummaryResult {
   ok: boolean
   reason?: string
@@ -396,6 +567,8 @@ export interface SummaryResult {
     lastTime?: string
     answers?: { id: string; answer: string }[]
     corrections?: { heard: string; meant: string }[]
+    /** The other person's part, each point resting on their own quoted words. */
+    theirs?: TheirPoint[]
   }
   costUsd?: number | null
 }
@@ -548,7 +721,8 @@ function texts(value: NonNullable<SummaryResult['value']>): string {
     ...value.questions,
     ...value.people,
     value.lastTime ?? '',
-    ...(value.answers ?? []).map((answer) => answer.answer)
+    ...(value.answers ?? []).map((answer) => answer.answer),
+    ...(value.theirs ?? []).map((point) => point.point)
   ].join(' ')
 }
 
@@ -628,7 +802,8 @@ export function tidyAnswer(
     questions: value.questions.map(tidy),
     people: value.people.map(tidy),
     lastTime: value.lastTime === undefined ? undefined : tidy(value.lastTime),
-    answers: value.answers?.map((answer) => ({ ...answer, answer: tidy(answer.answer) }))
+    answers: value.answers?.map((answer) => ({ ...answer, answer: tidy(answer.answer) })),
+    theirs: value.theirs?.map((point) => ({ ...point, point: tidy(point.point) }))
   }
   return texts(fixed) === texts(value) ? value : fixed
 }
@@ -689,7 +864,10 @@ export function applyGlossary(
     questions: value.questions.map(fix),
     people: value.people.map(fix),
     lastTime: value.lastTime === undefined ? undefined : fix(value.lastTime),
-    answers: value.answers?.map((answer) => ({ ...answer, answer: fix(answer.answer) }))
+    answers: value.answers?.map((answer) => ({ ...answer, answer: fix(answer.answer) })),
+    // The point, never the quote: the quote is the transcript's own words, and it
+    // is what was checked against the transcript.
+    theirs: value.theirs?.map((point) => ({ ...point, point: fix(point.point) }))
   }
   if (texts(fixed) === before) {
     return value
@@ -767,6 +945,25 @@ export function instruction(request: SummaryRequest): string {
    * they actually are, it can fall back on the words.
    */
   const conversation = conversationOf(request.conversation)
+
+  /*
+   * The other person's part - only where the schema has the field for it.
+   *
+   * Asked for because the user reviews only their own side of these
+   * conversations, and the summary used to do the same: everything in it was
+   * about the user, so the other person - their own manager above all - was
+   * implicitly assumed to have done it right. The emptiness is said twice, here
+   * and in the schema, because a section waiting to be filled is how flaws get
+   * invented to fill it.
+   */
+  const theirs =
+    !conversation.theirs
+      ? ''
+      : [
+          "In `theirs`, weigh the OTHER person's part the way the user's own part is usually weighed: what they did well and what less well - a clear explanation or a vague one, a decision made or pushed back, a promise kept or dropped, a question answered or deflected, support given or withheld.",
+          "Every point must rest on something THEY said, and `quote` is those words copied exactly from the transcript. A point you cannot quote them for is left out, and a point quoted from the user's own lines is not about them.",
+          'Most conversations have little or nothing that stands out, and then the list is empty. Do not balance praise with criticism, or the reverse, for its own sake.'
+        ].join('\n')
 
   const labels =
     request.speakers === undefined
@@ -910,6 +1107,7 @@ export function instruction(request: SummaryRequest): string {
      * work of the "Sedan förra gången" it no longer has a field for.
      */
     conversation.says,
+    theirs,
     labels,
     voiceLabels,
     marks,
@@ -937,7 +1135,10 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
   const result = await ask({
     prompt: instruction(request),
     model: request.model,
-    schema: schemaFor(request.kind === 'note' ? 'one-to-one' : request.conversation),
+    schema: schemaFor(
+      request.kind === 'note' ? 'one-to-one' : request.conversation,
+      request.kind === 'note' ? 'note' : 'meeting'
+    ),
     // A meeting's only. A note summarised as a note is asked about its own text.
     images:
       request.kind === 'note'
@@ -978,7 +1179,11 @@ export async function summarise(request: SummaryRequest): Promise<SummaryResult>
     decisions: raw.decisions ?? [],
     actions: raw.actions ?? [],
     questions: raw.questions ?? [],
-    people: raw.people ?? []
+    people: raw.people ?? [],
+    // Whatever the model wrote, only the points it can quote the transcript for.
+    ...(raw.theirs === undefined
+      ? {}
+      : { theirs: keepQuoted(raw.theirs, request.transcript, quotedSpeakers(request)) })
   })
 
   const answered =
