@@ -3,6 +3,35 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-17 - A popover closes on Escape and on a click outside, wherever the focus is
+
+**The report.** "Move to another note" on a recording opened the note picker,
+and it could not be closed. It closed only on Escape while its own search field
+had focus, and not on a click outside at all. A click on the note's text put the
+caret back in the body, and from there nothing put the picker away short of
+picking a note that was not wanted.
+
+**The audit found the same gap in two more places.** The slash menu and the
+calendar listened for Escape only in the note body, and for no click outside, so
+with the focus in the title field or a click on the toolbar they stayed up.
+TagPicker, CardMenu and Settings already closed both ways. VoiceRename takes the
+focus and closes when it loses it, so it cannot be stranded.
+
+**Decided.** One hook, `useDismiss` in `src/renderer/src/lib/dismiss.ts`: Escape
+and a pointer-down outside the panel, both on the document in the capture phase,
+the same shape the three that worked already had. Applied to the note picker
+(both of its uses, link and move), the slash menu and the calendar. Escape is
+stopped once it has closed the popover, so it does nothing else. A press inside
+is left alone, so the rows and the field still work.
+
+Closing the move picker only clears the picker: the recording, its file and its
+note are untouched, and a transcription running at the time still lands on it.
+
+**Verified** by `test/e2e/popover-dismiss.steps.mjs` in the built app. Six of its
+checks fail on the code before this (Escape and an outside click, for each of the
+three) and all pass after, along with the recording staying put and a
+transcription started before the picker opened landing on it.
+
 ## 2026-11-16 - A meeting recorded on a phone is imported, and its voices are told apart here
 
 **The ask.** In-room meetings will be recorded on a phone (Pixel Recorder) on

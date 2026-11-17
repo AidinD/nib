@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useDismiss } from '../lib/dismiss'
 
 /*
  * The slash menu: type `/` and pick a command, the way Slack and Notion do.
@@ -88,10 +89,13 @@ interface SlashMenuProps {
   active: number
   onPick: (command: SlashCommand) => void
   onHover: (index: number) => void
+  /** Escape from anywhere, or a press outside the menu. */
+  onClose: () => void
 }
 
-export function SlashMenu({ at, query, active, onPick, onHover }: SlashMenuProps): React.JSX.Element | null {
+export function SlashMenu({ at, query, active, onPick, onHover, onClose }: SlashMenuProps): React.JSX.Element | null {
   const listRef = useRef<HTMLDivElement | null>(null)
+  useDismiss(listRef, onClose)
   const matches = matchCommands(query)
 
   // Keep the highlighted row in view when the arrows walk past the edge.

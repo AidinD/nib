@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useDismiss } from '../lib/dismiss'
 
 /*
  * A month at the caret, for `/date`.
@@ -66,14 +67,18 @@ interface DatePickerProps {
   cursor: Date
   onPick: (date: Date) => void
   onMove: (date: Date) => void
+  /** Escape from anywhere, or a press outside the calendar. */
+  onClose: () => void
 }
 
-export function DatePicker({ at, cursor, onPick, onMove }: DatePickerProps): React.JSX.Element {
+export function DatePicker({ at, cursor, onPick, onMove, onClose }: DatePickerProps): React.JSX.Element {
   const today = useRef(new Date()).current
+  const panel = useRef<HTMLDivElement | null>(null)
+  useDismiss(panel, onClose)
   const weeks = weeksOf(cursor)
 
   return (
-    <div className="date-picker" style={{ left: at.left, top: at.top }}>
+    <div className="date-picker" ref={panel} style={{ left: at.left, top: at.top }}>
       <div className="date-head">
         <button
           type="button"

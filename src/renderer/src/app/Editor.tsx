@@ -3667,6 +3667,7 @@ export function Editor({
             cursor={picker.cursor}
             onPick={pickDate}
             onMove={(date) => setPicker({ ...picker, cursor: date })}
+            onClose={() => setPicker(null)}
           />
         )}
 
@@ -3677,6 +3678,7 @@ export function Editor({
             active={slash.active}
             onPick={runSlashCommand}
             onHover={(index) => setSlash({ ...slash, active: index })}
+            onClose={() => setSlash(null)}
           />
         )}
 

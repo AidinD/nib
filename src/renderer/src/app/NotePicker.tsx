@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta } from '@shared/types'
+import { useDismiss } from '../lib/dismiss'
 
 /*
  * Pick a note to link to.
@@ -61,6 +62,10 @@ export function NotePicker({ at, choices, onPick, onClose }: NotePickerProps): R
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  // Escape wherever the focus is, and a press outside - see `useDismiss`. The
+  // field's own Escape below is kept: it is the same answer, given first.
+  useDismiss(panelRef, onClose)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -84,7 +89,7 @@ export function NotePicker({ at, choices, onPick, onClose }: NotePickerProps): R
   }
 
   return (
-    <div className="note-picker" style={{ left: at.left, top: at.top }}>
+    <div className="note-picker" ref={panelRef} style={{ left: at.left, top: at.top }}>
       <input
         ref={inputRef}
         className="note-picker-input"
