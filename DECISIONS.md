@@ -3,6 +3,52 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-19 - A recording warns, while it runs, when the microphone channel is unusable
+
+**The report.** A meeting where the default mic was at 0% input volume. The
+meeting app had switched to another microphone; Nib records the Windows default
+(it asks `getUserMedia` for no particular device) and went on recording that
+one. The device, a virtual one, delivered constant loud noise rather than
+silence: its level never fell to a floor in twenty-one minutes, about one sample
+in a hundred was clipped, and neighbouring samples correlated at 0.4 to 0.6
+where speech is 0.9 and above. The call's side was fine. whisper turned the
+microphone side into one phrase repeated, and nothing said so until the meeting
+was over.
+
+**Decided.** The recorder measures every chunk it writes - level, peak,
+clipping, lag-1 correlation of the microphone channel, level of the call's - and
+a warning appears under the recording bar, naming the device being recorded and
+saying to check its input volume and whether the meeting uses that microphone.
+In the app, not a dialog; it never stops the recording; a cross puts it away
+until the problem changes or clears and comes back. `src/renderer/src/lib/mic-health.ts`.
+
+- **noise** - the quietest second in the last ten is still loud. At or above
+  0.3 RMS that alone is enough, since speech cannot hold it for a second
+  without clipping (the failure measured 0.34 to 0.46). From 0.03 it also needs
+  the signal not to look like speech: lag-1 correlation under 0.8, or at least
+  one sample in a thousand clipped.
+- **silent** - for twenty seconds no microphone peak above 64 of 32768 (about
+  -54 dBFS) while the call was audible in a quarter of them. Twenty, not ten,
+  and worded as "if you have spoken, Nib is not hearing you", because a
+  noise-removing virtual microphone sends true digital silence whenever you are
+  quiet: listening and a dead device look identical, and only the person knows
+  which.
+
+**Tuned towards false positives**, the standing rule for attention signals: a
+false warning costs a glance and clears itself, a missed one costs the meeting.
+
+**Rejected.** A device picker - out of scope, and the warning is what makes the
+mismatch visible in the first place. Checking only before recording - the level
+check already exists there, and the failure happened mid-meeting. Stopping or
+pausing on a bad signal - the other channel may still be worth everything.
+
+**Verified.** Synthetic signals only, built from the measured numbers: unit
+tests for constant noise, quieter noise, a silent microphone under an active
+call, speech with pauses, a loud talker with no pause, a quiet room floor.
+`test/e2e/mic-warning.steps.mjs` feeds generated signals into a real recording
+and measures the warning as a box on screen; it passes against the packaged
+build. Not verified: a real device at 0% input volume.
+
 ## 2026-11-17 - A 1-1 and a conversation with your manager also weigh the other person's part
 
 **The ask.** The author reviews only himself in these conversations and assumes

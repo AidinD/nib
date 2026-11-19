@@ -39,6 +39,9 @@
  * returns.
  */
 
+import { chunkStats, MicWatch } from './mic-health'
+import type { MicProblem } from './mic-health'
+
 /** What whisper resamples everything to, so there is no point capturing more. */
 const SAMPLE_RATE = 16000
 
@@ -62,6 +65,15 @@ export interface Recorder {
   levels: () => Levels
   /** Seconds captured so far, from the samples themselves rather than a clock. */
   seconds: () => number
+  /**
+   * The device the left channel comes from, as the system names it.
+   *
+   * The Windows default, always - no device is asked for - which is exactly why
+   * it is named in the warning: a meeting app can be using another one.
+   */
+  microphone: string
+  /** What is wrong with the microphone channel right now, or null. See mic-health.ts. */
+  micProblem: () => MicProblem | null
   stop: () => Promise<{ path: string; seconds: number; bytes: number } | null>
 }
 
@@ -168,9 +180,13 @@ export async function startRecording(noteId: string): Promise<Recorder> {
 
   const processor = context.createScriptProcessor(CHUNK_SAMPLES, CHANNELS, CHANNELS)
   let samples = 0
+  // Judged from the very samples being written, so the warning is about what is
+  // in the file rather than about a meter that could disagree with it.
+  const watch = new MicWatch()
   processor.onaudioprocess = (event) => {
     const left = event.inputBuffer.getChannelData(MIC_CHANNEL)
     const right = event.inputBuffer.getChannelData(SYSTEM_CHANNEL)
+    watch.push(chunkStats(left, right))
     // Interleaved, which is what a WAV holds: L R L R rather than one channel
     // after the other.
     const frames = new Int16Array(left.length * CHANNELS)
@@ -195,6 +211,8 @@ export async function startRecording(noteId: string): Promise<Recorder> {
     path,
     levels: () => ({ mic: peak(micNode, scratch), system: peak(systemNode, scratch) }),
     seconds: () => Math.round(samples / SAMPLE_RATE),
+    microphone: mic.getAudioTracks()[0]?.label ?? '',
+    micProblem: () => watch.problem(),
     stop: async () => {
       processor.disconnect()
       processor.onaudioprocess = null

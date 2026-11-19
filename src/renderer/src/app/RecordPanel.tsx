@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { openSelfTest, startRecording } from '../lib/recorder'
+import { micWarning } from '../lib/mic-health'
+import type { MicProblem } from '../lib/mic-health'
 import type { Levels, Recorder } from '../lib/recorder'
 
 /*
@@ -169,11 +171,20 @@ export function RecordingBar({
 }): React.JSX.Element {
   const [seconds, setSeconds] = useState(0)
   const [levels, setLevels] = useState<Levels>({ mic: 0, system: 0 })
+  const [problem, setProblem] = useState<MicProblem | null>(null)
+  /**
+   * A warning put away, by kind. Only that kind and only until it clears: if the
+   * microphone recovers and fails again, that is news, and it is said again.
+   */
+  const [hidden, setHidden] = useState<MicProblem | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setSeconds(recorder.seconds())
       setLevels(recorder.levels())
+      const now = recorder.micProblem()
+      setProblem(now)
+      setHidden((current) => (current !== null && current !== now ? null : current))
     }, 200)
     return () => window.clearInterval(timer)
   }, [recorder])
@@ -182,6 +193,7 @@ export function RecordingBar({
   const rest = seconds % 60
 
   return (
+    <>
     <div className="recording-bar">
       <span className="recording-dot" />
       <span className="recording-time">
@@ -214,5 +226,25 @@ export function RecordingBar({
         Stop
       </button>
     </div>
+    {/*
+      The microphone check, under the bar while the meeting is still on - the
+      only time anything can be done about it. In the app, not a dialog: it must
+      not take the focus from a call, and it never stops the recording.
+    */}
+    {problem !== null && hidden !== problem && (
+      <div className="mic-warning" role="alert" data-problem={problem}>
+        <span className="mic-warning-text">{micWarning(problem, recorder.microphone)}</span>
+        <button
+          type="button"
+          className="mic-warning-hide"
+          title="Hide until it changes"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setHidden(problem)}
+        >
+          ×
+        </button>
+      </div>
+    )}
+    </>
   )
 }

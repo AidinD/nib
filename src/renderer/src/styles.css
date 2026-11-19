@@ -3635,6 +3635,42 @@ body.is-resizing .splitter-grip {
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
 
+/*
+ * The microphone check, hanging under the recording bar. Same corner, so it is
+ * where the eye already goes to see that the recording is running; the alert
+ * colour, because it means the recording may be worth nothing on your side.
+ */
+.mic-warning {
+  position: absolute;
+  z-index: 42;
+  top: 116px;
+  right: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 420px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--alert);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mic-warning-hide {
+  flex: none;
+  padding: 0 4px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
 .recording-dot {
   width: 8px;
   height: 8px;
