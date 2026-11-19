@@ -2231,6 +2231,7 @@ export function timeLabel(at: number, label: HTMLElement = document.createElemen
  * behind on its own.
  */
 export function applyTimeMarks(root: HTMLElement): void {
+  dropCopiedMarks(root)
   for (const label of root.querySelectorAll<HTMLElement>('[data-at-label]')) {
     const before = label.previousElementSibling
     const parent = label.parentElement
@@ -2254,6 +2255,104 @@ export function applyTimeMarks(root: HTMLElement): void {
       } else {
         owner.insertBefore(label, owner.firstChild)
       }
+    }
+  }
+}
+
+/** Take a line's mark off: the moment, the recording and the label in front of it. */
+function unmark(block: HTMLElement): void {
+  delete block.dataset.at
+  delete block.dataset.rec
+  const label = block.firstElementChild
+  if (label instanceof HTMLElement && label.hasAttribute('data-at-label')) {
+    label.remove()
+  }
+}
+
+/**
+ * A marked line copied onto other lines, taken back off them.
+ *
+ * The browser makes the line after an Enter by cloning the one the caret was
+ * in, attributes and all, so one press of Mark used to become a time on every
+ * line written after it - and the next screenshot, which rebuilds the labels,
+ * made all of them appear at once. Copying a marked line does the same.
+ *
+ * A line keeps its mark only if no earlier line has the same moment in the same
+ * recording. Two real marks cannot share a second: marking another line means
+ * moving the caret to it and pressing Mark again. Screenshots are left alone;
+ * each paste gets its own moment and a picture is never cloned by a split.
+ */
+export function dropCopiedMarks(root: HTMLElement): void {
+  const seen = new Set<string>()
+  for (const owner of root.querySelectorAll<HTMLElement>('[data-at]')) {
+    if (owner.tagName === 'IMG' || owner.closest('[data-transcript]') !== null) {
+      continue
+    }
+    const key = `${owner.dataset.rec ?? ''}|${owner.dataset.at}`
+    if (seen.has(key)) {
+      unmark(owner)
+    } else {
+      seen.add(key)
+    }
+  }
+}
+
+/**
+ * After Enter split a marked line: the mark stays on one of the two.
+ *
+ * On the one that kept the label, which is the line that was marked - unless
+ * the split left it with nothing but its label, when the words the mark was
+ * about have all moved down and the mark goes with them.
+ */
+export function settleSplitMark(original: HTMLElement, added: readonly HTMLElement[]): void {
+  const at = original.dataset.at
+  if (at === undefined) {
+    return
+  }
+  const copies = added.filter((block) => block.dataset.at === at)
+  if (copies.length === 0) {
+    return
+  }
+  const words = (block: HTMLElement): string => {
+    const copy = block.cloneNode(true) as HTMLElement
+    for (const label of copy.querySelectorAll('[data-at-label]')) {
+      label.remove()
+    }
+    return (copy.textContent ?? '').replace(/[\s​]/g, '')
+  }
+  const next = copies.find((block) => block.previousElementSibling === original)
+  if (next !== undefined && words(original) === '' && words(next) !== '' && original.querySelector('img') === null) {
+    const rec = original.dataset.rec
+    unmark(original)
+    for (const copy of copies) {
+      unmark(copy)
+    }
+    next.dataset.at = at
+    if (rec !== undefined) {
+      next.dataset.rec = rec
+    }
+    return
+  }
+  for (const copy of copies) {
+    unmark(copy)
+  }
+}
+
+/**
+ * A line whose time was deleted is no longer marked.
+ *
+ * Every marked line wears its label in front, so a marked line without one
+ * after a delete is a line whose label somebody just took out - and the only
+ * other way to take a mark off is Mark again, which needs a recording running.
+ */
+export function dropUnlabelledMarks(root: HTMLElement): void {
+  for (const owner of root.querySelectorAll<HTMLElement>('[data-at]')) {
+    if (owner.tagName === 'IMG' || owner.closest('[data-transcript]') !== null) {
+      continue
+    }
+    const first = owner.firstElementChild
+    if (!(first instanceof HTMLElement && first.hasAttribute('data-at-label'))) {
+      unmark(owner)
     }
   }
 }

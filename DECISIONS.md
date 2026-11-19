@@ -3,6 +3,44 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-19 - The caret survives Start, and a mark stays on the line it was put on
+
+**Two reports from one meeting.** The caret vanished as he started typing, and
+times appeared on comments written under screenshots that nobody had marked.
+
+**The caret.** Start is a button; a click focuses it, the record panel closes
+under it, and the focus falls to the page. The selection was still in the note,
+so nothing looked wrong until the first keys went nowhere. Decided: when the
+record panel, the import panel or the recording bar appears or goes, the editor
+takes the focus back and restores its selection - only when the focus fell to
+the page, so a cursor in the title field stays where it is. Rejected: swallowing
+mousedown on Start, as the toolbar does. It covers one button of several and
+leaves the next panel to repeat the mistake.
+
+**The times.** One press of Mark put `data-at` on a line. Chromium makes the
+line after an Enter by cloning the one the caret was in, attributes and all, so
+every line written after a mark carried it - and the next screenshot rebuilt
+the labels and made them all appear at once. Decided:
+
+- Enter on a marked line leaves the mark on one line: the one that kept the
+  label, or the next one when the split left the marked line with nothing but
+  its label (Enter right after the time moves the words down, and the mark goes
+  with them). `settleSplitMark`.
+- On load, and whenever labels are rebuilt, a line whose moment and recording
+  an earlier line already has loses its mark. Two real marks cannot share a
+  second - marking another line means moving the caret and pressing Mark again
+  - so this only ever removes copies, and it is what repairs the notes the bug
+  already wrote, in the app rather than by editing files under it.
+  `dropCopiedMarks`. Screenshots are left alone: each paste has its own moment
+  and a split never clones a picture.
+- Deleting a line's time unmarks the line. Before, the label came back on the
+  next load and the only way to take a mark off was Mark again, which needs a
+  recording running. `dropUnlabelledMarks`.
+
+Checked in `test/e2e/image-comments.steps.mjs` and
+`test/e2e/copied-marks.steps.mjs`; both fail against 0.24.13. `run.mjs` now
+takes a `seed` body from a script, for cases about what happens as a note loads.
+
 ## 2026-11-19 - A recording warns, while it runs, when the microphone channel is unusable
 
 **The report.** A meeting where the default mic was at 0% input volume. The

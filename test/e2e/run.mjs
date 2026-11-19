@@ -24,14 +24,20 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..', '..')
 const filter = process.argv[2] ?? ''
 
-/** A notebook with one category and one note, `note-e2e`, whose body is a line and a bullet. */
-function scratchNotebook(dir) {
+const START = '<p>Start</p><ul><li>Plain bullet</li></ul>'
+
+/**
+ * A notebook with one category and one note, `note-e2e`, whose body is a line
+ * and a bullet - or the `seed` a script exports, for a case that is about what
+ * the app does with a note as it is loaded.
+ */
+function scratchNotebook(dir, html = START) {
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(join(dir, 'notes'), { recursive: true })
   const now = Date.now()
@@ -47,7 +53,7 @@ function scratchNotebook(dir) {
   }))
   writeFileSync(join(dir, 'notes', 'note-e2e.json'), JSON.stringify({
     id: 'note-e2e', categoryId: 'cat-e2e', subId: '', title: 'E2E',
-    html: '<p>Start</p><ul><li>Plain bullet</li></ul>', created: now, edited: now
+    html, created: now, edited: now
   }))
 }
 
@@ -55,7 +61,8 @@ const scripts = readdirSync(here).filter((name) => name.endsWith('.steps.mjs') &
 let failed = 0
 for (const name of scripts) {
   const notebook = join(tmpdir(), `nib-e2e-notebook-${process.pid}`)
-  scratchNotebook(notebook)
+  const { seed } = await import(pathToFileURL(join(here, name)).href)
+  scratchNotebook(notebook, seed)
   console.log(`\n=== ${name}`)
   const run = spawnSync(process.execPath, [join(root, 'scripts', 'e2e.mjs'), join(here, name)], {
     cwd: root,

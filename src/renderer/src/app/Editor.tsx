@@ -50,6 +50,8 @@ import {
   withoutRecording,
   applySummaryBlocks,
   applyTimeMarks,
+  dropUnlabelledMarks,
+  settleSplitMark,
   applyTranscriptBlocks,
   transcriptHtml,
   transcriptForRecording,
@@ -645,6 +647,40 @@ export function Editor({
     }
   }, [refreshFormats])
 
+  /**
+   * The caret comes back when a recording starts or stops.
+   *
+   * Start, Stop and the import's buttons are clicked, a click focuses a button,
+   * and the button is gone a moment later with the panel it sat in - so the
+   * focus fell to the page itself. The selection was still in the note, which
+   * is why nothing looked wrong until you started typing: no caret, and the
+   * words went nowhere. Only taken back when nothing else holds the focus, so a
+   * cursor in the title field stays there.
+   */
+  const recordingOn = recording !== null
+  const lastChrome = useRef({ panel, importing, recordingOn })
+  useEffect(() => {
+    const was = lastChrome.current
+    lastChrome.current = { panel, importing, recordingOn }
+    if (was.panel === panel && was.importing === importing && was.recordingOn === recordingOn) {
+      return
+    }
+    const root = bodyRef.current
+    const active = document.activeElement
+    if (root === null || (active !== null && active !== document.body)) {
+      return
+    }
+    const selection = window.getSelection()
+    const current = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+    const range =
+      current !== null && root.contains(current.commonAncestorContainer) ? current.cloneRange() : savedRange.current
+    root.focus({ preventScroll: true })
+    if (selection !== null && range !== null && root.contains(range.commonAncestorContainer)) {
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+  }, [panel, importing, recordingOn])
+
   /** Run something with the caret guaranteed to be back inside the body. */
   const withSelection = useCallback((run: () => void) => {
     const root = bodyRef.current
@@ -779,10 +815,27 @@ export function Editor({
      * the one worth keeping.
      */
     let splitting: { list: Element; before: Set<Element> } | null = null
+    /*
+     * Enter on a marked line marks one line, not two - the same clone, copying
+     * `data-at`. See `settleSplitMark`.
+     */
+    let splittingMark: { line: HTMLElement; parent: Element; before: Set<Element> } | null = null
     const onInput = (event: Event): void => {
+      const type = (event as InputEvent).inputType
+      const mark = splittingMark
+      splittingMark = null
+      if (mark !== null && type === 'insertParagraph') {
+        const added = Array.from(mark.parent.children).filter(
+          (child): child is HTMLElement => child instanceof HTMLElement && !mark.before.has(child)
+        )
+        settleSplitMark(mark.line, added)
+        applyTimeMarks(root)
+      } else if (type.startsWith('delete')) {
+        dropUnlabelledMarks(root)
+      }
       const pending = splitting
       splitting = null
-      if (pending === null || (event as InputEvent).inputType !== 'insertParagraph') {
+      if (pending === null || type !== 'insertParagraph') {
         return
       }
       for (const item of pending.list.children) {
@@ -807,6 +860,10 @@ export function Editor({
         const task = line?.closest('li[data-task]') ?? null
         if (!handled && task?.parentElement != null) {
           splitting = { list: task.parentElement, before: new Set(task.parentElement.children) }
+        }
+        const marked = line?.closest<HTMLElement>('[data-at]') ?? null
+        if (!handled && marked !== null && marked.tagName !== 'IMG' && marked.parentElement !== null) {
+          splittingMark = { line: marked, parent: marked.parentElement, before: new Set(marked.parentElement.children) }
         }
       } else if (input.data === ' ') {
         handled = applyBlockShortcut(root, line)
