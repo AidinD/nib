@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NibIndex, NoteMeta, Template } from '@shared/types'
 import { tagsFor } from '@shared/tags'
+import { NEXT_TIME, nextTimeCandidates } from '@shared/next-time'
 import { CardMenu } from './CardMenu'
 import { TagPicker } from './TagPicker'
-import { dateStamp, noteReference, noteTrail, relativeTime, sameDay } from '../lib/notes'
+import { dateStamp, nextTimeOf, noteReference, noteTrail, relativeTime, sameDay } from '../lib/notes'
 import type { Selection } from '../lib/selection'
 import {
   audioSize,
@@ -139,6 +140,49 @@ export function NoteList({
   const target = selectionTarget(selection)
   const showCrumb = selectionShowsCrumb(selection)
 
+  /*
+   * "Till nästa gång" from the newest note in this folder that has one, above
+   * the cards - so the minutes before a 1-1 are spent reading it, not finding
+   * it. Read from the files because the index holds no bodies; re-read when one
+   * of those notes is edited, which is when the list can have changed.
+   */
+  const [nextTime, setNextTime] = useState<{ noteId: string; title: string; lines: string[] } | null>(null)
+  const folderKey = target === null ? '' : `${target.categoryId}/${target.subId ?? ''}`
+  const candidates = useMemo(
+    () =>
+      target === null
+        ? []
+        : nextTimeCandidates(index.categories.flatMap((category) => category.notes), target, [], 8),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [index, folderKey]
+  )
+  const candidateKey = candidates.map((note) => `${note.id}:${note.edited}`).join('|')
+  useEffect(() => {
+    let live = true
+    if (candidates.length === 0) {
+      setNextTime(null)
+      return
+    }
+    void window.nib.readNotes(candidates.map((note) => note.id)).then((docs) => {
+      if (!live) {
+        return
+      }
+      for (const candidate of candidates) {
+        const doc = docs.find((read) => read.id === candidate.id)
+        const lines = doc === undefined ? [] : nextTimeOf(doc.html)
+        if (lines.length > 0) {
+          setNextTime({ noteId: candidate.id, title: candidate.title, lines })
+          return
+        }
+      }
+      setNextTime(null)
+    })
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderKey, candidateKey])
+
   /**
    * Where a card dropped in this list lands.
    *
@@ -187,6 +231,25 @@ export function NoteList({
         <span className="list-name">{selectionTitle(index, selection)}</span>
         <span className="row-count">{notes.length}</span>
       </header>
+
+      {nextTime !== null && (
+        <div className="next-time">
+          <button
+            type="button"
+            className="next-time-head"
+            title={`Öppna ${nextTime.title}`}
+            onClick={() => onOpen(nextTime.noteId)}
+          >
+            <span className="next-time-label">{NEXT_TIME}</span>
+            <span className="next-time-from">{nextTime.title}</span>
+          </button>
+          <ul className="next-time-lines">
+            {nextTime.lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="add-row">
         <input

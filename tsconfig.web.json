@@ -11,6 +11,11 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "strict": true,
+    /* As in tsconfig.node.json: a renderer module that `node --test` imports
+       reaches a shared one by relative path with its .ts extension, because the
+       test runner cannot see the `@shared/...` alias. */
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "baseUrl": ".",

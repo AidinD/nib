@@ -3,6 +3,48 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-25 - "Till nästa gång": what to pick up, in front of you before the next 1-1
+
+**The ask.** A section in a 1-1 for the next time, to check quickly before the
+next meeting with that person. The moment is the five minutes before it; what
+was promised and left open was in last time's note, and opening and reading that
+is the step that does not happen.
+
+**Decided.**
+
+- The 1-1 template ends with a heading, `Till nästa gång`, and a prompt. A
+  section in the note rather than a field beside it, because it is written
+  during the conversation, in the note. A notebook seeded before this gets the
+  section only if its 1-1 template is still exactly the old default; one that
+  has been rewritten is left alone.
+- The summary gets `nextTime` for the conversations that have a `lastTime` - a
+  1-1 and one with the manager - and writes it under the same heading. One rule
+  reads both back: every `Till nästa gång` heading in a note (also `Nästa gång`
+  and `Next time`), its lines up to the next heading of the same level, minus
+  ticked items, the template prompt and the summary's signature. `nextTimeOf`.
+- Shown in two places, both read from the newest note in the folder that has
+  any - by the date the title starts with, since a 1-1 is often written up a
+  day late:
+  - **The folder.** A box above the cards with the lines and the note they come
+    from; a click opens that note. Opening the person's folder is enough.
+  - **The next note.** A 1-1 made from the template - from the folder or from
+    Ctrl+K, which share `createNote` - starts with the list as open checklist
+    items under its first heading, "Uppföljning", whose question is exactly
+    whether those things got done. Looked for among notes with the template's
+    tags, so a 1-1 follows the previous 1-1.
+
+**Rejected.** A stored "next time" field on the note's metadata: a second place
+to type, and one the summary and the editor would both have to keep in step.
+A pinned sticky per person: the folder is already where the person is. Only one
+of the two places: the folder answers "what is open with Kim" the day before,
+the carried list is where it gets ticked off during the conversation, and both
+are the same lookup.
+
+**Not shown anywhere** until a note has the section with something in it: no
+note in the real notebook had one when this shipped. `tsconfig.web.json` now
+allows `.ts` import paths, as `tsconfig.node.json` already did, so a renderer
+module `npm test` imports can reach a shared one.
+
 ## 2026-11-19 - The caret survives Start, and a mark stays on the line it was put on
 
 **Two reports from one meeting.** The caret vanished as he started typing, and

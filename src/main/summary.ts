@@ -175,6 +175,12 @@ const SCHEMA = {
       description:
         'Only when a previous meeting was supplied: what was agreed then and is unresolved now.'
     },
+    nextTime: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'What the user should have in front of them before the NEXT conversation with this person: promises either side made that come due, questions left open, things to follow up on. One short line each. Empty when nothing carries over.'
+    },
     theirs: {
       type: 'array',
       description:
@@ -251,8 +257,11 @@ export function schemaFor(
 ): Record<string, unknown> {
   const conversation = conversationOf(kind)
   const properties: Record<string, unknown> = { ...SCHEMA.properties }
+  // The thread of a recurring conversation runs both ways: what was left open
+  // last time, and what to pick up next time. A one-off has neither.
   if (!conversation.lastTime) {
     delete properties.lastTime
+    delete properties.nextTime
   }
   if (!conversation.questions) {
     delete properties.questions
@@ -565,6 +574,8 @@ export interface SummaryResult {
     questions: string[]
     people: string[]
     lastTime?: string
+    /** What to pick up next time - shown before the next conversation with this person. */
+    nextTime?: string[]
     answers?: { id: string; answer: string }[]
     corrections?: { heard: string; meant: string }[]
     /** The other person's part, each point resting on their own quoted words. */
@@ -721,6 +732,7 @@ function texts(value: NonNullable<SummaryResult['value']>): string {
     ...value.questions,
     ...value.people,
     value.lastTime ?? '',
+    ...(value.nextTime ?? []),
     ...(value.answers ?? []).map((answer) => answer.answer),
     ...(value.theirs ?? []).map((point) => point.point)
   ].join(' ')
@@ -802,6 +814,7 @@ export function tidyAnswer(
     questions: value.questions.map(tidy),
     people: value.people.map(tidy),
     lastTime: value.lastTime === undefined ? undefined : tidy(value.lastTime),
+    nextTime: value.nextTime?.map(tidy),
     answers: value.answers?.map((answer) => ({ ...answer, answer: tidy(answer.answer) })),
     theirs: value.theirs?.map((point) => ({ ...point, point: tidy(point.point) }))
   }
@@ -864,6 +877,7 @@ export function applyGlossary(
     questions: value.questions.map(fix),
     people: value.people.map(fix),
     lastTime: value.lastTime === undefined ? undefined : fix(value.lastTime),
+    nextTime: value.nextTime?.map(fix),
     answers: value.answers?.map((answer) => ({ ...answer, answer: fix(answer.answer) })),
     // The point, never the quote: the quote is the transcript's own words, and it
     // is what was checked against the transcript.

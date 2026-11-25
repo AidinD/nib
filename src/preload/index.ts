@@ -144,6 +144,7 @@ const api = {
       questions: string[]
       people: string[]
       lastTime?: string
+      nextTime?: string[]
       answers?: { id: string; answer: string }[]
       /** The glossary corrections applied on the way into this summary. */
       corrections?: { heard: string; meant: string }[]

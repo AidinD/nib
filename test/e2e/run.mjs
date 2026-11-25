@@ -61,8 +61,16 @@ const scripts = readdirSync(here).filter((name) => name.endsWith('.steps.mjs') &
 let failed = 0
 for (const name of scripts) {
   const notebook = join(tmpdir(), `nib-e2e-notebook-${process.pid}`)
-  const { seed } = await import(pathToFileURL(join(here, name)).href)
-  scratchNotebook(notebook, seed)
+  // A script may seed the note's body, or write a whole notebook of its own -
+  // still into the scratch folder, still before the app starts.
+  const { seed, notebook: write } = await import(pathToFileURL(join(here, name)).href)
+  if (typeof write === 'function') {
+    rmSync(notebook, { recursive: true, force: true })
+    mkdirSync(join(notebook, 'notes'), { recursive: true })
+    write(notebook)
+  } else {
+    scratchNotebook(notebook, seed)
+  }
   console.log(`\n=== ${name}`)
   const run = spawnSync(process.execPath, [join(root, 'scripts', 'e2e.mjs'), join(here, name)], {
     cwd: root,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Category, NoteMeta, Template } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
 import { noteTitle } from '@shared/templates'
+import { hasNextTime, nextTimeCandidates, withCarriedOver } from '@shared/next-time'
 import { TemplateModal } from './TemplateModal'
 
 /**
@@ -43,7 +44,7 @@ import type { LauncherRow, Standing } from '../lib/launcher'
 import type { ScopeFilter, Selection } from '../lib/selection'
 import { LIST_MAX, LIST_MIN, applyPrefs, readPrefs, writePrefs } from '../lib/prefs'
 import { setAlertDone } from '../lib/alerts'
-import { withoutAudio } from '../lib/notes'
+import { nextTimeOf, withoutAudio } from '../lib/notes'
 
 /** What is waiting to be confirmed, and everything needed to say it out loud. */
 type PendingDelete =
@@ -314,14 +315,36 @@ export function App(): React.JSX.Element {
     typed: string
   ): Promise<string> => {
     const named = noteTitle(typed, template)
+    /*
+     * Last time's "Till nästa gång", carried into a template that has the
+     * section - read before the note exists, so it cannot find itself. From the
+     * notes made with the same template's tags, so a 1-1 follows the previous 1-1.
+     */
+    let body = template?.body ?? ''
+    if (template !== undefined && hasNextTime(body)) {
+      const candidates = nextTimeCandidates(
+        index.categories.flatMap((category) => category.notes),
+        target,
+        template.tags ?? []
+      )
+      const docs = await window.nib.readNotes(candidates.map((note) => note.id))
+      for (const candidate of candidates) {
+        const doc = docs.find((read) => read.id === candidate.id)
+        const lines = doc === undefined ? [] : nextTimeOf(doc.html)
+        if (lines.length > 0) {
+          body = withCarriedOver(body, lines, candidate.title)
+          break
+        }
+      }
+    }
     const id = ops.addNote(target.categoryId, target.subId, named, template?.kind, template?.tags)
-    if (template !== undefined && template.body.length > 0) {
+    if (template !== undefined && body.length > 0) {
       await window.nib.writeNote({
         id,
         categoryId: target.categoryId,
         subId: target.subId,
         title: named,
-        html: template.body,
+        html: body,
         created: Date.now(),
         edited: Date.now()
       })

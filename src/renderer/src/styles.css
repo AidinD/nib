@@ -435,6 +435,56 @@ textarea {
   white-space: nowrap;
 }
 
+/* "Till nästa gång" from the folder's newest note that has one - read before
+   the next conversation, so it sits above everything else in the folder. */
+.next-time {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.next-time-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
+.next-time-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.next-time-from {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.next-time-head:hover .next-time-from {
+  color: var(--accent);
+}
+
+.next-time-lines {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
 .add-note {
   padding: 7px 10px;
   border: 1px solid var(--border);

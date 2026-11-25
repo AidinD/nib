@@ -30,6 +30,7 @@
  */
 
 import type { Template } from './types'
+import { NEXT_TIME, NEXT_TIME_PROMPT } from './next-time.ts'
 
 export type { Template }
 
@@ -54,7 +55,7 @@ export const MAX_TEMPLATE_BODY = 20_000
  * it cannot: the rotation belongs to the pair, not to the calendar, and a
  * conversation that gets moved a week would silently ask the wrong half.
  */
-const ONE_TO_ONE_BODY = [
+const ONE_TO_ONE_BEFORE_NEXT_TIME = [
   '<h3>Uppföljning</h3>',
   '<p><em>Hur går det med det vi kom överens om förra gången? Något som behöver ändras, eller kan vi checka av det?</em></p>',
   '<h3>Öppen space</h3>',
@@ -70,6 +71,13 @@ const ONE_TO_ONE_BODY = [
   '<h3>Något annat</h3>',
   '<p><em>Är det något annat du vill ta upp?</em></p>'
 ].join('')
+
+/**
+ * ...and the section that ends it: what to have in front of you before the next
+ * one. Last, because it is written as the conversation closes, and read back
+ * from here into the folder and into the next note - see `next-time.ts`.
+ */
+const ONE_TO_ONE_BODY = ONE_TO_ONE_BEFORE_NEXT_TIME + `<h3>${NEXT_TIME}</h3><p><em>${NEXT_TIME_PROMPT}</em></p>`
 
 /**
  * The story's four questions, in STAR order.
@@ -222,12 +230,26 @@ export function normalizeTemplates(raw: unknown): Template[] {
       continue
     }
     seen.add(template.id)
-    out.push(withSeededTags(template))
+    out.push(withNextTime(withSeededTags(template)))
     if (out.length >= MAX_TEMPLATES) {
       break
     }
   }
   return out
+}
+
+/**
+ * The seeded 1-1, as every notebook got it before "Till nästa gång", gets it.
+ *
+ * Same problem as the tags below: the catalog is written into the notebook the
+ * first time it is read, so a new section reaches nobody who already has it.
+ * Only a body that is still exactly the old default is upgraded - one somebody
+ * has rewritten is theirs, and they can add the heading themselves.
+ */
+function withNextTime(template: Template): Template {
+  return template.id === 'tpl-one-to-one' && template.body === ONE_TO_ONE_BEFORE_NEXT_TIME
+    ? { ...template, body: ONE_TO_ONE_BODY }
+    : template
 }
 
 /**

@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import type { AlertMeta, Category, NibIndex, NoteMeta } from '@shared/types'
+import { NEXT_TIME, NEXT_TIME_PROMPT, isNextTimeHeading } from '../../../shared/next-time.ts'
 
 /**
  * Ids are used as filenames, so they stay inside the character class the storage
@@ -2570,6 +2571,7 @@ export function summaryHtml(
     questions: string[]
     people: string[]
     lastTime?: string
+    nextTime?: string[]
     corrections?: { heard: string; meant: string }[]
     theirs?: { verdict: 'good' | 'less good'; point: string; quote: string }[]
   }
@@ -2638,6 +2640,16 @@ export function summaryHtml(
     parts.push(
       `<ul>${[...good.map((point) => line('Bra', point)), ...less.map((point) => line('Mindre bra', point))].join('')}</ul>`
     )
+  }
+
+  if (value.nextTime !== undefined && value.nextTime.length > 0) {
+    /*
+     * What to pick up next time, under the heading the 1-1 template gives the
+     * user's own list - so the folder and the next note find both the same way.
+     * See `nextTimeOf`.
+     */
+    parts.push(`<h2>${NEXT_TIME}</h2>`)
+    parts.push(`<ul>${value.nextTime.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>`)
   }
 
   if (value.questions.length > 0) {
@@ -3226,6 +3238,7 @@ export function insertSummary(
     questions: string[]
     people: string[]
     lastTime?: string
+    nextTime?: string[]
     answers?: { id: string; answer: string }[]
     corrections?: { heard: string; meant: string }[]
     theirs?: { verdict: 'good' | 'less good'; point: string; quote: string }[]
@@ -3265,4 +3278,47 @@ export function withSummary(
   root.innerHTML = sanitizeHtml(html)
   const filled = insertSummary(root, provenance, value)
   return { html: sanitizeHtml(root.innerHTML), filled }
+}
+
+/**
+ * What a note says to pick up next time: the lines under every "Till nästa
+ * gång" heading in it - the user's own and the summary's - in order, each once.
+ *
+ * Parsed with DOMParser, which builds an inert document: the note's pictures
+ * are not fetched just to read a list out of it. A ticked checklist item is
+ * left out, because it is done; so is the template's own prompt, which is a
+ * question rather than something written. Nothing inside a transcript counts.
+ */
+export function nextTimeOf(html: string): string[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const lines: string[] = []
+  for (const heading of doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    if (!isNextTimeHeading(heading.textContent ?? '') || heading.closest('[data-transcript]') !== null) {
+      continue
+    }
+    const level = Number(heading.tagName[1])
+    for (let node = heading.nextElementSibling; node !== null; node = node.nextElementSibling) {
+      if (/^H[1-6]$/.test(node.tagName) && Number(node.tagName[1]) <= level) {
+        break
+      }
+      if (node.matches('[data-transcript], [data-recording], [data-flag-all], [data-provenance]')) {
+        continue
+      }
+      const items = node.matches('ul, ol') ? Array.from(node.querySelectorAll('li')) : [node]
+      for (const item of items) {
+        if (item.getAttribute('data-task') === 'done') {
+          continue
+        }
+        const copy = item.cloneNode(true) as Element
+        for (const inner of copy.querySelectorAll('ul, ol, [data-at-label]')) {
+          inner.remove()
+        }
+        const text = (copy.textContent ?? '').replace(/\u200b/g, '').replace(/\s+/g, ' ').trim()
+        if (text.length > 0 && text !== NEXT_TIME_PROMPT && !lines.includes(text)) {
+          lines.push(text)
+        }
+      }
+    }
+  }
+  return lines
 }
