@@ -48,6 +48,7 @@ import {
   movedLine,
   withMovedRecording,
   withoutRecording,
+  applyNextTimeSections,
   applySummaryBlocks,
   applyTimeMarks,
   dropUnlabelledMarks,
@@ -494,6 +495,7 @@ export function Editor({
       applyTranscriptBlocks(bodyRef.current)
       applyTimeMarks(bodyRef.current)
       applySummaryBlocks(bodyRef.current)
+      applyNextTimeSections(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
@@ -576,6 +578,7 @@ export function Editor({
       applyTranscriptBlocks(bodyRef.current)
       applyTimeMarks(bodyRef.current)
       applySummaryBlocks(bodyRef.current)
+      applyNextTimeSections(bodyRef.current)
       void markLostRecordings(bodyRef.current)
       normaliseBlocks(bodyRef.current)
       normaliseLists(bodyRef.current)
@@ -904,6 +907,9 @@ export function Editor({
   const onBodyInput = useCallback(() => {
     const element = bodyRef.current
     if (element !== null) {
+      // Before the count and the save read the body: a heading typed or renamed
+      // into "Till nästa gång" is painted as it is written.
+      applyNextTimeSections(element)
       setWords(wordCount(element.innerHTML))
     }
     // Typing means the calendar is not what is wanted after all; a stale one

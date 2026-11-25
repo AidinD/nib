@@ -4290,6 +4290,47 @@ body.is-resizing .splitter-grip {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
+/*
+ * "Till nästa gång": the heading and everything under it, as one band.
+ *
+ * The same shape as a filled-in answer - a rule down the left and a wash, the
+ * text aligned with the rest of the note - in amber instead of the accent, so
+ * the two say different things: an answer is the app talking, this is the part
+ * to read again before the next conversation. Amber is the palette's yellow,
+ * the highlighter's own default.
+ *
+ * One band rather than a box per line: a block's bottom margin becomes padding
+ * inside the band, so nothing between the lines shows through. The heading keeps
+ * its top margin, outside, which is what separates it from the section above.
+ * `data-next-time` is written by `applyNextTimeSections` from the heading's
+ * text, so a note that already has the section is painted when it is opened.
+ */
+.doc-body [data-next-time] {
+  border-left: 2px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 13%, transparent);
+  margin-left: -12px;
+  margin-bottom: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-bottom: 10px;
+}
+
+.doc-body [data-next-time='head'] {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-top-right-radius: var(--radius);
+}
+
+.doc-body :is(ul, ol)[data-next-time] {
+  padding-left: calc(var(--list-indent) + 10px);
+}
+
+/* Its last block closes the band. */
+.doc-body [data-next-time]:not(:has(+ [data-next-time])) {
+  border-bottom-right-radius: var(--radius);
+  margin-bottom: 10px;
+}
+
 /* ---------- the summary panel ---------- */
 
 .summary-panel {

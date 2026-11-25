@@ -3281,29 +3281,82 @@ export function withSummary(
 }
 
 /**
+ * Every "Till nästa gång" section under a root: the heading, and the blocks that
+ * belong to it - its siblings up to the next heading of the same or a higher
+ * level. A recording, a transcript and the summary's own furniture sit among a
+ * note's lines without being part of what was written there, so they are passed
+ * over rather than ending the section. Nothing inside a transcript counts.
+ *
+ * One definition, used both to read the section out and to mark it on screen,
+ * so what the folder shows and what the note paints cannot drift apart.
+ */
+export function nextTimeSections(root: ParentNode): { heading: Element; lines: Element[] }[] {
+  const sections: { heading: Element; lines: Element[] }[] = []
+  for (const heading of root.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    if (!isNextTimeHeading(heading.textContent ?? '') || heading.closest('[data-transcript]') !== null) {
+      continue
+    }
+    const level = Number(heading.tagName[1])
+    const lines: Element[] = []
+    for (let node = heading.nextElementSibling; node !== null; node = node.nextElementSibling) {
+      if (/^H[1-6]$/.test(node.tagName) && Number(node.tagName[1]) <= level) {
+        break
+      }
+      if (!node.matches('[data-transcript], [data-recording], [data-flag-all], [data-provenance], details')) {
+        lines.push(node)
+      }
+    }
+    sections.push({ heading, lines })
+  }
+  return sections
+}
+
+/**
+ * Paint every "Till nästa gång" section, so it stands out in the note the way a
+ * filled-in answer does - see `[data-next-time]` in the stylesheet.
+ *
+ * Derived from the heading's text every time rather than stored as a choice:
+ * a note written before this existed is marked the moment it is opened, a
+ * heading renamed away from it loses the mark on the next keystroke, and a line
+ * Enter cloned the attribute onto is put right by the same pass. The attribute
+ * does reach disk with the next save, which is harmless - it is recomputed from
+ * the text on every load.
+ */
+export function applyNextTimeSections(root: HTMLElement): void {
+  const marked = new Map<Element, string>()
+  for (const { heading, lines } of nextTimeSections(root)) {
+    marked.set(heading, 'head')
+    for (const line of lines) {
+      marked.set(line, 'line')
+    }
+  }
+  for (const element of root.querySelectorAll<HTMLElement>('[data-next-time]')) {
+    if (!marked.has(element)) {
+      delete element.dataset.nextTime
+    }
+  }
+  for (const [element, kind] of marked) {
+    const html = element as HTMLElement
+    if (html.dataset.nextTime !== kind) {
+      html.dataset.nextTime = kind
+    }
+  }
+}
+
+/**
  * What a note says to pick up next time: the lines under every "Till nästa
  * gång" heading in it - the user's own and the summary's - in order, each once.
  *
  * Parsed with DOMParser, which builds an inert document: the note's pictures
  * are not fetched just to read a list out of it. A ticked checklist item is
  * left out, because it is done; so is the template's own prompt, which is a
- * question rather than something written. Nothing inside a transcript counts.
+ * question rather than something written.
  */
 export function nextTimeOf(html: string): string[] {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const lines: string[] = []
-  for (const heading of doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
-    if (!isNextTimeHeading(heading.textContent ?? '') || heading.closest('[data-transcript]') !== null) {
-      continue
-    }
-    const level = Number(heading.tagName[1])
-    for (let node = heading.nextElementSibling; node !== null; node = node.nextElementSibling) {
-      if (/^H[1-6]$/.test(node.tagName) && Number(node.tagName[1]) <= level) {
-        break
-      }
-      if (node.matches('[data-transcript], [data-recording], [data-flag-all], [data-provenance]')) {
-        continue
-      }
+  for (const section of nextTimeSections(doc.body)) {
+    for (const node of section.lines) {
       const items = node.matches('ul, ol') ? Array.from(node.querySelectorAll('li')) : [node]
       for (const item of items) {
         if (item.getAttribute('data-task') === 'done') {

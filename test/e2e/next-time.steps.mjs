@@ -12,7 +12,9 @@
  * both halves, without the ticked item or the template's prompt, and not the
  * older note's; a new 1-1 starts with that list as open items under
  * "Uppföljning" and ends with its own empty section; once something is written
- * into the new one, the folder shows that instead; and the old notes still open.
+ * into the new one, the folder shows that instead; the old notes still open; and
+ * the section is marked in amber wherever it is - an old note's, the summary's -
+ * and loses the mark when its heading is renamed.
  *
  * Every name and line here is invented. PROBE_SHOTS=<dir> also writes
  * screenshots of the folder and the new note.
@@ -155,4 +157,60 @@ export default async (page) => {
   await page.waitFor(`document.querySelector('.doc-body')?.textContent.includes('Gammal punkt')`, 'an old note opens')
   const old = await page.eval(`return [...document.querySelectorAll('.doc-body h3')].map((h) => h.textContent)`)
   check(old.includes('Uppföljning') && old.includes(NEXT_TIME), 'an old 1-1 renders with its own sections', JSON.stringify(old))
+
+  // --- And the section is marked in it, the way an answer is - a note written
+  // before the marking existed, painted the moment it is opened.
+  const paint = () =>
+    page.eval(`
+      const body = document.querySelector('.doc-body')
+      const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()
+      const head = [...body.querySelectorAll('h2, h3')].find((h) => h.textContent === ${JSON.stringify(NEXT_TIME)})
+      const look = (el) => el === null || el === undefined ? null : { mark: el.dataset.nextTime ?? null, border: getComputedStyle(el).borderLeftColor, bg: getComputedStyle(el).backgroundColor }
+      const follow = [...body.querySelectorAll('h3')].find((h) => h.textContent === 'Uppföljning')
+      return { amber, head: look(head), list: look(head?.nextElementSibling), followUp: look(follow), marked: body.querySelectorAll('[data-next-time]').length }`)
+  const painted = await paint()
+  console.log('    marked:', JSON.stringify(painted))
+  const isAmber = (look) => look !== null && look.border === 'rgb(255, 176, 84)' && /^color\(srgb 1 0\.69\d* 0\.329\d* \/ 0\.13\)$/.test(look.bg)
+  check(painted.head?.mark === 'head' && isAmber(painted.head), 'the heading is marked in amber - rule and wash', JSON.stringify(painted.head))
+  check(painted.list?.mark === 'line' && isAmber(painted.list), 'and the list under it, as part of the same band', JSON.stringify(painted.list))
+  check(painted.followUp?.mark === null && painted.followUp.bg === 'rgba(0, 0, 0, 0)', 'and nothing outside the section', JSON.stringify(painted.followUp))
+
+  // --- Renamed away from the section, the heading loses the mark as it is typed.
+  await page.eval(`
+    const body = document.querySelector('.doc-body'); body.focus()
+    const head = [...body.querySelectorAll('h3')].find((h) => h.textContent === ${JSON.stringify(NEXT_TIME)})
+    const r = document.createRange(); r.selectNodeContents(head)
+    getSelection().removeAllRanges(); getSelection().addRange(r); return true`)
+  await page.type('Avslut')
+  await page.waitFor(`document.querySelector('.doc-body [data-next-time]') === null`, 'the mark goes with the heading', 10)
+  check(true, 'a heading renamed away from it is no longer marked')
+
+  // --- The newest 1-1, both halves: the summary's and his own. By title, not by
+  // the card's text: the new note's preview names this one too.
+  // Once the rename is saved: a card clicked inside the save window right after
+  // typing over a heading does not open (0.24.15 does the same - not this change).
+  await page.waitFor(`document.querySelector('.save-state')?.textContent === 'Saved'`, 'the rename saved', 20)
+  await page.eval(`[...document.querySelectorAll('.card')].find((c) => c.querySelector('.card-title')?.textContent.trim() === '2026-03-17 1-1').classList.add('e2e-last'); return true`)
+  await page.click('.e2e-last')
+  await page.waitFor(`document.querySelector('.doc-body')?.textContent.includes('Redan klart')`, 'the newest 1-1 opens')
+  const both = await page.eval(`
+    const heads = [...document.querySelectorAll('.doc-body [data-next-time="head"]')]
+    return heads.map((h) => h.tagName + (h.closest('[data-summary]') ? ' in summary' : ''))`)
+  check(JSON.stringify(both) === JSON.stringify(['H2 in summary', 'H3']), "the summary's section is marked as well as his own", JSON.stringify(both))
+  if (SHOTS) {
+    const clip = await page.eval(`
+      const head = document.querySelectorAll('.doc-body [data-next-time="head"]')[1]
+      head.scrollIntoView({ block: 'center' })
+      const doc = document.querySelector('.doc-body').getBoundingClientRect()
+      const r = head.getBoundingClientRect()
+      return { x: Math.round(doc.left) - 40, y: Math.max(0, Math.round(r.top) - 260), width: Math.round(doc.width) + 60, height: 420 }`)
+    await page.shot(`${SHOTS}/next-time-marked.png`, clip, 1)
+    const top = await page.eval(`
+      const head = document.querySelectorAll('.doc-body [data-next-time="head"]')[0]
+      head.scrollIntoView({ block: 'center' })
+      const doc = document.querySelector('.doc-body').getBoundingClientRect()
+      const r = head.getBoundingClientRect()
+      return { x: Math.round(doc.left) - 40, y: Math.max(0, Math.round(r.top) - 200), width: Math.round(doc.width) + 60, height: 320 }`)
+    await page.shot(`${SHOTS}/next-time-marked-summary.png`, top, 1)
+  }
 }

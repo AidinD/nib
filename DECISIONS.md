@@ -3,6 +3,40 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-25 - "Till nästa gång" is marked in amber, the way an answer is marked
+
+**The ask.** Mark the section with a colour, "yellow or so", the same way the
+answers to the questions further down are marked.
+
+**Decision.** The same shape as a filled-in answer (`[data-filled]`): a rule down
+the left and a wash, text kept aligned with the rest of the note. Amber instead of
+the accent, because amber is the palette's yellow (the highlighter's own default)
+and because the two should not read as the same thing - an answer is the app
+talking, this is the part to read again before the next conversation. The heading
+and every block under it make one band, not a box per line: inside the section a
+block's bottom margin becomes padding, so nothing shows through between lines.
+
+**How a note gets it.** `applyNextTimeSections` sets `data-next-time` on the
+heading and the blocks under it, from the heading's text, on every load and every
+edit. So a note written before this is marked when it is opened, with nothing
+rewritten in advance; a heading renamed away from it loses the mark as it is
+typed; and a line Enter cloned the attribute onto is put right by the same pass.
+What counts as the section is one walker, `nextTimeSections`, shared with
+`nextTimeOf` - the lines the folder shows are exactly the lines the note paints.
+A recording, a transcript and the summary's provenance and flag button are passed
+over, not painted.
+
+**Considered.** A CSS-only rule keyed on the heading - CSS cannot match text, so
+something has to put an attribute on the heading anyway, and once it does, the
+section's extent (up to the next heading of the same or a higher level) is easier
+to say in code than in a sibling selector. Storing the mark as a choice the user
+makes - but the section is the heading; a second switch for it is a way for the
+two to disagree.
+
+**Not changed.** The box at the top of the person's folder keeps the accent
+colour. The ask was about the section in the note; whether the box should match
+is a separate call.
+
 ## 2026-11-25 - "Till nästa gång": what to pick up, in front of you before the next 1-1
 
 **The ask.** A section in a 1-1 for the next time, to check quickly before the
