@@ -22,6 +22,13 @@ function openPoints(note: NoteMeta): number {
   return note.alerts.filter((alert) => !alert.done).length
 }
 
+/** The "Till nästa gång" box above the cards: which note it is read from, and its lines. */
+interface NextTimeStrip {
+  noteId: string
+  title: string
+  lines: string[]
+}
+
 interface NoteListProps {
   /** Set by dragging the edge between this pane and the editor. */
   width: number
@@ -101,6 +108,51 @@ export function NoteList({
   const templateHolder = useRef<HTMLDivElement | null>(null)
 
   /*
+   * The list as it was when a press on it began, held until the press is over.
+   *
+   * Pressing a card is what saves the note being edited: the press takes focus
+   * from the body, whose blur saves at once rather than waiting out the
+   * debounce. The save rewrites that note's card - a new preview can be a line
+   * longer or shorter, and where the list is newest-edited first the card moves
+   * to the top - and it can change the "Till nästa gång" box above. When that
+   * lands between the button going down and coming up, everything under the
+   * pointer has shifted: the press was on one card, the release on another, and
+   * the browser fires no click at all. The note aimed at does not open; a second
+   * click, on a list that has stopped moving, does. Seen after typing over the
+   * heading of the card above the one clicked - the preview is the heading.
+   *
+   * Holding the list rather than deferring the save: the save is right to happen
+   * now, and what must not move is what is being pressed. Released a tick after
+   * the button comes up, so the click - dispatched after pointerup - reaches the
+   * card it was aimed at, and then the list catches up.
+   */
+  const [held, setHeld] = useState<{ notes: NoteMeta[]; nextTime: NextTimeStrip | null } | null>(null)
+  useEffect(() => {
+    if (held === null) {
+      return
+    }
+    let timer: number | null = null
+    const release = (): void => {
+      if (timer === null) {
+        timer = window.setTimeout(() => setHeld(null), 0)
+      }
+    }
+    window.addEventListener('pointerup', release, true)
+    window.addEventListener('pointercancel', release, true)
+    window.addEventListener('dragend', release, true)
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('pointerup', release, true)
+      window.removeEventListener('pointercancel', release, true)
+      window.removeEventListener('dragend', release, true)
+      window.removeEventListener('blur', release)
+      if (timer !== null) {
+        window.clearTimeout(timer)
+      }
+    }
+  }, [held])
+
+  /*
    * Click away to close, which is what every popover is expected to do and what
    * the settings popover already does. Without it the only ways out were the
    * button that opened it and picking something - so a menu opened by mistake
@@ -146,7 +198,7 @@ export function NoteList({
    * it. Read from the files because the index holds no bodies; re-read when one
    * of those notes is edited, which is when the list can have changed.
    */
-  const [nextTime, setNextTime] = useState<{ noteId: string; title: string; lines: string[] } | null>(null)
+  const [nextTime, setNextTime] = useState<NextTimeStrip | null>(null)
   const folderKey = target === null ? '' : `${target.categoryId}/${target.subId ?? ''}`
   const candidates = useMemo(
     () =>
@@ -182,6 +234,10 @@ export function NoteList({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderKey, candidateKey])
+
+  /** What is drawn: the list as it is, or as it was when the press began. */
+  const shown = held === null ? notes : held.notes
+  const strip = held === null ? nextTime : held.nextTime
 
   /**
    * Where a card dropped in this list lands.
@@ -225,26 +281,30 @@ export function NoteList({
   }
 
   return (
-    <section className="note-list" style={{ width, flexBasis: width }}>
+    <section
+      className="note-list"
+      style={{ width, flexBasis: width }}
+      onPointerDown={() => setHeld({ notes, nextTime })}
+    >
       <header className="list-header">
         <span className="dot" style={{ background: selectionColor(index, selection) }} />
         <span className="list-name">{selectionTitle(index, selection)}</span>
         <span className="row-count">{notes.length}</span>
       </header>
 
-      {nextTime !== null && (
+      {strip !== null && (
         <div className="next-time">
           <button
             type="button"
             className="next-time-head"
-            title={`Öppna ${nextTime.title}`}
-            onClick={() => onOpen(nextTime.noteId)}
+            title={`Öppna ${strip.title}`}
+            onClick={() => onOpen(strip.noteId)}
           >
             <span className="next-time-label">{NEXT_TIME}</span>
-            <span className="next-time-from">{nextTime.title}</span>
+            <span className="next-time-from">{strip.title}</span>
           </button>
           <ul className="next-time-lines">
-            {nextTime.lines.map((line) => (
+            {strip.lines.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
@@ -425,7 +485,7 @@ export function NoteList({
         }}
         onDrop={drop}
       >
-        {notes.map((note, position) => (
+        {shown.map((note, position) => (
           <div key={note.id} className="card-slot">
             {slot !== null && slot.before === note.id && <div className="drop-marker" />}
             <article
@@ -457,7 +517,7 @@ export function NoteList({
                   event,
                   event.currentTarget,
                   note.id,
-                  notes[position + 1]?.id ?? null
+                  shown[position + 1]?.id ?? null
                 )
                 if (!slotEquals(next, slot)) {
                   setSlot(next)

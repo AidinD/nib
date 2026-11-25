@@ -3,6 +3,37 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-25 - The note list holds still while it is being pressed
+
+**The bug.** Right after an edit, a click on another note's card sometimes did
+nothing; a second click opened it. Found while testing the "Till nästa gång"
+marking, after typing over a heading and clicking straight away, and present in
+0.24.15 too.
+
+**The cause.** Pressing a card takes focus from the body, and the body's blur
+saves at once instead of waiting out the debounce. The save rewrites the edited
+note's card, and if it lands between the button going down and coming up, the
+cards under the pointer have moved. A pointer trace showed the press on one card,
+the release on the card above it, and a click dispatched to the list itself,
+which opens nothing. Three things move: the card's new preview can be a line
+taller or shorter (the preview starts with the first heading, so typing over it
+is the likeliest trigger), in Recent and the other newest-edited views the card
+jumps to the top, and the "Till nästa gång" box above the cards can change size.
+
+**Decision.** `NoteList` draws the list as it was when a press on it began, cards
+and box both, and lets go a tick after the button comes up. The click reaches the
+card it was aimed at, and then the list catches up with the save.
+
+**Considered.** Deferring the blur save until after the click. The save is right
+to happen when focus leaves, and the debounce timer can fire mid-press anyway,
+so that would narrow the window rather than close it. Opening on pointerdown
+instead of click was ruled out because cards are draggable.
+
+**Verified.** `test/e2e/click-while-saving.steps.mjs` sends the click while the
+edit is still pending, once with a card above the target growing and once with
+the edited note jumping to the top of Recent. Both fail on the 0.24.16 package
+and pass now, and both pending edits are on disk afterwards.
+
 ## 2026-11-25 - "Till nästa gång" is marked in amber, the way an answer is marked
 
 **The ask.** Mark the section with a colour, "yellow or so", the same way the

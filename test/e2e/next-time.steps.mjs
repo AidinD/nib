@@ -187,9 +187,8 @@ export default async (page) => {
 
   // --- The newest 1-1, both halves: the summary's and his own. By title, not by
   // the card's text: the new note's preview names this one too.
-  // Once the rename is saved: a card clicked inside the save window right after
-  // typing over a heading does not open (0.24.15 does the same - not this change).
-  await page.waitFor(`document.querySelector('.save-state')?.textContent === 'Saved'`, 'the rename saved', 20)
+  // Straight away, with the rename still saving: the click opens what it was
+  // aimed at - see test/e2e/click-while-saving.steps.mjs.
   await page.eval(`[...document.querySelectorAll('.card')].find((c) => c.querySelector('.card-title')?.textContent.trim() === '2026-03-17 1-1').classList.add('e2e-last'); return true`)
   await page.click('.e2e-last')
   await page.waitFor(`document.querySelector('.doc-body')?.textContent.includes('Redan klart')`, 'the newest 1-1 opens')
