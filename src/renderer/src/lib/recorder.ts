@@ -150,8 +150,24 @@ export async function startRecording(noteId: string): Promise<Recorder> {
   const mic = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
   })
-  const system = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false })
-  const path = await window.nib.startRecording(noteId, CHANNELS)
+  let system: MediaStream
+  try {
+    system = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false })
+  } catch (error) {
+    mic.getTracks().forEach((track) => track.stop())
+    throw error
+  }
+  let path: string
+  try {
+    path = await window.nib.startRecording(noteId, CHANNELS)
+  } catch (error) {
+    // Refused - already recording, or the folder could not be written. The
+    // devices were opened for nothing; left open, the microphone stays in use
+    // (and says so in the tray) until the window goes.
+    mic.getTracks().forEach((track) => track.stop())
+    system.getTracks().forEach((track) => track.stop())
+    throw error
+  }
 
   const context = new AudioContext({ sampleRate: SAMPLE_RATE })
   /*

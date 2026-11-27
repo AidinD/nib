@@ -3,6 +3,132 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-27 - The language is chosen when transcribing, not when recording
+
+**The ask.** "The recording asks for a language, but the choice should really move
+to when it is transcribed." It also mattered for Ctrl+Alt+,: a quick recording must
+not stop to ask.
+
+**What made it possible.** Transcription never ran live. It runs after the
+recording stops, when the block is clicked (or at once for an import), and reads
+the language off the block's `data-language` at that moment. Asking at Start only
+put a label on the block early.
+
+**Decided.**
+
+- Starting a recording - the Record panel and the Ctrl+Alt+, prompt - asks
+  nothing. The block is labelled with the language last transcribed in
+  (`lib/language.ts`, per machine in localStorage), Swedish until there is one.
+- Before transcribing, the language on the block is a switch: a click flips
+  Svenska/English and transcribes nothing; a click anywhere else on the block
+  transcribes in whatever it says.
+- A transcribed block offers "transcribe again **in English**" (or Svenska)
+  beside "transcribe again", for the guess that was wrong. It replaces the
+  transcript, the same as transcribing again already did.
+- Import keeps its toggle, starting on the last language: an import is
+  transcribed the moment it is saved, so its panel is the transcription's moment.
+
+**Rejected.** Auto-detection. The two models are language-specific - the Swedish
+one is not a multilingual model told "sv" - so detecting would mean running one
+model to pick the other, on every recording, for a choice that is one click on the
+block and right by default most of the time.
+
+## 2026-11-27 - Ctrl+Alt+, records from anywhere, into the Inbox
+
+**The ask.** Jot's quick capture (Ctrl+Alt+.) for Nib, one key to the left: a
+hotkey that starts a recording from anywhere, maybe with a name, landing somewhere
+it can be moved from to the right note afterwards.
+
+**Decided.**
+
+- **The key** opens a small prompt over whatever is on screen, the way Jot's does:
+  a name field and Enter - no language, see the entry above.
+  Enter on an empty field records too - a name is never in the way of starting.
+  Escape or a click elsewhere puts the prompt away. The main window is not brought
+  forward; the point is to start recording without leaving the call.
+- **Where it lands**: a new note in a folder called **Inbox**, made the first time
+  and found again by name. Titled with the typed name, or with the date and minute
+  (`2026-11-27 14:05`) - not the date alone as an untitled note gets, because two
+  recordings in a day are the ordinary case here. The note is opened in the main
+  window, so it is in front of you when you get there.
+- **Moving it** uses what Nib already has, nothing new: the recording block's own
+  Move (block, transcript and marks travel together, the audio file is renamed),
+  or dragging the note's card to another folder.
+- **Pressed again while recording** - any recording, also one started from the
+  Record button - the prompt shows that recording instead: its time and its note,
+  with Enter to stop, Escape to leave it running, and Open note. Two presses to
+  stop, never one: a stray key must not end a meeting.
+- **Seeing that it runs**: an orange dot on the taskbar button for as long as
+  audio is being written, however the recording was started, plus the recording
+  bar that was already there. Nib has no tray icon and this did not seem reason
+  enough to add one.
+- **A recording goes into the note it was started in.** Before, the block went
+  into whichever note was on screen at Stop, while the audio file still carried
+  the first note's id - leaving the meeting's note during the meeting filed it
+  wrong. Quick record makes leaving the Inbox note the ordinary case, so this was
+  fixed for every recording: if the owning note is not open, the block is written
+  into its file, the way the transcription path already patches a note that has
+  left the body. Changes the in-app Record button too; that is the intent.
+
+**The key on a Swedish keyboard.** Ctrl+Alt is AltGr there, so the hotkey also
+takes AltGr+, system-wide. That is safe: the comma key has no AltGr character on
+that layout. (AltGr+2..0, +, < and ¨ do - @ £ $ € { [ ] } \ | ~ - and must never
+be taken.) If another program already holds the key, `register` answers false
+rather than throwing; that is logged and shown as a dismissable line under the
+header, since a key that silently does nothing reads as broken, not as a clash.
+
+**What it adds and replaces.** Adds one window (the prompt) and one convention
+(the Inbox folder, which is an ordinary folder). Replaces nothing: the Record
+button and its level check stay as they were. The quick path skips the level
+check - it is the price of one key - and leans on the in-recording microphone
+warning, which says within twenty seconds if your side is silent.
+
+**Rejected.** Recording straight into a note picked in the prompt: a picker is a
+search to do while a call is starting, and the move afterwards is one click on the
+block. A special Inbox kind of folder with a hidden id: the name is the whole
+contract, so a renamed or deleted Inbox is simply made again. Stopping on a single
+press while recording.
+
+**Hardened after an adversarial review**, before release:
+
+- The hotkey is not answered until the main window's index has loaded. Before,
+  a start straight into a freshly made main window could find no Inbox in the
+  empty placeholder index and save an index holding only that, over the real one.
+- Closing the main window mid-recording stops the recording first (and files and
+  saves the block), then closes - checked: the block was in the note file and the
+  WAV header patched after the window closed mid-recording. The capture runs in that window's page, so closing it
+  alone, with a sticky keeping the app alive, left an open file nothing could
+  stop and refused every later recording.
+- A hidden prompt never keeps the app alive: when a window closes and only the
+  prompt is left, the prompt closes too.
+- A failed start brings the prompt back with the reason, even if it had been
+  hidden by a click or by a main window taking the focus; a second start while
+  one is in flight is refused; devices opened for a refused start are released.
+- A recording whose note was deleted meanwhile goes to the open note with its
+  file renamed to that note, so the startup sweep does not delete the audio.
+- A recording lands on screen only when the owning note's body has actually
+  loaded, not merely been asked for.
+- `useNib` no longer lets a stale read roll the index back. A reload whose read
+  could predate a local change - because a change was made while it was in
+  flight, or because our own write had not reached the disk yet - is dropped,
+  and a read of any of our last few writes is recognised as our own. Before,
+  the Inbox and its note (two changes in a row) could briefly vanish from the
+  window, and the app, seeing its open note gone, closed it: two e2e runs in
+  six. Cost: an external change landing during a local write waits for the
+  next change event - which our own write is about to overwrite anyway.
+- With no note open, the recording bar still shows while a recording runs.
+- A stop saves the note at once rather than after the typing debounce, so a
+  stop that is the last thing before the window closes keeps its block.
+
+**Verified.** `test/e2e/quick-record.steps.mjs`, against the built app with
+generated audio: the prompt, named and unnamed starts (the unnamed one with the
+main window minimised: audio keeps flowing, and Open note restores it), the prompt showing the
+running recording, a stop from the prompt with another note open (the recording
+lands in the Inbox note on disk, not in the open one), and a Move out of the Inbox.
+The key press itself is the one thing it does not send - a real Ctrl+Alt+, goes to
+the whole desktop - so the script calls the same handler through a door the app
+opens only under `NIB_E2E`. The registration is real and logged in every run.
+
 ## 2026-11-25 - The note list holds still while it is being pressed
 
 **The bug.** Right after an edit, a click on another note's card sometimes did

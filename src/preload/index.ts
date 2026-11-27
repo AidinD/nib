@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DrawingDoc, NibIndex, NoteDoc } from '../shared/types'
+import type { QuickResult, QuickStart, QuickState } from '../shared/quick-record'
 
 /**
  * The whole surface the renderer gets. Everything that touches disk happens in
@@ -231,6 +232,28 @@ const api = {
     return () => {
       ipcRenderer.removeListener('index:changed', listener)
     }
+  },
+
+  /*
+   * Quick record - the Ctrl+Alt+, prompt. See src/main/quick.ts. The prompt
+   * window uses these; the main window only asks whether the key is ours.
+   */
+  quick: {
+    state: (): Promise<QuickState> => ipcRenderer.invoke('quick:state'),
+    registered: (): Promise<boolean> => ipcRenderer.invoke('quick:registered'),
+    start: (request: QuickStart): Promise<QuickResult> => ipcRenderer.invoke('quick:start', request),
+    stop: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('quick:stop'),
+    open: (): Promise<void> => ipcRenderer.invoke('quick:open'),
+    close: (): void => ipcRenderer.send('quick:close'),
+    onReset: (handler: (state: QuickState) => void): (() => void) => {
+      const listener = (_event: unknown, state: QuickState): void => handler(state)
+      ipcRenderer.on('quick:reset', listener)
+      return () => {
+        ipcRenderer.removeListener('quick:reset', listener)
+      }
+    },
+    /** What the key would do, for the e2e scripts - only answers under NIB_E2E. */
+    e2ePress: (): Promise<void> => ipcRenderer.invoke('e2e:quick-hotkey')
   }
 }
 

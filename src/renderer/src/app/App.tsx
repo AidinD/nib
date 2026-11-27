@@ -19,10 +19,15 @@ function asPlainText(html: string): string {
 }
 import { AlertStrip } from './AlertStrip'
 import { UpdateStrip } from './UpdateStrip'
+import { HotkeyStrip } from './HotkeyStrip'
 import { Launcher } from './Launcher'
 import { PracticeStrip } from './PracticeStrip'
 import { ConfirmModal } from './ConfirmModal'
 import { Editor } from './Editor'
+import type { RecordingControl } from './Editor'
+import { INBOX_NAME, findInbox, quickTitle } from '@shared/quick-record'
+import type { QuickResult, QuickStart } from '@shared/quick-record'
+import { lastLanguage } from '../lib/language'
 import { NibMark } from './NibMark'
 import { NoteList } from './NoteList'
 import { Splitter } from './Splitter'
@@ -602,6 +607,80 @@ export function App(): React.JSX.Element {
     }
   }
 
+
+  /*
+   * Quick record - what the Ctrl+Alt+, prompt asks of this window.
+   *
+   * On `window` because the main process calls it with `executeJavaScript`,
+   * which hands back the answer as the call's own value. Refs throughout: the
+   * functions are installed once and must see this render's index, not the one
+   * from when they were installed.
+   */
+  const recordingControl = useRef<RecordingControl | null>(null)
+  const quickIndex = useRef(index)
+  quickIndex.current = index
+  const quickReveal = useRef(revealNote)
+  quickReveal.current = revealNote
+  useEffect(() => {
+    /*
+     * Not before the index is in. The main process takes "installed" to mean
+     * "ready", and a start before the load would find no Inbox in the EMPTY
+     * placeholder, add one, and save an index holding only that - over the real
+     * one, in a synced folder.
+     */
+    if (!loaded) {
+      return
+    }
+    const api = {
+      start: async (request: QuickStart): Promise<QuickResult> => {
+        const control = recordingControl.current
+        if (control === null) {
+          return { ok: false, error: 'Nib is still starting.' }
+        }
+        if (control.recordingNoteId() !== null) {
+          return { ok: false, error: 'Already recording.' }
+        }
+        // The Inbox folder, made the first time. Found by name, so one renamed
+        // away is simply replaced - see quick-record.ts.
+        const categoryId = findInbox(quickIndex.current) ?? ops.addCategory(INBOX_NAME)
+        const title = quickTitle(request.name)
+        const noteId = ops.addNote(categoryId, null, title)
+        // No language: it is chosen when the recording is transcribed - see
+        // lib/language.ts. Labelled with the last one used until then.
+        const started = await control.start(noteId, lastLanguage())
+        if (!started.ok) {
+          // An empty note for a recording that never began is only clutter.
+          ops.deleteNote(noteId)
+          return started
+        }
+        // Opened, so the note is in front of you whenever you come back to the
+        // window - without bringing the window forward over the call.
+        setScope('all')
+        setSearch('')
+        setSelection({ kind: 'category', categoryId })
+        setActiveNoteId(noteId)
+        return { ok: true, noteId, title }
+      },
+      stop: async (): Promise<{ ok: boolean; error?: string }> =>
+        recordingControl.current?.stop() ?? { ok: false, error: 'Nib is still starting.' },
+      reveal: (): void => {
+        const noteId = recordingControl.current?.recordingNoteId() ?? null
+        const target = quickIndex.current.categories
+          .flatMap((category) => category.notes)
+          .find((candidate) => candidate.id === noteId)
+        if (target !== undefined) {
+          quickReveal.current(target)
+        }
+      }
+    }
+    ;(window as unknown as { __nibQuick?: typeof api }).__nibQuick = api
+    return () => {
+      delete (window as unknown as { __nibQuick?: typeof api }).__nibQuick
+    }
+    // `ops` is rebuilt every render but only ever closes over `mutate`, which is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -681,6 +760,7 @@ export function App(): React.JSX.Element {
       </header>
 
       <UpdateStrip />
+      <HotkeyStrip />
 
       <AlertStrip
         index={index}
@@ -821,6 +901,7 @@ export function App(): React.JSX.Element {
           onAlertFocused={() => setFocusAlertId(null)}
           onSaved={(noteId, patch) => ops.patchNoteMeta(noteId, patch)}
           onAudioChanged={refreshAudio}
+          recordingControl={recordingControl}
           onTogglePin={(note) => void togglePin(note)}
           onCycleFlag={(note) => ops.cycleFlag(note.id)}
           onOpenNote={(noteId) => {

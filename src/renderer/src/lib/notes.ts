@@ -175,10 +175,26 @@ export function applyRecordingBlocks(root: HTMLElement): void {
       const again = document.createElement('span')
       again.dataset.retranscribe = '1'
       again.textContent = 'transcribe again'
+      /*
+       * The same again in the other language - for the guess that was wrong.
+       * The language is chosen when transcribing, not when recording (see
+       * lib/language.ts), so a recording labelled with the last language used
+       * can come back as the wrong one, and this is the way out.
+       */
+      const other = block.dataset.language === 'en' ? 'sv' : 'en'
+      const switched = document.createElement('span')
+      switched.dataset.retranscribeAs = other
+      switched.textContent = `in ${other === 'en' ? 'English' : 'Svenska'}`
       const discard = document.createElement('span')
       discard.dataset.discard = '1'
       discard.textContent = 'discard the audio'
-      block.append(again, document.createTextNode(' · '), discard)
+      block.append(
+        again,
+        document.createTextNode(' '),
+        switched,
+        document.createTextNode(' · '),
+        discard
+      )
       offerMove()
       offerTrim()
       continue
@@ -193,7 +209,19 @@ export function applyRecordingBlocks(root: HTMLElement): void {
             // because it marks where the meeting was, but it no longer offers
             // something it cannot do.
             `${kind} · ${length} · the audio is no longer on disk`
-          : `${kind} · ${length} · ${language} · click to transcribe`
+          : `${kind} · ${length} · `
+    /*
+     * Before transcribing, the language is a switch on the block: the moment it
+     * matters is the click that transcribes, so that is where it is chosen.
+     * Recording asks nothing. A click on it flips it and transcribes nothing.
+     */
+    if (state === 'recorded') {
+      const toggle = document.createElement('span')
+      toggle.dataset.languageToggle = '1'
+      toggle.title = `Transcribe in ${language === 'English' ? 'Svenska' : 'English'} instead`
+      toggle.textContent = language
+      block.append(toggle, document.createTextNode(' · click to transcribe'))
+    }
     if (state === 'recorded' || state === 'lost') {
       offerMove()
     }

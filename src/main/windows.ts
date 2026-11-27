@@ -88,6 +88,13 @@ function loadRenderer(window: BrowserWindow, hash = ''): void {
   }
 }
 
+/** Called with every main window made - see `stopBeforeClosing` in quick.ts. */
+let mainWindowHook: ((window: BrowserWindow) => void) | null = null
+
+export function onMainWindowCreated(hook: (window: BrowserWindow) => void): void {
+  mainWindowHook = hook
+}
+
 /**
  * The main window: 1240x780 and frameless, per the design spec - no title bar
  * and no window buttons, because the header row does that job.
@@ -108,6 +115,7 @@ export function createMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     window.show()
   })
+  mainWindowHook?.(window)
   openLinksExternally(window)
   setDictionaries(window)
   // Only the main window: a sticky note is not where a meeting is recorded.
@@ -184,10 +192,65 @@ export function closeStickyWindow(noteId: string): void {
   }
 }
 
-/** Every window that is not a sticky - today that is just the main window. */
+/**
+ * The quick-record prompt - Ctrl+Alt+, from anywhere. See quick.ts.
+ *
+ * One, made the first time the key is pressed and then kept, hidden, so the
+ * next press shows it at once instead of loading a page while you wait.
+ */
+let quickWindow: BrowserWindow | null = null
+
+export function quickRecordWindow(): BrowserWindow {
+  if (quickWindow !== null && !quickWindow.isDestroyed()) {
+    return quickWindow
+  }
+  const window = new BrowserWindow({
+    width: 440,
+    height: 176,
+    show: false,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    backgroundColor: '#1b1c1f',
+    webPreferences: baseWebPreferences()
+  })
+  window.setAlwaysOnTop(true, 'screen-saver')
+  // Clicking anywhere else puts it away, as Jot's does: it is a prompt, not a
+  // window to manage. The recording it started carries on regardless.
+  window.on('blur', () => {
+    if (window.isVisible()) {
+      window.hide()
+    }
+  })
+  window.on('closed', () => {
+    quickWindow = null
+  })
+  loadRenderer(window, 'quick')
+  quickWindow = window
+  return window
+}
+
+export function existingQuickWindow(): BrowserWindow | null {
+  return quickWindow !== null && !quickWindow.isDestroyed() ? quickWindow : null
+}
+
+export function closeQuickWindow(): void {
+  if (quickWindow !== null && !quickWindow.isDestroyed()) {
+    quickWindow.destroy()
+  }
+  quickWindow = null
+}
+
+/** Every window that is not a sticky or the quick prompt - today that is just the main window. */
 export function mainWindows(): BrowserWindow[] {
   const sticky = new Set(stickyWindows.values())
-  return BrowserWindow.getAllWindows().filter((window) => !sticky.has(window))
+  return BrowserWindow.getAllWindows().filter(
+    (window) => !sticky.has(window) && window !== quickWindow
+  )
 }
 
 /** Every open window, used to broadcast "the data on disk changed". */

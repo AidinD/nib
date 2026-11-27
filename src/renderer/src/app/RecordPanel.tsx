@@ -3,6 +3,8 @@ import { openSelfTest, startRecording } from '../lib/recorder'
 import { micWarning } from '../lib/mic-health'
 import type { MicProblem } from '../lib/mic-health'
 import type { Levels, Recorder } from '../lib/recorder'
+import { lastLanguage } from '../lib/language'
+import type { Language } from '../lib/language'
 
 /*
  * Starting a recording, and watching it run.
@@ -16,7 +18,7 @@ import type { Levels, Recorder } from '../lib/recorder'
  * five seconds before a meeting are the only chance to notice.
  */
 
-export type Language = 'sv' | 'en'
+export type { Language } from '../lib/language'
 
 interface RecordPanelProps {
   /** The note this belongs to - the file is named after it, so an orphan left by
@@ -43,7 +45,6 @@ function Meter({ label, level, hint }: { label: string; level: number; hint: str
 }
 
 export function RecordPanel({ noteId, onStarted, onClose }: RecordPanelProps): React.JSX.Element {
-  const [language, setLanguage] = useState<Language>('sv')
   const [levels, setLevels] = useState<Levels>({ mic: 0, system: 0 })
   const [devices, setDevices] = useState<{ microphone: string; system: string } | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
@@ -95,7 +96,10 @@ export function RecordPanel({ noteId, onStarted, onClose }: RecordPanelProps): R
       await test.current?.close()
       test.current = null
       const recorder = await startRecording(noteId)
-      onStarted(recorder, language)
+      // No language asked for here: it is chosen on the block, when the
+      // recording is transcribed - see lib/language.ts. Labelled with the last
+      // one used until then.
+      onStarted(recorder, lastLanguage())
     } catch (error) {
       setFailed(error instanceof Error ? error.message : String(error))
       setStarting(false)
@@ -106,18 +110,6 @@ export function RecordPanel({ noteId, onStarted, onClose }: RecordPanelProps): R
     <div className="record-panel">
       <div className="record-langs">
         <span className="record-title">Record the meeting</span>
-        <div className="lang-toggle">
-          {(['sv', 'en'] as Language[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`lang-option${language === option ? ' is-on' : ''}`}
-              onClick={() => setLanguage(option)}
-            >
-              {option === 'sv' ? 'Svenska' : 'English'}
-            </button>
-          ))}
-        </div>
       </div>
 
       {failed !== null ? (

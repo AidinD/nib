@@ -78,8 +78,9 @@ for (const name of scripts) {
     encoding: 'utf8'
   })
   const lines = `${run.stdout}${run.stderr}`.split('\n')
-  // The app's own chatter is noise here; the script's lines and the verdict are not.
-  console.log(lines.filter((line) => !line.startsWith('[app]') && !/DevTools listening|^\s+at /.test(line)).join('\n'))
+  // The app's own chatter is noise here; the script's lines and the verdict are
+  // not, and neither is quick record's - it is how a script sees the hotkey.
+  console.log(lines.filter((line) => (!line.startsWith('[app]') || line.includes('[quick]')) && !/DevTools listening|^\s+at /.test(line)).join('\n'))
   if (run.status !== 0) {
     failed++
   }

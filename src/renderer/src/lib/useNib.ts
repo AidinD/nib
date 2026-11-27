@@ -19,22 +19,52 @@ export function useNib(): {
 } {
   const [index, setIndex] = useState<NibIndex>(EMPTY)
   const [loaded, setLoaded] = useState(false)
-  // The last state we wrote, so a change event caused by our own write does not
-  // clobber newer local edits that have not been persisted yet.
-  const ownWrite = useRef<string>('')
+  /*
+   * The states we wrote, newest last, so a change event caused by our own write
+   * does not clobber newer local edits that have not been persisted yet.
+   *
+   * Several, not one. Two changes in a row - the Inbox folder and then its
+   * note, from Ctrl+Alt+, - are two writes and two change events, and the first
+   * event's read can land after the second write was made locally. Compared
+   * against the newest write only, that read of our OWN older state looked like
+   * an external change and rolled the index back, and the note vanished from the
+   * window until something else changed. Measured: one e2e run in seven.
+   */
+  const ownWrites = useRef<string[]>([])
 
-  const reload = useCallback(async () => {
+  /*
+   * Bumped by every local change. A read that was already in flight when one
+   * was made can only hold the state from before it, so it is dropped: our own
+   * write follows, and its change event brings the file back in line. Without
+   * this, the index briefly lost the note Ctrl+Alt+, had just made - and the
+   * app, seeing its open note gone, closed it.
+   */
+  const generation = useRef(0)
+  /*
+   * Our own writes not yet on disk. A read made meanwhile can find the file
+   * from before them - not a state we wrote, so it would pass for an external
+   * change - and roll the index back. Skipped; the last write's change event
+   * reads the file again once it is whole.
+   */
+  const pending = useRef(0)
+
+  const reload = useCallback(async (first = false) => {
+    const asked = generation.current
     const next = await window.nib.loadIndex()
-    const serialised = JSON.stringify(next)
-    if (serialised === ownWrite.current) {
+    // Never the first load: there is nothing newer than the file to protect yet.
+    if (!first && (asked !== generation.current || pending.current > 0)) {
       return
     }
-    ownWrite.current = serialised
+    const serialised = JSON.stringify(next)
+    if (ownWrites.current.includes(serialised)) {
+      return
+    }
+    ownWrites.current = [serialised]
     setIndex(next)
   }, [])
 
   useEffect(() => {
-    void reload().finally(() => setLoaded(true))
+    void reload(true).finally(() => setLoaded(true))
     return window.nib.onIndexChanged(() => {
       void reload()
     })
@@ -44,10 +74,18 @@ export function useNib(): {
   const mutate = useCallback((change: (current: NibIndex) => NibIndex) => {
     setIndex((current) => {
       const next = change(current)
-      ownWrite.current = JSON.stringify(next)
-      void window.nib.saveIndex(next).catch((error) => {
-        console.error('Failed to save the Nib index', error)
-      })
+      generation.current += 1
+      ownWrites.current = [...ownWrites.current, JSON.stringify(next)].slice(-8)
+      pending.current += 1
+      void window.nib
+        .saveIndex(next)
+        .catch((error) => {
+          console.error('Failed to save the Nib index', error)
+        })
+        .finally(() => {
+          pending.current -= 1
+          generation.current += 1
+        })
       return next
     })
   }, [])
@@ -57,7 +95,8 @@ export function useNib(): {
 }
 
 export interface NibOps {
-  addCategory: (name: string) => void
+  /** Returns the new category's id. */
+  addCategory: (name: string) => string
   renameCategory: (categoryId: string, name: string) => void
   deleteCategory: (categoryId: string) => void
   setCategoryOpen: (categoryId: string, open: boolean) => void
@@ -160,13 +199,14 @@ function moveBefore<T extends { id: string }>(items: T[], id: string, beforeId: 
 
 function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): NibOps {
   return {
-    addCategory: (name) =>
+    addCategory: (name) => {
+      const id = newId('cat')
       mutate((index) => ({
         ...index,
         categories: [
           ...index.categories,
           {
-            id: newId('cat'),
+            id,
             name: name.trim(),
             color: NOTE_COLORS[index.categories.length % NOTE_COLORS.length],
             scope: '',
@@ -175,7 +215,9 @@ function useNibOps(mutate: (change: (current: NibIndex) => NibIndex) => void): N
             notes: []
           }
         ]
-      })),
+      }))
+      return id
+    },
 
     renameCategory: (categoryId, name) =>
       mutate((index) => mapCategory(index, categoryId, (c) => ({ ...c, name: name.trim() }))),

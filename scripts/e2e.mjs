@@ -56,14 +56,18 @@ function sleep(ms) {
   return new Promise((done) => setTimeout(done, ms))
 }
 
-async function findPage() {
-  // The main window, not a sticky: stickies carry a #sticky/<id> hash.
+async function findPage(hash = null) {
+  // The main window, not a sticky (#sticky/<id>) or the quick-record prompt
+  // (#quick) - or, given a hash, the window that carries it.
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
       const response = await fetch(`http://127.0.0.1:${PORT}/json/list`)
       const targets = await response.json()
-      const page = targets.find(
-        (target) => target.type === 'page' && !target.url.includes('#sticky/')
+      const page = targets.find((target) =>
+        target.type === 'page' &&
+        (hash === null
+          ? !target.url.includes('#sticky/') && !target.url.includes('#quick')
+          : target.url.endsWith(hash))
       )
       if (page !== undefined) {
         return page
@@ -423,7 +427,9 @@ const child = spawn(
   {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env
+    // NIB_E2E opens the one test door the app has: pressing Ctrl+Alt+, without
+    // a real key press going to the whole desktop. See src/main/quick.ts.
+    env: { ...process.env, NIB_E2E: '1' }
   }
 )
 child.stdout.on('data', (chunk) => process.stdout.write(`[app] ${chunk}`))
@@ -441,6 +447,16 @@ try {
   const { socket, send } = await connect(target.webSocketDebuggerUrl)
   await send('Runtime.enable')
   const page = makePage(send)
+  /*
+   * Another of the app's windows, by its hash - `#quick` for the Ctrl+Alt+,
+   * prompt. Same calls as `page`, driving that window's renderer instead.
+   */
+  page.window = async (hash) => {
+    const other = await findPage(hash)
+    const connection = await connect(other.webSocketDebuggerUrl)
+    await connection.send('Runtime.enable')
+    return makePage(connection.send)
+  }
   const steps = (await import(`file://${resolve(stepsPath)}`)).default
   await steps(page)
   socket.close()

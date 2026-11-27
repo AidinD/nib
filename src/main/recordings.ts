@@ -55,6 +55,8 @@ interface Recording {
   bytes: number
   started: number
   channels: number
+  /** Whose recording this is - also in the filename, kept here so nothing parses it back out. */
+  noteId: string
 }
 
 /** One at a time, deliberately: two meetings at once is a mistake, not a feature. */
@@ -62,6 +64,18 @@ let current: Recording | null = null
 
 export function isRecording(): boolean {
   return current !== null
+}
+
+/** The recording running now - which note, and how long, from the bytes written. */
+export function currentRecording(): { noteId: string; path: string; seconds: number } | null {
+  if (current === null) {
+    return null
+  }
+  return {
+    noteId: current.noteId,
+    path: current.path,
+    seconds: Math.round(current.bytes / ((SAMPLE_RATE * current.channels * BITS) / 8))
+  }
 }
 
 /**
@@ -85,7 +99,7 @@ export async function startRecording(
 
   const stream = createWriteStream(path)
   stream.write(header(0, channels))
-  current = { path, stream, bytes: 0, started: Date.now(), channels }
+  current = { path, stream, bytes: 0, started: Date.now(), channels, noteId }
   return path
 }
 

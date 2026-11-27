@@ -16,6 +16,8 @@ import { conversationOf, guessConversation } from '@shared/conversation'
 import type { ConversationKind } from '@shared/conversation'
 import type { Language } from './RecordPanel'
 import type { Recorder } from '../lib/recorder'
+import { startRecording } from '../lib/recorder'
+import { otherLanguage, rememberLanguage } from '../lib/language'
 import type { NoteChoice } from './NotePicker'
 import { SlashMenu, matchCommands } from './SlashMenu'
 import type { SlashCommand } from './SlashMenu'
@@ -163,6 +165,20 @@ interface EditorProps {
   onCycleFlag: (note: NoteMeta) => void
   /** Follow a link to another note - the list and the sidebar go there too. */
   onOpenNote: (noteId: string) => void
+  /**
+   * Filled in by the editor: how the quick-record hotkey starts and stops a
+   * recording without the record panel. See src/main/quick.ts.
+   */
+  recordingControl?: React.MutableRefObject<RecordingControl | null>
+}
+
+/** Starting and stopping a recording from outside the editor - Ctrl+Alt+,. */
+export interface RecordingControl {
+  /** Start recording into this note, which need not be the one on screen yet. */
+  start: (noteId: string, language: Language) => Promise<{ ok: true } | { ok: false; error: string }>
+  stop: () => Promise<{ ok: boolean; error?: string }>
+  /** The note being recorded into, or null. */
+  recordingNoteId: () => string | null
 }
 
 type SaveState = 'saved' | 'dirty' | 'saving'
@@ -179,7 +195,8 @@ export function Editor({
   onAudioChanged,
   onTogglePin,
   onCycleFlag,
-  onOpenNote
+  onOpenNote,
+  recordingControl
 }: EditorProps): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [title, setTitle] = useState('')
@@ -347,9 +364,20 @@ export function Editor({
     null
   )
   const [summaryError, setSummaryError] = useState<string | null>(null)
-  const [recording, setRecording] = useState<{ recorder: Recorder; language: Language } | null>(
-    null
-  )
+  /*
+   * `noteId` is the note the recording was started in, and where it goes when
+   * it stops - whatever is open by then. Before, the block went into the note
+   * on screen at Stop, so leaving the meeting's note for another one during the
+   * meeting filed the recording under the wrong note while its audio file still
+   * carried the first one's id. A recording started from Ctrl+Alt+, makes that
+   * the ordinary case: the Inbox note is where it was started, and the note you
+   * go and write in meanwhile is usually a different one.
+   */
+  const [recording, setRecording] = useState<{
+    recorder: Recorder
+    language: Language
+    noteId: string
+  } | null>(null)
 
   /*
    * The note picker, when `/link` is up.
@@ -385,6 +413,13 @@ export function Editor({
   // The note the body element currently holds, so a save that lands after a
   // switch can never write one note's text into another note's file.
   const loadedId = useRef<string | null>(null)
+  /**
+   * The note whose body is actually in the element - set when the read lands,
+   * not when it is asked for. `loadedId` moves first, so between the two the
+   * body still holds the previous note; anything that writes into the body by
+   * note id (a stopped recording) has to ask this one.
+   */
+  const shownId = useRef<string | null>(null)
   /*
    * The audio paths going through whisper right now.
    *
@@ -463,6 +498,7 @@ export function Editor({
     }
     let cancelled = false
     loadedId.current = note.id
+    shownId.current = null
     setSelectedImage(null)
     setColumnRow(null)
     setCaret(null)
@@ -479,6 +515,7 @@ export function Editor({
       }
       const html = sanitizeHtml(doc?.html ?? '')
       bodyRef.current.innerHTML = html
+      shownId.current = note.id
       applyImageWidths(bodyRef.current)
       applyCanvasBlocks(bodyRef.current)
       // Before applyRecordingBlocks, which writes the label FROM the state:
@@ -1299,6 +1336,143 @@ export function Editor({
     [onBodyInput, onAudioChanged]
   )
 
+  /*
+   * A finished recording, put into the note it belongs to.
+   *
+   * On screen when that note is the one open, which is the case `insertRecordingBlock`
+   * was written for. Otherwise into the note's file: read, placed by the same
+   * rule, written back - the shape the transcription and the move already use for
+   * a note that is no longer in the body. A note deleted meanwhile has nowhere to
+   * take it, so the open note does, rather than the meeting going nowhere.
+   */
+  const indexRef = useRef(index)
+  indexRef.current = index
+  const landRecording = useCallback(
+    async (owner: string, path: string, seconds: number, language: Language): Promise<void> => {
+      const meta = indexRef.current.categories
+        .flatMap((category) => category.notes)
+        .find((candidate) => candidate.id === owner)
+      if (meta === undefined) {
+        /*
+         * The note was deleted while it was being recorded into. The open note
+         * takes the meeting - but the file is renamed to it first, or the
+         * startup sweep, which goes by the id in the filename, would delete the
+         * audio of a block that is still there.
+         */
+        const here = shownId.current
+        if (here === null) {
+          return
+        }
+        const renamed = (await window.nib.moveRecording(path, here)) ?? path
+        if (shownId.current === here) {
+          insertRecordingBlock(renamed, seconds, language)
+        }
+        return
+      }
+      if (shownId.current === owner) {
+        insertRecordingBlock(path, seconds, language)
+        return
+      }
+      const doc = (await window.nib.readNote(owner)) ?? {
+        id: meta.id,
+        categoryId: meta.categoryId,
+        subId: meta.subId,
+        title: meta.title,
+        html: '',
+        created: meta.created,
+        edited: meta.edited
+      }
+      const holder = document.createElement('div')
+      holder.innerHTML = sanitizeHtml(doc.html)
+      const block = document.createElement('div')
+      block.dataset.recording = path
+      block.dataset.seconds = String(seconds)
+      block.dataset.language = language
+      block.dataset.state = 'recorded'
+      if (placeRecording(holder, block)) {
+        const after = document.createElement('p')
+        after.appendChild(document.createElement('br'))
+        holder.appendChild(after)
+      }
+      applyRecordingBlocks(holder)
+      const html = holder.innerHTML
+      const edited = await window.nib.writeNote({ ...doc, html })
+      onSaved(owner, { edited, preview: buildPreview(html) })
+      onAudioChanged()
+      /*
+       * Opened while the file was being written: the body may hold what was read
+       * before the write, and its next save would take the block back out. Put
+       * it in there too - `placeRecording` and the check make it the same one.
+       */
+      const live = bodyRef.current
+      if (
+        shownId.current === owner &&
+        live !== null &&
+        !Array.from(live.querySelectorAll<HTMLElement>('[data-recording]')).some(
+          (candidate) => candidate.dataset.recording === path
+        )
+      ) {
+        insertRecordingBlock(path, seconds, language)
+      }
+    },
+    [insertRecordingBlock, onSaved, onAudioChanged]
+  )
+
+  /** Stop, from the bar's button or from Ctrl+Alt+,, and file what was recorded. */
+  const recordingRef = useRef(recording)
+  recordingRef.current = recording
+  /** A start from the hotkey still waiting on the devices - a second must not begin. */
+  const startingRef = useRef(false)
+  const stopRecordingNow = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    const live = recordingRef.current
+    if (live === null) {
+      return { ok: false, error: 'Nothing is recording.' }
+    }
+    recordingRef.current = null
+    setRecording(null)
+    const done = await live.recorder.stop()
+    if (done !== null) {
+      await landRecording(live.noteId, done.path, done.seconds, live.language)
+      // Saved now rather than after the typing debounce: a stop can be the last
+      // thing before the window closes (see `stopBeforeClosing`), and the block
+      // is the only thing pointing at the audio.
+      if (shownId.current === live.noteId) {
+        await save()
+      }
+    }
+    return { ok: true }
+  }, [landRecording, save])
+
+  /*
+   * The hotkey's way in. Filled on every render so it always closes over the
+   * current functions; the caller holds the ref, not a copy.
+   */
+  if (recordingControl !== undefined) {
+    recordingControl.current = {
+      start: async (noteId, language) => {
+        if (recordingRef.current !== null || startingRef.current) {
+          return { ok: false, error: 'Already recording.' }
+        }
+        startingRef.current = true
+        try {
+          const recorder = await startRecording(noteId)
+          const live = { recorder, language, noteId }
+          recordingRef.current = live
+          setPanel(false)
+          setImporting(false)
+          setRecording(live)
+          return { ok: true }
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) }
+        } finally {
+          startingRef.current = false
+        }
+      },
+      stop: stopRecordingNow,
+      recordingNoteId: () => recordingRef.current?.noteId ?? null
+    }
+  }
+
   /**
    * Turn a recording into text, in place.
    *
@@ -1440,6 +1614,8 @@ export function Editor({
        */
       const noteId = loadedId.current
       const language = block.dataset.language === 'en' ? 'en' : 'sv'
+      // What a new recording is labelled with next time - see lib/language.ts.
+      rememberLanguage(language)
       const seconds = Number(block.dataset.seconds ?? 0)
       /*
        * One microphone, so the voices are separated after the words. Only for
@@ -3314,6 +3490,15 @@ export function Editor({
     return (
       <section className="editor">
         <p className="empty">Pick a note, or add one.</p>
+        {/* A recording does not stop because no note is open - so neither
+            does the bar that says it is running and can stop it. */}
+        {recording !== null && (
+          <RecordingBar
+            recorder={recording.recorder}
+            onMark={() => undefined}
+            onStop={() => void stopRecordingNow()}
+          />
+        )}
       </section>
     )
   }
@@ -3682,7 +3867,7 @@ export function Editor({
             onClose={() => setPanel(false)}
             onStarted={(recorder, language) => {
               setPanel(false)
-              setRecording({ recorder, language })
+              setRecording({ recorder, language, noteId: note?.id ?? 'untitled' })
             }}
           />
         )}
@@ -3721,15 +3906,7 @@ export function Editor({
           <RecordingBar
             recorder={recording.recorder}
             onMark={markMoment}
-            onStop={() => {
-              const { recorder, language } = recording
-              setRecording(null)
-              void recorder.stop().then((done) => {
-                if (done !== null) {
-                  insertRecordingBlock(done.path, done.seconds, language)
-                }
-              })
-            }}
+            onStop={() => void stopRecordingNow()}
           />
         )}
 
@@ -4071,6 +4248,31 @@ export function Editor({
              * with a fresh one from the same audio, which is the whole reason the
              * audio is still here. Discarding is, so it goes through the dialog.
              */
+            // The language, flipped before transcribing - and nothing else:
+            // this click must not also mean "transcribe".
+            const flip = target.closest<HTMLElement>('[data-language-toggle]')
+            if (flip !== null) {
+              const block = flip.closest<HTMLElement>('[data-recording]')
+              const root = bodyRef.current
+              if (block !== null && root !== null) {
+                const next = otherLanguage(block.dataset.language === 'en' ? 'en' : 'sv')
+                block.dataset.language = next
+                rememberLanguage(next)
+                applyRecordingBlocks(root)
+                onBodyInput()
+              }
+              return
+            }
+            // Transcribe again in the other language, for a wrong guess.
+            const switched = target.closest<HTMLElement>('[data-retranscribe-as]')
+            if (switched !== null) {
+              const block = switched.closest<HTMLElement>('[data-recording]')
+              if (block !== null) {
+                block.dataset.language = switched.dataset.retranscribeAs === 'en' ? 'en' : 'sv'
+                void transcribeBlock(block)
+              }
+              return
+            }
             const again = target.closest<HTMLElement>('[data-retranscribe]')
             if (again !== null) {
               const block = again.closest<HTMLElement>('[data-recording]')

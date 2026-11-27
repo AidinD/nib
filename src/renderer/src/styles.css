@@ -3871,6 +3871,7 @@ body.is-resizing .splitter-grip {
  * first or do nothing destructive at all.
  */
 .recording-block [data-retranscribe],
+.recording-block [data-retranscribe-as],
 .recording-block [data-move-note],
 .recording-block [data-discard] {
   text-decoration: underline;
@@ -3881,8 +3882,23 @@ body.is-resizing .splitter-grip {
   color: var(--text);
 }
 
-.recording-block [data-retranscribe]:hover {
+.recording-block [data-retranscribe]:hover,
+.recording-block [data-retranscribe-as]:hover {
   color: var(--text);
+}
+
+/* The language before transcribing: a switch, so it looks like one - a pill,
+   the way the language toggle in the import panel reads. */
+.recording-block [data-language-toggle] {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.recording-block [data-language-toggle]:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .recording-block [data-discard]:hover {
@@ -4680,4 +4696,95 @@ body.is-resizing .splitter-grip {
   padding-left: 12px;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- quick record (Ctrl+Alt+,) ---------- */
+
+/* The prompt is its own window: the whole page is the panel. */
+body.is-quick-window {
+  background: var(--surface);
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.quick-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: drag;
+}
+
+.quick-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.quick-name {
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.quick-name:focus {
+  border-color: var(--accent);
+}
+
+.quick-note {
+  margin: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-actions button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.quick-actions button:hover {
+  background: var(--surface-hover);
+}
+
+.quick-actions .quick-stop {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.quick-actions .quick-hint {
+  margin-left: auto;
+}
+
+.quick-error {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--danger);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { decodeRecording } from '../lib/decode-audio'
 import type { Language } from './RecordPanel'
+import { lastLanguage } from '../lib/language'
 
 /*
  * Bringing in a meeting recorded on a phone.
@@ -34,7 +35,10 @@ interface ImportPanelProps {
 }
 
 export function ImportPanel({ noteId, onImported, onClose }: ImportPanelProps): React.JSX.Element {
-  const [language, setLanguage] = useState<Language>('sv')
+  // Asked here, unlike a live recording, because an import is transcribed the
+  // moment it is saved - this IS the transcription's moment. Starts on the last
+  // language used.
+  const [language, setLanguage] = useState<Language>(lastLanguage)
   const [busy, setBusy] = useState<string | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   /*

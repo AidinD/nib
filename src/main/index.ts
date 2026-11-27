@@ -27,9 +27,18 @@ import type { SummaryRequest } from './summary'
 import { NoteStorage } from './storage'
 import { installUpdateNow, pendingUpdate, startUpdateChecks } from './updater'
 import {
+  registerQuickRecord,
+  showRecordingIndicator,
+  stopBeforeClosing,
+  unregisterQuickRecord
+} from './quick'
+import {
   allWindows,
+  closeQuickWindow,
   closeStickyWindow,
   createMainWindow,
+  existingQuickWindow,
+  onMainWindowCreated,
   mainWindows,
   onStickyClosed,
   openStickyWindow
@@ -239,11 +248,20 @@ function registerIpc(): void {
    * every few hundred milliseconds for the length of a meeting, and a round trip
    * for each one buys nothing when there is no answer to wait for.
    */
-  ipcMain.handle('recording:start', (_event, noteId: string, channels: number) =>
-    startRecording(recordingsDir(), noteId, channels)
-  )
+  ipcMain.handle('recording:start', async (_event, noteId: string, channels: number) => {
+    const path = await startRecording(recordingsDir(), noteId, channels)
+    // The taskbar's red dot - for every recording, however it was started.
+    showRecordingIndicator(true)
+    return path
+  })
   ipcMain.on('recording:chunk', (_event, chunk: Uint8Array) => appendSamples(chunk))
-  ipcMain.handle('recording:stop', () => stopRecording())
+  ipcMain.handle('recording:stop', async () => {
+    try {
+      return await stopRecording()
+    } finally {
+      showRecordingIndicator(false)
+    }
+  })
   ipcMain.handle('recording:delete', (_event, path: string) => deleteRecording(path))
   ipcMain.handle('recording:exists', (_event, path: string) => existsSync(path))
   /* Renaming the file IS the move - the filename is the only record of which
@@ -554,7 +572,23 @@ void app.whenReady().then(() => {
 
   app.on('browser-window-created', (_event, window) => {
     optimizer.watchWindowShortcuts(window)
+    /*
+     * The quick-record prompt is a window too, kept hidden between presses, and
+     * a hidden window left as the last one keeps the app running with nothing
+     * on screen and no tray to quit from. So whenever a window closes and only
+     * the prompt is left, the prompt goes too and the app can quit as before.
+     */
+    window.on('closed', () => {
+      const prompt = existingQuickWindow()
+      const rest = BrowserWindow.getAllWindows().filter(
+        (other) => other !== window && !other.isDestroyed()
+      )
+      if (prompt !== null && rest.every((other) => other === prompt)) {
+        closeQuickWindow()
+      }
+    })
   })
+  onMainWindowCreated(stopBeforeClosing)
 
   // A sticky window closing is the note being unpinned - unless the whole app is
   // going down, in which case the pins are exactly what should survive.
@@ -569,8 +603,22 @@ void app.whenReady().then(() => {
     }
   })
 
+  // Ctrl+Alt+, - a recording from anywhere. See quick.ts. Before the window,
+  // so its question about the key is answered.
+  registerQuickRecord(async (noteId) => {
+    const index = await store().loadIndex()
+    for (const category of index.categories) {
+      const found = category.notes.find((note) => note.id === noteId)
+      if (found !== undefined) {
+        return found.title.length > 0 ? found.title : 'Untitled'
+      }
+    }
+    return 'a note'
+  })
+
   createMainWindow()
   startUpdateChecks()
+
 
   // Pinning a note is what produces its sticky window, and a pin outlives a
   // restart - so the windows have to come back with it, or a pinned note would
@@ -617,6 +665,10 @@ app.on('before-quit', (event) => {
     event.preventDefault()
     void stopRecording().finally(() => app.quit())
   }
+})
+
+app.on('will-quit', () => {
+  unregisterQuickRecord()
 })
 
 app.on('window-all-closed', () => {
