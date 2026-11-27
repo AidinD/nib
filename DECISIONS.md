@@ -3,6 +3,49 @@
 Newest first.
 Each entry records the decision, what else was considered, and why the choice was made.
 
+## 2026-11-27 - A column always holds lines, and a row is left the way it was entered
+
+**The ask.** Three reports at once: columns were hard to get rid of; lines
+selected and Columns pressed should become the first column, with the second
+empty; and bullets did not work in the right-hand column.
+
+**What was measured.** From a fresh row, `- ` and the Bullets button both made
+bullets in either column, so the right-hand failure was not a rule that only the
+first column had. What did break, in both columns: turning Bullets off inside a
+column left the text loose in the cell (`<div data-col><span style=...>A</span>`).
+From there `- ` stayed a dash, because the shortcut finds no line to turn into a
+list, and Enter cloned the cell into a third column. The Bullets button also left
+`<p><ul>` behind, which reloads as an empty line on each side of the list. And the
+row's controls showed up only on a click, as a red "Remove" that reads as
+deleting the text.
+
+**Decided.**
+
+- A cell holds blocks and nothing else, put right after every edit and on load
+  (`tidyColumnCells`): loose text becomes a paragraph, a `br` ends a line, and a
+  span that only carried Chromium's inline style is dissolved. That fixes the
+  cause, not the case: whatever Chromium does next in a `div`, the column is back
+  to lines before the next keystroke reads it.
+- The list buttons normalise like the typed `- ` already did, so no `<p><ul>`.
+- Columns is a toggle, like Bullets: lit in a row, and pressed there it turns the
+  row back into lines, column by column. The row's strip follows the caret, so a
+  row reached by keyboard has it too, and says "Back to text", not in red.
+- Backspace at the start of the first column takes the row apart, keeping
+  everything, the way Backspace takes a quote off. At the start of a later column
+  it moves to the end of the previous one; Delete at the end of a column moves to
+  the start of the next. Neither ever merges cells, which is still what the old
+  refusal was protecting against.
+- Columns with a selection wraps the whole blocks the selection touches into the
+  first column and puts the caret in the empty second one. A selection ending at
+  the very start of a line (triple-click, Shift+Down) does not take that line. A
+  selection that includes a row falls back to adding a row below, since rows
+  never nest.
+
+**Not changed.** Tab inside a list in a column still indents rather than moving
+to the next column - the older meaning, and nesting is what Tab does in every
+list. Worth revisiting if the owner's right-hand bullet report turns out to be
+that.
+
 ## 2026-11-27 - The language is chosen when transcribing, not when recording
 
 **The ask.** "The recording asks for a language, but the choice should really move

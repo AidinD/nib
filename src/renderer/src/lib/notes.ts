@@ -800,6 +800,107 @@ export function applyColumnBlocks(root: HTMLElement): void {
       }
     }
   }
+  tidyColumnCells(root)
+}
+
+/** What may sit loose in a line - everything else is a block of its own. */
+const INLINE_TAGS = new Set([
+  'A', 'ABBR', 'B', 'BR', 'CODE', 'EM', 'FONT', 'I', 'IMG', 'KBD', 'MARK', 'S', 'SMALL',
+  'SPAN', 'STRIKE', 'STRONG', 'SUB', 'SUP', 'TIME', 'U'
+])
+
+function isLoose(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? '').trim().length > 0
+  }
+  return node instanceof HTMLElement && INLINE_TAGS.has(node.tagName)
+}
+
+/**
+ * Put every line in a column inside a block of its own.
+ *
+ * A cell is a `div`, and Chromium treats a `div` as a line it may write straight
+ * into. Turning Bullets off inside a column leaves the text loose in the cell,
+ * wrapped in a `span` carrying an inline colour; so does typing with the caret
+ * on the cell rather than in one of its lines. Text loose in a cell is not a line
+ * to any of the editor: `- ` stays a dash because the shortcut finds no block,
+ * the Bullets button wraps the whole cell, and Enter clones the cell itself -
+ * which is a new COLUMN, not a new line. Every one of those was measured in the
+ * running app before this existed.
+ *
+ * So a column holds blocks and nothing else, put right after every edit and on
+ * load: each run of loose text becomes a paragraph, a `br` between runs is the
+ * line break it was, and a `span` that only carried Chromium's inline style is
+ * dissolved - the sanitiser would drop the style on the next save anyway.
+ *
+ * The caret is carried across: moving a text node takes a live selection out
+ * of it, and this runs while someone is typing.
+ *
+ * Returns whether anything moved.
+ */
+export function tidyColumnCells(root: HTMLElement): boolean {
+  const selection = window.getSelection()
+  const held =
+    selection !== null && selection.rangeCount > 0
+      ? {
+          anchor: selection.anchorNode,
+          anchorOffset: selection.anchorOffset,
+          focus: selection.focusNode,
+          focusOffset: selection.focusOffset
+        }
+      : null
+  let changed = false
+
+  for (const cell of Array.from(root.querySelectorAll<HTMLElement>('[data-col]'))) {
+    let line: HTMLElement | null = null
+    for (const node of Array.from(cell.childNodes)) {
+      if (node instanceof HTMLElement && node.tagName === 'BR') {
+        // A break ends the line it is in; on its own it is an empty line.
+        if (line === null) {
+          const empty = document.createElement('p')
+          cell.insertBefore(empty, node)
+          empty.appendChild(node)
+        } else {
+          node.remove()
+        }
+        line = null
+        changed = true
+        continue
+      }
+      if (!isLoose(node)) {
+        // Blank text between blocks stays where it is; anything else is a block.
+        if (node.nodeType !== Node.TEXT_NODE) {
+          line = null
+        }
+        continue
+      }
+      if (line === null) {
+        line = document.createElement('p')
+        cell.insertBefore(line, node)
+      }
+      line.appendChild(node)
+      changed = true
+    }
+  }
+
+  if (!changed) {
+    return false
+  }
+  for (const span of Array.from(root.querySelectorAll<HTMLElement>('[data-col] > p > span'))) {
+    if (Array.from(span.attributes).every((attribute) => attribute.name === 'style')) {
+      span.replaceWith(...Array.from(span.childNodes))
+    }
+  }
+  if (
+    held !== null &&
+    selection !== null &&
+    held.anchor?.isConnected === true &&
+    held.focus?.isConnected === true &&
+    root.contains(held.anchor)
+  ) {
+    selection.setBaseAndExtent(held.anchor, held.anchorOffset, held.focus, held.focusOffset)
+  }
+  return true
 }
 
 /**

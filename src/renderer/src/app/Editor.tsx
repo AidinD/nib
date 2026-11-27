@@ -40,6 +40,7 @@ import {
   isBlankLine,
   isSolidBlock,
   nothingBeyond,
+  tidyColumnCells,
   unwrapColumns,
   COLS_MAX,
   COLS_MIN,
@@ -675,6 +676,17 @@ export function Editor({
       const range = selection.getRangeAt(0)
       if (root.contains(range.commonAncestorContainer)) {
         savedRange.current = range.cloneRange()
+        /*
+         * The row's controls follow the caret, not only a click.
+         *
+         * They used to appear on a click in the row and nowhere else, so a row
+         * reached with the arrow keys or Tab had no visible way to change it or
+         * take it apart - "hard to get rid of columns" was that.
+         */
+        const from = range.startContainer
+        const element = from instanceof HTMLElement ? from : from.parentElement
+        const row = element?.closest<HTMLElement>('[data-cols]') ?? null
+        setColumnRow((current) => (current === row ? current : row))
       }
       // The caret moved, so what it is standing in may have changed too. Same
       // listener rather than a second one: it is the same event and the same
@@ -944,6 +956,9 @@ export function Editor({
   const onBodyInput = useCallback(() => {
     const element = bodyRef.current
     if (element !== null) {
+      // A column holds lines, never loose text - see tidyColumnCells. After every
+      // edit, because the edits that leave text loose are Chromium's own.
+      tidyColumnCells(element)
       // Before the count and the save read the body: a heading typed or renamed
       // into "Till nästa gång" is painted as it is written.
       applyNextTimeSections(element)
@@ -989,7 +1004,16 @@ export function Editor({
   const exec = useCallback(
     (command: string, value?: string) => {
       withSelection(() => {
-        document.execCommand(command, false, value)
+        const root = bodyRef.current
+        if (root !== null && (command === 'insertUnorderedList' || command === 'insertOrderedList')) {
+          // A list made from a paragraph lands INSIDE it - `<p><ul>` - which is
+          // invalid and comes back from disk as an empty line on each side of
+          // the list. The typed `- ` already put that right; the button now
+          // does too.
+          keepingCaret(root, () => document.execCommand(command, false, value))
+        } else {
+          document.execCommand(command, false, value)
+        }
         onBodyInput()
       })
     },
@@ -2594,6 +2618,38 @@ export function Editor({
         return
       }
       withSelection(() => {
+        const selection = window.getSelection()
+        const range =
+          selection !== null && selection.rangeCount > 0 && !selection.isCollapsed
+            ? selection.getRangeAt(0)
+            : null
+        const chosen = range === null ? null : blocksInRange(root, range)
+        if (chosen !== null) {
+          /*
+           * With lines selected, the row is made OF them: the selection goes
+           * into the first column and the others start empty, with the caret in
+           * the second - which is where the next thing to write goes. Putting an
+           * empty row under a selection, as this used to, left the person to
+           * cut and paste their own text into the layout they had just asked
+           * for.
+           */
+          const row = columnsRow(count)
+          chosen[0].before(row)
+          const cells = columnCells(row)
+          cells[0].replaceChildren(...chosen)
+          const next = row.nextElementSibling
+          if (next === null || isSolidBlock(next)) {
+            insertLine(root, next)
+          }
+          if (row.previousElementSibling === null) {
+            insertLine(root, row)
+          }
+          caretInto(cells[1].firstElementChild ?? cells[1], 'start')
+          setColumnRow(row)
+          onBodyInput()
+          return
+        }
+
         const row = columnsRow(count)
         // A paragraph after it, so there is somewhere to keep writing below the
         // row - the last block in a note cannot be one you cannot get past.
@@ -3391,16 +3447,19 @@ export function Editor({
         }
       }
       /*
-       * Backspace at the top of a column, and Delete at the bottom of one, do
-       * nothing at all.
+       * Backspace at the top of a column, and Delete at the bottom of one, never
+       * reach Chromium.
        *
-       * Left to Chromium they merge the cell into whatever sits beside it, and the
+       * Left to it they merge the cell into whatever sits beside it, and the
        * column goes with it: one keystroke at the top of a column turns a row of
        * three into a paragraph with the other columns' text run together. Both
        * keys still work everywhere inside the column, including on an image or a
-       * divider - what is refused is the one position where the target is the
-       * structure rather than the text. A row is taken apart with Remove, which
-       * keeps every line.
+       * divider. At the edge they move the caret instead - Backspace to the end
+       * of the column before, Delete to the start of the column after - and
+       * Backspace at the start of the FIRST column takes the row apart, keeping
+       * every line in reading order. That last one used to be refused too, which
+       * left the Remove button as the only way out of a row; it was reported as
+       * columns being hard to get rid of.
        */
       if (event.key === 'Backspace' || event.key === 'Delete') {
         const root = bodyRef.current
@@ -3415,8 +3474,26 @@ export function Editor({
           const cell = block?.closest<HTMLElement>('[data-col]') ?? null
           const range = selection.getRangeAt(0)
           const back = event.key === 'Backspace'
-          if (cell !== null && nothingBeyond(cell, range, back ? 'start' : 'end')) {
+          const row = cell?.closest<HTMLElement>('[data-cols]') ?? null
+          if (cell !== null && row !== null && nothingBeyond(cell, range, back ? 'start' : 'end')) {
             event.preventDefault()
+            const cells = columnCells(row)
+            const index = cells.indexOf(cell)
+            if (back && index === 0) {
+              // The very start of the row: the row goes and its lines stay, in
+              // order, the way Backspace at the start of a quote takes the quote.
+              const first = unwrapColumns(row)
+              setColumnRow(null)
+              if (first !== null) {
+                caretInto(first, 'start')
+              }
+              onBodyInput()
+            } else if (back) {
+              caretIntoCell(cells[index - 1])
+            } else if (index < cells.length - 1) {
+              const next = cells[index + 1]
+              caretInto(next.firstElementChild ?? next, 'start')
+            }
             return
           }
           /*
@@ -3614,7 +3691,14 @@ export function Editor({
           {/* Two, because two is the row you reach for - the third column is one
               press away on the row itself, and a button that asks how many
               columns before it has made any is a dialog for a layout choice. */}
-          <button type="button" onClick={() => insertColumns(2)} title="Columns">
+          {/* A toggle, like Bullets: lit while the caret is in a row, and
+              pressed there it turns the row back into ordinary lines. */}
+          <button
+            type="button"
+            className={columnRow !== null ? 'is-active' : ''}
+            onClick={() => (columnRow !== null && columnRow.isConnected ? dropColumns(columnRow) : insertColumns(2))}
+            title={columnRow !== null ? 'Back to ordinary text - every line is kept' : 'Columns - selected lines go in the first one'}
+          >
             Columns
           </button>
         </div>
@@ -3957,13 +4041,14 @@ export function Editor({
                 {count}
               </button>
             ))}
+            {/* Not red, and not "Remove": the lines all stay, and a red Remove
+                reads as deleting them - which is what kept it from being used. */}
             <button
               type="button"
-              className="danger"
               title="Take the row apart and keep every line"
               onClick={() => dropColumns(columnRow)}
             >
-              Remove
+              Back to text
             </button>
           </div>
         )}
@@ -4414,6 +4499,53 @@ function topLevel(root: HTMLElement, node: HTMLElement): HTMLElement {
     current = current.parentElement
   }
   return current
+}
+
+/**
+ * The blocks directly under the body that a selection covers, in order - or
+ * null when it is not a run of whole blocks a row could be made of.
+ *
+ * Whole blocks, because a row holds blocks: half a paragraph selected puts the
+ * whole paragraph in the column. A selection that ends at the very start of a
+ * block, which is what a triple-click and a Shift+Down both produce, does not
+ * take that block along. Null when the run includes a row already - a row inside
+ * a row is the shape `insertColumns` never makes.
+ */
+function blocksInRange(root: HTMLElement, range: Range): HTMLElement[] | null {
+  const elementOf = (node: Node): HTMLElement | null =>
+    node instanceof HTMLElement ? node : node.parentElement
+  const start = elementOf(range.startContainer)
+  const end = elementOf(range.endContainer)
+  if (start === null || end === null || !root.contains(start) || !root.contains(end)) {
+    return null
+  }
+  // The body itself as a container: the selection's edges are between blocks.
+  const first =
+    start === root ? (root.children[range.startOffset] as HTMLElement | undefined) : topLevel(root, start)
+  let last =
+    end === root ? (root.children[range.endOffset - 1] as HTMLElement | undefined) : topLevel(root, end)
+  if (first === undefined || last === undefined) {
+    return null
+  }
+  if (last !== first && end !== root) {
+    const lead = document.createRange()
+    lead.setStart(last, 0)
+    lead.setEnd(range.endContainer, range.endOffset)
+    if (lead.toString().length === 0 && lead.cloneContents().querySelector('img') === null) {
+      last = last.previousElementSibling as HTMLElement
+    }
+  }
+  const blocks: HTMLElement[] = []
+  for (let block: Element | null = first; block !== null; block = block.nextElementSibling) {
+    if (!(block instanceof HTMLElement) || block.matches('[data-cols]')) {
+      return null
+    }
+    blocks.push(block)
+    if (block === last) {
+      return blocks
+    }
+  }
+  return null
 }
 
 /**
